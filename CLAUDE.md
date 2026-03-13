@@ -7,11 +7,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 bun run src/index.ts           # Start the bot
 bun --watch run src/index.ts   # Start with auto-reload (dev mode)
+bun test                       # Run unit tests
 bunx tsc --noEmit              # Type-check without emitting
+bunx biome check src/          # Lint and format check
 bun install                    # Install dependencies
 ```
 
-No test framework or linter is configured.
+### Verification (run all checks)
+
+```bash
+cd bot && bun test && bunx tsc --noEmit && bunx biome check src/
+```
 
 ## What This Is
 
