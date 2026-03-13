@@ -108,6 +108,23 @@ See the full guide: **[docs/creating-characters.md](docs/creating-characters.md)
 
 A ready-to-use sample is included at [`characters/sample-character.md`](characters/sample-character.md) — copy it and make it your own, or use it as-is.
 
+## Available AI Agents
+
+Add any of these to your game with `/add-agent <name>`:
+
+| Agent File | Name | Race | Class | Level | Personality |
+|-----------|------|------|-------|-------|-------------|
+| `grimbold` | Grimbold Ironforge | Mountain Dwarf | Fighter | 3 | Gruff veteran who protects the party while complaining about everything |
+| `criella` | Criella Arkalis | Tiefling | Warlock | 2 | Treats her fiendish pact like a tedious business contract |
+| `merric` | Merric Tosscobble | Lightfoot Halfling | Bard | 1 | Cheerful traveling cook whose secret ingredient is magic |
+| `torinn` | Torinn Stormfang | Dragonborn | Paladin | 3 | Earnest honor-bound knight who cannot detect sarcasm |
+| `nyx` | Nyx Namfoodle | Forest Gnome | Wizard | 2 | Compulsive tinkerer whose contraptions "probably won't explode" |
+| `vola` | Vola Keth | Half-Orc | Barbarian | 1 | Gentle former shepherd who rages only to protect the helpless |
+| `caelynn` | Caelynn Galanodel | Wood Elf | Ranger | 2 | 237-year-old elf who adventures because she's bored |
+| `damakos` | Damakos "Sorrow" | Tiefling | Monk | 1 | Awkward monk stuck with an embarrassing teenage virtue name |
+| `seraphina` | Seraphina Goodbarrel | Lightfoot Halfling | Cleric | 3 | Militant soup-healer who mothers the entire party |
+| `soveliss` | Soveliss Ilphelkiir | High Elf | Sorcerer | 2 | Aristocrat whose wild magic got him politely exiled |
+
 ## Creating AI Agents
 
 Agent personality files live in `agents/` as markdown with YAML frontmatter. See `agents/grimbold.md` for a complete example.
