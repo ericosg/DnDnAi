@@ -6,7 +6,7 @@ let appendedHistory: TurnEntry[] = [];
 let savedStates: GameState[] = [];
 
 mock.module("../config.js", () => ({
-  config: { discordToken: "test", anthropicApiKey: "test", guildId: "test" },
+  config: { discordToken: "test", guildId: "test" },
   models: { dm: "test-model", agent: "test-model", orchestrator: "test-model" },
   HISTORY_WINDOW: 8,
   COMPRESS_EVERY: 10,

@@ -2,7 +2,7 @@ import { describe, expect, mock, test } from "bun:test";
 
 // Mock config and claude to avoid env var / API requirements
 mock.module("../config.js", () => ({
-  config: { discordToken: "test", anthropicApiKey: "test", guildId: "test" },
+  config: { discordToken: "test", guildId: "test" },
   models: { dm: "test", agent: "test", orchestrator: "test" },
   DATA_DIR: "data/games",
   AGENTS_DIR: "agents",

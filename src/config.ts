@@ -6,7 +6,6 @@ const required = (name: string): string => {
 
 export const config = {
   discordToken: required("DISCORD_TOKEN"),
-  anthropicApiKey: required("ANTHROPIC_API_KEY"),
   guildId: required("GUILD_ID"),
 } as const;
 

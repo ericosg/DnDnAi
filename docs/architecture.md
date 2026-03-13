@@ -32,7 +32,7 @@ Discord Channel
    ┌────┴────┐
    ▼         ▼
 ┌────────┐ ┌────────┐
-│ Agent  │ │   DM   │  Claude API calls (stateless)
+│ Agent  │ │   DM   │  Claude CLI calls (stateless)
 │(Sonnet)│ │(Opus)  │  Context rebuilt each call
 └───┬────┘ └───┬────┘
     │          │ Contains [[ROLL:...]] directives
@@ -91,7 +91,7 @@ Round tracking is in-memory only (not persisted). It tracks which players have r
 
 ### AI Layer (`src/ai/`)
 
-**claude.ts** — AI abstraction layer. All AI calls flow through `chat(model, system, messages)`. Uses the Claude CLI in non-interactive mode (`claude -p`), routing through the user's Pro/Max plan instead of requiring API credits. Retries on failure with exponential backoff (up to 3 attempts).
+**claude.ts** — AI abstraction layer. All AI calls flow through `chat(model, system, messages)`. Uses the Claude CLI in non-interactive mode (`claude -p`), routing through the user's Pro/Max plan instead of requiring API credits. Retries on failure with exponential backoff (up to 3 attempts). Subprocess safety (env var overrides, permission flags) is handled by helpers in `claude-subprocess.ts`.
 
 **orchestrator.ts** — Decides who acts next. Mostly deterministic (no AI call needed in most cases):
 - Exploration: agents first (in order), then wait for humans, then DM resolves

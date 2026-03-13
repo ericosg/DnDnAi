@@ -1,7 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
-import { config } from "../config.js";
-
-const client = new Anthropic({ apiKey: config.anthropicApiKey });
+import { buildSpawnArgs, buildSpawnEnv, isRetryable } from "./claude-subprocess.js";
 
 interface ChatMessage {
   role: "user" | "assistant";
@@ -17,24 +14,38 @@ export async function chat(
   messages: ChatMessage[],
   maxTokens = 2048,
 ): Promise<string> {
+  const prompt = messages.map((m) => m.content).join("\n\n");
+  const args = buildSpawnArgs(model, system, prompt, maxTokens);
+  const env = buildSpawnEnv();
+
   let lastError: unknown;
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
-      const response = await client.messages.create({
-        model,
-        max_tokens: maxTokens,
-        system,
-        messages,
+      const proc = Bun.spawn(args, {
+        stdout: "pipe",
+        stderr: "pipe",
+        env,
       });
 
-      const textBlock = response.content.find((b) => b.type === "text");
-      return textBlock?.text ?? "";
+      const exitCode = await proc.exited;
+      const stdout = await new Response(proc.stdout).text();
+      const stderr = await new Response(proc.stderr).text();
+
+      if (exitCode !== 0) {
+        const msg = stderr.trim() || `claude exited with code ${exitCode}`;
+        if (isRetryable(msg)) {
+          throw new RetryableError(msg);
+        }
+        throw new Error(`Claude CLI error: ${msg}`);
+      }
+
+      return stdout.trim();
     } catch (err: unknown) {
       lastError = err;
-      if (err instanceof Anthropic.RateLimitError || err instanceof Anthropic.InternalServerError) {
+      if (err instanceof RetryableError) {
         const delay = BASE_DELAY * 2 ** attempt;
-        console.warn(`Claude API retry ${attempt + 1}/${MAX_RETRIES} in ${delay}ms`);
+        console.warn(`Claude CLI retry ${attempt + 1}/${MAX_RETRIES} in ${delay}ms`);
         await new Promise((r) => setTimeout(r, delay));
         continue;
       }
@@ -43,4 +54,11 @@ export async function chat(
   }
 
   throw lastError;
+}
+
+class RetryableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RetryableError";
+  }
 }

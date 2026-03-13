@@ -10,7 +10,6 @@ mock.module("./claude.js", () => ({
 mock.module("../config.js", () => ({
   config: {
     discordToken: "test",
-    anthropicApiKey: "test",
     guildId: "test",
   },
   models: {

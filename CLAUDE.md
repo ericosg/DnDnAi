@@ -27,7 +27,7 @@ This project was born from a set of D&D 5e learning guides in the companion repo
 
 ## Architecture
 
-TypeScript + Bun runtime, discord.js for Discord, Anthropic SDK for AI, gray-matter for agent personality files. JSON files for persistence (no database).
+TypeScript + Bun runtime, discord.js for Discord, Claude CLI for AI (uses Pro/Max plan — no API key needed), gray-matter for agent personality files. JSON files for persistence (no database).
 
 ### Turn Flow (the core loop)
 

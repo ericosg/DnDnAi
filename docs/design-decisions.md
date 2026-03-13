@@ -152,6 +152,18 @@ The bot uses the Claude CLI (`claude -p`) in non-interactive mode rather than th
 
 Since the bot's AI calls are all single-turn and the game's pace is naturally slow (human turn-based), the subprocess overhead is negligible. The cost savings make this ideal for development and small-group play.
 
+### Subprocess Safety
+
+Running `claude -p` as a subprocess requires several safeguards to avoid hangs and silent failures:
+
+- **`--dangerously-skip-permissions`** — In a subprocess there is no terminal to approve tool calls. Without this flag, the process hangs indefinitely. It sounds scary but is safe here — the bot doesn't use MCP tools, so there's nothing to approve.
+- **`--no-session-persistence`** — Prevents the subprocess from reading/writing Claude Code session state. Without this, concurrent game AI calls could interfere with each other or with an interactive session.
+- **`CLAUDECODE=""`** — When the bot is started from inside Claude Code (common during development), child processes inherit the `CLAUDECODE` env var. Claude CLI detects this and rejects the call as a nested session. Blanking it prevents this.
+- **`GIT_PAGER="cat"` / `PAGER="cat"`** — Prevents any pager (`less`, `more`) from launching in the headless subprocess. A pager would hang the process indefinitely.
+- **`--output-format text`** — Ensures plain text output without ANSI formatting or structured wrappers.
+
+These lessons were learned from the [d2r-screenshot-ai-reviewer](https://github.com/ericosg/d2r-screenshot-ai-reviewer) project, which also drives Claude as a subprocess.
+
 ## Why "AFK = Pause"?
 
 The game never auto-advances without human input. If it's a human's turn and they walk away, the bot waits indefinitely. This prevents:

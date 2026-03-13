@@ -181,7 +181,7 @@ The `characterSpec` field contains the mechanical character sheet that gets pars
 
 See [docs/architecture.md](docs/architecture.md) for full technical details.
 
-**TL;DR:** Discord events → game engine → AI orchestrator decides who acts → agents/DM generate responses via Claude API → webhooks post as character identities → state persists to JSON.
+**TL;DR:** Discord events → game engine → AI orchestrator decides who acts → agents/DM generate responses via Claude CLI → webhooks post as character identities → state persists to JSON.
 
 ## Tech Stack
 
@@ -195,7 +195,7 @@ See [docs/architecture.md](docs/architecture.md) for full technical details.
 ## Development
 
 ```bash
-bun test                       # 67 unit + integration tests
+bun test                       # 92 unit + integration tests
 bunx tsc --noEmit              # type-check
 bunx biome check src/          # lint + format check
 ```
