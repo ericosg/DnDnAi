@@ -9,6 +9,12 @@ mock.module("../config.js", () => ({
   HISTORY_WINDOW: 8,
   COMPRESS_EVERY: 10,
   AGENT_DELAY_MS: 0,
+  NARRATIVE_STYLE: "concise",
+  STYLE_INSTRUCTIONS: {
+    concise: { dm: "", agent: "" },
+    standard: { dm: "", agent: "" },
+    elaborate: { dm: "", agent: "" },
+  },
 }));
 mock.module("../ai/claude.js", () => ({
   chat: async () => "A mocked backstory.",

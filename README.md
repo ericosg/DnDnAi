@@ -45,6 +45,7 @@ cp .env.example .env
 # Edit .env with your tokens:
 #   DISCORD_TOKEN=your_bot_token
 #   GUILD_ID=your_server_id
+#   NARRATIVE_STYLE=concise  # concise | standard | elaborate (default: concise)
 
 # Run
 bun run src/index.ts

@@ -66,6 +66,10 @@ All AI calls are stateless — context is rebuilt from game state + sliding hist
 
 Structured logger (`src/logger.ts`) with configurable verbosity via `LOG_LEVEL` env var (`error`, `warn`, `info`, `debug`). Defaults to `info`. At `debug` level, logs include orchestrator iteration details and responded-player sets. At `info`, logs show the full turn lifecycle: turn received → orchestrator decisions → agent/DM Claude calls → responses posted → round cleared.
 
+### Narrative Style
+
+Configurable via `NARRATIVE_STYLE` env var (`concise`, `standard`, `elaborate`). Defaults to `concise`. Style instructions are injected into both DM and agent system prompts via `STYLE_INSTRUCTIONS` in `config.ts`. Concise mode keeps DM narration to 2-4 sentences and agent responses to 1-3 sentences. Elaborate mode allows rich atmospheric detail.
+
 ### Resumability
 
 The bot is fully resumable across restarts. All game state persists to JSON; AI calls are stateless. On restart, the bot reconnects to Discord and responds to the next player action by loading state from disk. The only thing lost is the in-memory round tracker — the next player action starts a fresh round, but the DM still has full history context. No special resume command is needed; just keep playing.

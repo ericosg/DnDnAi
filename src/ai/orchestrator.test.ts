@@ -22,6 +22,12 @@ mock.module("../config.js", () => ({
   AGENT_DELAY_MS: 0,
   DATA_DIR: "data/games",
   AGENTS_DIR: "agents",
+  NARRATIVE_STYLE: "concise",
+  STYLE_INSTRUCTIONS: {
+    concise: { dm: "", agent: "" },
+    standard: { dm: "", agent: "" },
+    elaborate: { dm: "", agent: "" },
+  },
 }));
 
 // Import after mocks are set up

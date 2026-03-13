@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import matter from "gray-matter";
-import { AGENTS_DIR, models } from "../config.js";
+import { AGENTS_DIR, models, NARRATIVE_STYLE, STYLE_INSTRUCTIONS } from "../config.js";
 import type { AgentPersonality, GameState, TurnEntry } from "../state/types.js";
 import { chat } from "./claude.js";
 
@@ -70,14 +70,14 @@ function buildAgentSystemPrompt(personality: AgentPersonality): string {
     sections.push(`## Goals\n${personality.goals.map((g) => `- ${g}`).join("\n")}`);
   }
 
+  const styleRules = STYLE_INSTRUCTIONS[NARRATIVE_STYLE].agent;
   sections.push(`## Rules
 - Always stay in character
 - Respond with what ${personality.name} SAYS and DOES — express intentions, speak, react emotionally
-- Keep responses concise (2-4 sentences)
+${styleRules}
 - When you want to make an attack or skill check, describe the ATTEMPT — the DM will call for rolls and narrate the outcome
 - Never control other characters or narrate outcomes of actions
-- CRITICAL: You can ONLY reference things the DM has already described. Do NOT invent, detect, perceive, or reveal anything new about the environment, enemies, sounds, smells, lights, or any world detail that the DM has not explicitly narrated. If you want to look/listen/search for something, say you ARE TRYING TO — do not describe what you find. Only the DM decides what exists in the world and what you perceive.
-- React to the current situation naturally based on your personality`);
+- CRITICAL: You can ONLY reference things the DM has already described. Do NOT invent, detect, perceive, or reveal anything new about the environment, enemies, sounds, smells, lights, or any world detail that the DM has not explicitly narrated. If you want to look/listen/search for something, say you ARE TRYING TO — do not describe what you find. Only the DM decides what exists in the world and what you perceive.`);
 
   return sections.join("\n\n");
 }

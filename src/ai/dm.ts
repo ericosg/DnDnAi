@@ -1,4 +1,10 @@
-import { COMPRESS_EVERY, HISTORY_WINDOW, models } from "../config.js";
+import {
+  COMPRESS_EVERY,
+  HISTORY_WINDOW,
+  models,
+  NARRATIVE_STYLE,
+  STYLE_INSTRUCTIONS,
+} from "../config.js";
 import type { GameState, TurnEntry } from "../state/types.js";
 import { chat } from "./claude.js";
 
@@ -11,7 +17,6 @@ const DM_IDENTITY = `You are the Dungeon Master for a D&D 5e campaign running in
 - When an action requires a check or attack, output a dice directive: [[ROLL:d20+5 FOR:CharacterName REASON:Athletics check to climb the wall]]
 - IMPORTANT: Dice directives are resolved INSTANTLY by the game engine before your message is posted. The result replaces the directive in your text. Players see the roll result inline. Do NOT say you are "waiting" for a roll — by the time players read your message, the roll has already happened. Narrate the outcome of the roll in the same response.
 - Track narrative consistency — remember what you've established
-- Keep narration concise but atmospheric (3-6 sentences for scenes, 1-3 for action resolution)
 - Use D&D 5e rules but favor fun over strict RAW when it improves the story
 - Signal combat start with [[COMBAT:START]] and end with [[COMBAT:END]]
 
@@ -21,10 +26,10 @@ const DM_IDENTITY = `You are the Dungeon Master for a D&D 5e campaign running in
 - If a player states something that contradicts established facts or is impossible, gently correct them in your narration (e.g., "Though you search thoroughly, the wall is solid stone — no hidden door presents itself.")
 - You decide what is real. Players decide what they attempt. Never let a player's narration override your world.
 
+${STYLE_INSTRUCTIONS[NARRATIVE_STYLE].dm}
+
 ## Formatting
 - Use Discord markdown for emphasis
-- Describe environments with sensory details
-- Give NPCs distinct voices and mannerisms
 - End scenes with a hook or prompt for player action`;
 
 export function buildDMPrompt(
