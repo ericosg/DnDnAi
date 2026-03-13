@@ -30,13 +30,13 @@ DnDnAi replaces the human DM with Claude AI while keeping human players at the t
 ### Prerequisites
 - [Bun](https://bun.sh) runtime
 - A Discord bot token ([Discord Developer Portal](https://discord.com/developers/applications))
-- An Anthropic API key ([console.anthropic.com](https://console.anthropic.com))
+- [Claude CLI](https://docs.anthropic.com/en/docs/claude-code) installed and logged in (uses your Pro/Max plan — no API key needed)
 
 ### Setup
 
 ```bash
 # Clone and install
-git clone <repo-url>
+git clone git@github.com:ericosg/DnDnAi.git
 cd DnDnAi
 bun install
 
@@ -44,7 +44,6 @@ bun install
 cp .env.example .env
 # Edit .env with your tokens:
 #   DISCORD_TOKEN=your_bot_token
-#   ANTHROPIC_API_KEY=your_api_key
 #   GUILD_ID=your_server_id
 
 # Run
@@ -54,7 +53,7 @@ bun run src/index.ts
 ### Discord Bot Permissions
 
 When creating your bot in the Discord Developer Portal, enable these:
-- **Bot permissions**: Send Messages, Manage Webhooks, Use Slash Commands, Embed Links, Attach Files, Read Message History
+- **Bot permissions**: Send Messages, Manage Webhooks, Use Slash Commands, Embed Links, Attach Files, Read Message History, Add Reactions, View Channels
 - **Privileged intents**: Message Content Intent
 
 ### Invite URL
@@ -189,9 +188,17 @@ See [docs/architecture.md](docs/architecture.md) for full technical details.
 - **Runtime**: [Bun](https://bun.sh)
 - **Language**: TypeScript (strict mode)
 - **Discord**: [discord.js](https://discord.js.org) v14
-- **AI**: [Anthropic SDK](https://docs.anthropic.com/en/docs/sdks) — Opus (DM), Sonnet (agents), Haiku (orchestrator)
+- **AI**: Claude CLI (non-interactive mode) — Opus (DM), Sonnet (agents), Haiku (orchestrator)
 - **Config Parsing**: [gray-matter](https://github.com/jonschlinkert/gray-matter) for agent frontmatter
 - **Persistence**: Flat JSON files (no database)
+
+## Development
+
+```bash
+bun test                       # 67 unit + integration tests
+bunx tsc --noEmit              # type-check
+bunx biome check src/          # lint + format check
+```
 
 ## License
 

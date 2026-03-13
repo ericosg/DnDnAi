@@ -136,6 +136,22 @@ Simplicity. The bot registers commands to one guild (via `GUILD_ID`) and each ga
 
 Supporting multiple guilds is a future enhancement — the architecture doesn't prevent it, it's just not wired up.
 
+## Why Claude CLI Instead of the Anthropic SDK?
+
+The bot uses the Claude CLI (`claude -p`) in non-interactive mode rather than the Anthropic SDK directly. This means AI calls route through the user's Claude Pro/Max subscription instead of requiring separate API credits.
+
+**Pros:**
+- No API key or prepaid credits needed — uses existing Pro/Max plan
+- Same model access (Opus, Sonnet, Haiku)
+- Simpler credential management (just `claude` being logged in)
+
+**Cons:**
+- Slightly higher latency (subprocess spawn per call vs direct HTTP)
+- Consumes Pro/Max plan usage faster
+- Requires Claude CLI installed and authenticated on the host
+
+Since the bot's AI calls are all single-turn and the game's pace is naturally slow (human turn-based), the subprocess overhead is negligible. The cost savings make this ideal for development and small-group play.
+
 ## Why "AFK = Pause"?
 
 The game never auto-advances without human input. If it's a human's turn and they walk away, the bot waits indefinitely. This prevents:
