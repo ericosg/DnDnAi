@@ -83,6 +83,7 @@ mock.module("../discord/formatter.js", () => ({
 
 mock.module("../ai/guardrail.js", () => ({
   checkDMResponse: async () => ({ pass: true }),
+  checkAgentResponse: async () => ({ pass: true }),
 }));
 
 const { processTurn, markResponded } = await import("./engine.js");

@@ -1,7 +1,7 @@
 import type { TextChannel } from "discord.js";
 import { generateAgentAction, loadAgentPersonality } from "../ai/agent.js";
 import { compressNarrative, dmNarrate } from "../ai/dm.js";
-import { checkDMResponse } from "../ai/guardrail.js";
+import { checkAgentResponse, checkDMResponse } from "../ai/guardrail.js";
 import { getNextAction } from "../ai/orchestrator.js";
 import { AGENT_DELAY_MS, COMPRESS_EVERY, HISTORY_WINDOW } from "../config.js";
 import { dmNarrationEmbeds } from "../discord/formatter.js";
@@ -157,13 +157,33 @@ async function handleAgentTurn(
       .join("\n");
 
     log.debug(`Agent ${player.name}: calling Claude (model=${personality.model ?? "default"})`);
-    const response = await generateAgentAction(
+    let response = await generateAgentAction(
       personality,
       gameState,
       recentHistory,
       currentSituation,
     );
     log.info(`Agent ${player.name}: response ready (${response.length} chars)`);
+
+    // Guardrail: check agent isn't inventing world facts
+    const dmContext = recentHistory
+      .filter((t) => t.type === "dm-narration")
+      .map((t) => t.content)
+      .join("\n\n");
+    const agentCheck = await checkAgentResponse(response, player.name, dmContext);
+    if (!agentCheck.pass) {
+      log.warn(`Agent guardrail violation (${player.name}): ${agentCheck.violation}`);
+      log.info(`Agent ${player.name}: re-generating with guardrail feedback...`);
+      response = await generateAgentAction(
+        personality,
+        gameState,
+        recentHistory,
+        `${currentSituation}\n\n[SYSTEM: Your previous response was rejected because you invented world details the DM hasn't described. Violation: "${agentCheck.violation}". You may ONLY reference things the DM has already narrated. Express intentions, speak in character, react emotionally — but do NOT describe what you perceive, detect, or discover. Only the DM decides what exists in the world.]`,
+      );
+      log.info(`Agent ${player.name}: re-generated response ready (${response.length} chars)`);
+    } else {
+      log.info(`Agent guardrail (${player.name}): pass`);
+    }
 
     // Post as agent identity via webhook
     await sendAsIdentity(channel, player.name, response, {

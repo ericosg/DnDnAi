@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
+  AGENT_GUARDRAIL_SYSTEM,
+  buildAgentGuardrailPrompt,
   buildGuardrailPrompt,
   GUARDRAIL_SYSTEM,
   parseGuardrailResponse,
@@ -132,6 +134,65 @@ describe("guardrail", () => {
     test("handles pass:true with extra fields", () => {
       const result = parseGuardrailResponse('{"pass": true, "confidence": 0.95}');
       expect(result.pass).toBe(true);
+    });
+  });
+
+  describe("AGENT_GUARDRAIL_SYSTEM prompt", () => {
+    test("contains world fact invention rules", () => {
+      expect(AGENT_GUARDRAIL_SYSTEM).toContain("invent");
+      expect(AGENT_GUARDRAIL_SYSTEM).toContain("detect");
+      expect(AGENT_GUARDRAIL_SYSTEM).toContain("perceive");
+    });
+
+    test("lists violation examples", () => {
+      expect(AGENT_GUARDRAIL_SYSTEM).toContain("Violations include");
+      expect(AGENT_GUARDRAIL_SYSTEM).toContain("NOT violations");
+    });
+
+    test("allows emotional reactions and intentions", () => {
+      expect(AGENT_GUARDRAIL_SYSTEM).toContain("intentions");
+      expect(AGENT_GUARDRAIL_SYSTEM).toContain("Emotional reactions");
+    });
+
+    test("specifies JSON output format", () => {
+      expect(AGENT_GUARDRAIL_SYSTEM).toContain('"pass"');
+      expect(AGENT_GUARDRAIL_SYSTEM).toContain('"violation"');
+    });
+  });
+
+  describe("buildAgentGuardrailPrompt", () => {
+    test("includes agent name", () => {
+      const prompt = buildAgentGuardrailPrompt(
+        "I raise my shield.",
+        "Grimbold",
+        "The cave is dark.",
+      );
+      expect(prompt).toContain("Grimbold");
+    });
+
+    test("includes agent response", () => {
+      const prompt = buildAgentGuardrailPrompt(
+        "I raise my shield.",
+        "Grimbold",
+        "The cave is dark.",
+      );
+      expect(prompt).toContain("I raise my shield.");
+    });
+
+    test("includes DM context", () => {
+      const prompt = buildAgentGuardrailPrompt(
+        "I raise my shield.",
+        "Grimbold",
+        "The cave is dark and cold.",
+      );
+      expect(prompt).toContain("The cave is dark and cold.");
+    });
+
+    test("has section headers", () => {
+      const prompt = buildAgentGuardrailPrompt("Test.", "Agent", "Context.");
+      expect(prompt).toContain("## Agent Character");
+      expect(prompt).toContain("## What the DM Has Described");
+      expect(prompt).toContain("## Agent Response to Check");
     });
   });
 });

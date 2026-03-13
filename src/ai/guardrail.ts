@@ -2,6 +2,8 @@ import { models } from "../config.js";
 import { log } from "../logger.js";
 import { chat } from "./claude.js";
 import {
+  AGENT_GUARDRAIL_SYSTEM,
+  buildAgentGuardrailPrompt,
   buildGuardrailPrompt,
   GUARDRAIL_SYSTEM,
   type GuardrailResult,
@@ -27,6 +29,25 @@ export async function checkDMResponse(
     return result;
   } catch (err) {
     log.warn("Guardrail: check failed, allowing through:", err);
+    return { pass: true };
+  }
+}
+
+export async function checkAgentResponse(
+  agentResponse: string,
+  agentName: string,
+  dmContext: string,
+): Promise<GuardrailResult> {
+  const prompt = buildAgentGuardrailPrompt(agentResponse, agentName, dmContext);
+
+  try {
+    const response = await chat(models.orchestrator, AGENT_GUARDRAIL_SYSTEM, [
+      { role: "user", content: prompt },
+    ]);
+
+    return parseGuardrailResponse(response);
+  } catch (err) {
+    log.warn("Agent guardrail: check failed, allowing through:", err);
     return { pass: true };
   }
 }
