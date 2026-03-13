@@ -9,11 +9,12 @@ import {
   type TextChannel,
 } from "discord.js";
 import { loadAgentPersonality } from "../ai/agent.js";
-import { dmLook, dmNarrate, dmRecap } from "../ai/dm.js";
+import { dmAsk, dmLook, dmNarrate, dmRecap } from "../ai/dm.js";
 import { config } from "../config.js";
 import { buildAgentCharacter, parseCharacterSheet } from "../game/characters.js";
 import { roll } from "../game/dice.js";
 import { processTurn } from "../game/engine.js";
+import { log } from "../logger.js";
 import {
   createGameState,
   findGameByChannel,
@@ -44,16 +45,17 @@ export function createBot(): Client {
   });
 
   client.once(Events.ClientReady, async (c) => {
-    console.log(`Logged in as ${c.user.tag}`);
+    log.info(`Logged in as ${c.user.tag}`);
     await registerCommands(c.user.id);
   });
 
   client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
+    log.info(`/${interaction.commandName} from ${interaction.user.displayName}`);
     try {
       await handleCommand(interaction);
     } catch (err) {
-      console.error("Command error:", err);
+      log.error("Command error:", err);
       const msg = { content: "Something went wrong.", ephemeral: true };
       if (interaction.replied || interaction.deferred) {
         await interaction.followUp(msg);
@@ -68,6 +70,7 @@ export function createBot(): Client {
     if (message.author.bot) return;
     if (!message.content.startsWith(">")) return;
 
+    log.info(`IC message from ${message.author.displayName}: ${message.content.slice(0, 80)}`);
     const channel = message.channel as TextChannel;
     const gameState = await findGameByChannel(channel.id);
     if (!gameState || gameState.status !== "active") return;
@@ -96,7 +99,7 @@ async function registerCommands(botUserId: string): Promise<void> {
   await rest.put(Routes.applicationGuildCommands(botUserId, config.guildId), {
     body: commands,
   });
-  console.log(`Registered ${commands.length} slash commands`);
+  log.info(`Registered ${commands.length} slash commands`);
 }
 
 async function handleCommand(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -235,7 +238,8 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
             ),
           ],
         });
-      } catch (_err) {
+      } catch (err) {
+        log.error(`Failed to add agent "${agentName}":`, err);
         await interaction.editReply(
           `Could not load agent "${agentName}". Make sure \`agents/${agentName}.md\` exists.`,
         );
@@ -456,6 +460,29 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       };
 
       await processTurn(gameState, entry, channel);
+      break;
+    }
+
+    case "ask": {
+      await interaction.deferReply();
+      const gameState = await findGameByChannel(channel.id);
+      if (!gameState || gameState.status !== "active") {
+        await interaction.editReply("No active game in this channel.");
+        return;
+      }
+
+      const question = interaction.options.getString("question", true);
+      const history = await loadHistory(gameState.id);
+      const answer = await dmAsk(gameState, history, question);
+
+      await sendAsIdentity(channel, "Dungeon Master", "", {
+        embeds: [
+          dmNarrationEmbed(
+            `**OOC — ${interaction.user.displayName} asks:**\n> ${question}\n\n${answer}`,
+          ),
+        ],
+      });
+      await interaction.editReply("The DM has answered your question.");
       break;
     }
 

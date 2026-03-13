@@ -5,6 +5,7 @@ import { getNextAction } from "../ai/orchestrator.js";
 import { AGENT_DELAY_MS, COMPRESS_EVERY, HISTORY_WINDOW } from "../config.js";
 import { dmNarrationEmbed } from "../discord/formatter.js";
 import { sendAsIdentity } from "../discord/webhooks.js";
+import { log } from "../logger.js";
 import { appendHistory, loadHistory, saveGameState } from "../state/store.js";
 import type { DiceResult, GameState, TurnEntry } from "../state/types.js";
 import { advanceTurn, endCombat, startCombat } from "./combat.js";
@@ -39,6 +40,9 @@ export async function processTurn(
   channel: TextChannel,
 ): Promise<void> {
   // Record the entry
+  log.info(
+    `Turn ${gameState.turnCount + 1}: ${entry.playerName} [${entry.type}] — ${entry.content.slice(0, 80)}`,
+  );
   await appendHistory(gameState.id, entry);
   gameState.turnCount++;
 
@@ -46,16 +50,20 @@ export async function processTurn(
   markResponded(gameState.id, entry.playerId);
 
   // Run the orchestrator loop
+  log.info("Orchestrator loop starting");
   await orchestratorLoop(gameState, channel);
+  log.info("Orchestrator loop finished");
 
   // Auto-persist state
   await saveGameState(gameState);
 
   // Compress narrative if needed
   if (gameState.turnCount % COMPRESS_EVERY === 0) {
+    log.info(`Compressing narrative (turn ${gameState.turnCount})`);
     const history = await loadHistory(gameState.id);
     gameState.narrativeSummary = await compressNarrative(gameState, history);
     await saveGameState(gameState);
+    log.info("Narrative compressed");
   }
 }
 
@@ -70,7 +78,13 @@ async function orchestratorLoop(gameState: GameState, channel: TextChannel): Pro
     if (!lastEntry) break;
 
     const responded = getResponded(gameState.id);
+    log.debug(
+      `Orchestrator iteration ${iterations}/${maxIterations} — responded: [${[...responded].join(", ")}]`,
+    );
     const decision = await getNextAction(gameState, history, lastEntry, responded);
+    log.info(
+      `Orchestrator → ${decision.action}${decision.targetPlayerId ? ` target=${decision.targetPlayerId}` : ""} (${decision.reason})`,
+    );
 
     switch (decision.action) {
       case "prompt_agent": {
@@ -83,26 +97,36 @@ async function orchestratorLoop(gameState: GameState, channel: TextChannel): Pro
         await handleDMTurn(gameState, history, channel);
         // After DM resolves, clear round for next cycle
         clearRound(gameState.id);
+        log.info("Round cleared — ready for next player input");
 
         // If combat, advance turn
         if (gameState.combat.active) {
           advanceTurn(gameState);
+          log.info(
+            `Combat: advanced to turn ${gameState.combat.turnIndex}, round ${gameState.combat.round}`,
+          );
         }
         return; // DM narration ends this orchestration cycle
       }
 
       case "wait_for_human": {
-        return; // Stop and wait for human input
+        const waitPlayer = gameState.players.find((p) => p.id === decision.targetPlayerId);
+        log.info(`Waiting for human: ${waitPlayer?.name ?? decision.targetPlayerId}`);
+        return;
       }
 
       case "advance_combat": {
         if (gameState.combat.active) {
           advanceTurn(gameState);
+          log.info(
+            `Combat: advanced to turn ${gameState.combat.turnIndex}, round ${gameState.combat.round}`,
+          );
         }
         break;
       }
 
       case "skip": {
+        log.info("Orchestrator: skipping (no action needed)");
         return;
       }
     }
@@ -118,6 +142,7 @@ async function handleAgentTurn(
   const player = gameState.players.find((p) => p.id === agentPlayerId);
   if (!player || !player.agentFile) return;
 
+  log.info(`Agent turn: ${player.name} — generating response...`);
   // Pacing delay
   await new Promise((r) => setTimeout(r, AGENT_DELAY_MS));
 
@@ -130,17 +155,20 @@ async function handleAgentTurn(
       .map((t) => `[${t.playerName}] ${t.content}`)
       .join("\n");
 
+    log.debug(`Agent ${player.name}: calling Claude (model=${personality.model ?? "default"})`);
     const response = await generateAgentAction(
       personality,
       gameState,
       recentHistory,
       currentSituation,
     );
+    log.info(`Agent ${player.name}: response ready (${response.length} chars)`);
 
     // Post as agent identity via webhook
     await sendAsIdentity(channel, player.name, response, {
       avatarUrl: personality.avatarUrl,
     });
+    log.info(`Agent ${player.name}: posted to Discord`);
 
     // Record in history
     const entry: TurnEntry = {
@@ -156,7 +184,7 @@ async function handleAgentTurn(
     markResponded(gameState.id, player.id);
     gameState.turnCount++;
   } catch (err) {
-    console.error(`Error generating agent action for ${player.name}:`, err);
+    log.error(`Agent ${player.name}: failed to generate action:`, err);
   }
 }
 
@@ -173,10 +201,16 @@ async function handleDMTurn(
     .map((t) => `${t.playerName}: ${t.content}`)
     .join("\n");
 
+  log.info("DM turn: calling Claude for narration...");
+  log.debug(
+    `DM prompt: resolving actions from ${responded.size} players (${recentActions.length} chars)`,
+  );
   try {
     let dmResponse = await dmNarrate(gameState, history, recentActions);
+    log.info(`DM turn: response ready (${dmResponse?.length ?? 0} chars)`);
 
     if (!dmResponse || !dmResponse.trim()) {
+      log.warn("DM returned empty response");
       await channel.send("*The Dungeon Master pauses to gather their thoughts...*");
       return;
     }
@@ -185,9 +219,15 @@ async function handleDMTurn(
     const directives = parseDiceDirective(dmResponse);
     const diceResults: DiceResult[] = [];
 
+    if (directives.length > 0) {
+      log.info(`DM turn: processing ${directives.length} dice directive(s)`);
+    }
     for (const directive of directives) {
       const result = roll(directive.notation, `${directive.forName}: ${directive.reason}`);
       diceResults.push(result);
+      log.info(
+        `  Dice: ${directive.notation} for ${directive.forName} → ${result.total} (${directive.reason})`,
+      );
 
       // Replace the directive in the DM text with the result
       dmResponse = dmResponse.replace(
@@ -198,13 +238,16 @@ async function handleDMTurn(
 
     // Check for combat start/end signals
     if (dmResponse.includes("[[COMBAT:START]]")) {
+      log.info("DM turn: COMBAT START signal detected");
       dmResponse = dmResponse.replace("[[COMBAT:START]]", "");
       const initResults = startCombat(gameState);
       const initText = initResults.map(formatDiceResult).join("\n");
       dmResponse += `\n\n**Initiative Order:**\n${initText}`;
+      log.info(`Combat started — ${initResults.length} combatants rolled initiative`);
     }
 
     if (dmResponse.includes("[[COMBAT:END]]")) {
+      log.info("DM turn: COMBAT END signal detected");
       dmResponse = dmResponse.replace("[[COMBAT:END]]", "");
       endCombat(gameState);
       dmResponse += "\n\n*Combat has ended.*";
@@ -214,6 +257,7 @@ async function handleDMTurn(
     await sendAsIdentity(channel, "Dungeon Master", "", {
       embeds: [dmNarrationEmbed(dmResponse)],
     });
+    log.info("DM turn: narration posted to Discord");
 
     // Record in history
     const entry: TurnEntry = {
@@ -229,7 +273,7 @@ async function handleDMTurn(
     await appendHistory(gameState.id, entry);
     gameState.turnCount++;
   } catch (err) {
-    console.error("Error generating DM narration:", err);
+    log.error("DM turn: failed to generate narration:", err);
     await channel.send("*The Dungeon Master pauses to gather their thoughts...*");
   }
 }

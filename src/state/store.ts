@@ -51,13 +51,21 @@ export async function findGameByChannel(channelId: string): Promise<GameState | 
   if (!existsSync(gamesDir)) return null;
   const { readdir } = await import("node:fs/promises");
   const entries = await readdir(gamesDir, { withFileTypes: true });
+  let latest: GameState | null = null;
   for (const entry of entries) {
     if (entry.isDirectory()) {
       const state = await loadGameState(entry.name);
-      if (state && state.channelId === channelId) return state;
+      if (state && state.channelId === channelId) {
+        // Prefer non-ended games; among those, prefer the most recently active
+        if (!latest || (latest.status === "ended" && state.status !== "ended")) {
+          latest = state;
+        } else if (latest.status === state.status && state.lastActivity > latest.lastActivity) {
+          latest = state;
+        }
+      }
     }
   }
-  return null;
+  return latest;
 }
 
 // --- History ---

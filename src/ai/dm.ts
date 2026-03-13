@@ -9,7 +9,7 @@ const DM_IDENTITY = `You are the Dungeon Master for a D&D 5e campaign running in
 - Be fair but challenging — let players feel heroic
 - Never control player characters' decisions
 - When an action requires a check or attack, output a dice directive: [[ROLL:d20+5 FOR:CharacterName REASON:Athletics check to climb the wall]]
-- After dice are rolled, narrate the outcome based on results
+- IMPORTANT: Dice directives are resolved INSTANTLY by the game engine before your message is posted. The result replaces the directive in your text. Players see the roll result inline. Do NOT say you are "waiting" for a roll — by the time players read your message, the roll has already happened. Narrate the outcome of the roll in the same response.
 - Track narrative consistency — remember what you've established
 - Keep narration concise but atmospheric (3-6 sentences for scenes, 1-3 for action resolution)
 - Use D&D 5e rules but favor fun over strict RAW when it improves the story
@@ -94,7 +94,7 @@ export async function dmNarrate(
   currentActions: string,
 ): Promise<string> {
   const { system, messages } = buildDMPrompt(gameState, history, currentActions);
-  return chat(models.dm, system, messages, 2048);
+  return chat(models.dm, system, messages);
 }
 
 export async function dmRecap(gameState: GameState, history: TurnEntry[]): Promise<string> {
@@ -103,7 +103,7 @@ export async function dmRecap(gameState: GameState, history: TurnEntry[]): Promi
     history,
     "Please provide a dramatic recap of the adventure so far, summarizing key events, discoveries, and character moments. Write it as a 'Previously on...' narration.",
   );
-  return chat(models.dm, system, messages, 1024);
+  return chat(models.dm, system, messages);
 }
 
 export async function dmLook(
@@ -116,7 +116,20 @@ export async function dmLook(
     : `A player looks around. Describe the current environment in detail — sights, sounds, smells, and anything notable they might interact with.`;
 
   const { system, messages } = buildDMPrompt(gameState, history, prompt);
-  return chat(models.dm, system, messages, 1024);
+  return chat(models.dm, system, messages);
+}
+
+export async function dmAsk(
+  gameState: GameState,
+  history: TurnEntry[],
+  question: string,
+): Promise<string> {
+  const { system, messages } = buildDMPrompt(
+    gameState,
+    history,
+    `[OUT-OF-CHARACTER QUESTION FROM A PLAYER]\n\n${question}\n\nAnswer this out-of-character question helpfully. You can reference game rules, what has happened in the story, available options, or anything else the player might want to know. Keep your DM personality but be direct and informative.`,
+  );
+  return chat(models.dm, system, messages);
 }
 
 export async function compressNarrative(
@@ -142,5 +155,5 @@ export async function compressNarrative(
     },
   ];
 
-  return chat(models.orchestrator, system, messages, 1024);
+  return chat(models.orchestrator, system, messages);
 }

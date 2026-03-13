@@ -142,7 +142,6 @@ export async function classifyMessage(message: string, context: string): Promise
         content: `Context: ${context}\n\nMessage: "${message}"\n\nIs this IC or OOC?`,
       },
     ],
-    10,
   );
   return response.trim().toUpperCase() === "IC";
 }

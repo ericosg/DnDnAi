@@ -4,12 +4,7 @@
  */
 
 /** Build the CLI argument array for a `claude -p` subprocess call. */
-export function buildSpawnArgs(
-  model: string,
-  system: string,
-  prompt: string,
-  maxTokens: number,
-): string[] {
+export function buildSpawnArgs(model: string, system: string, prompt: string): string[] {
   return [
     "claude",
     "-p",
@@ -18,8 +13,6 @@ export function buildSpawnArgs(
     model,
     "--system-prompt",
     system,
-    "--max-tokens",
-    String(maxTokens),
     "--output-format",
     "text",
     "--no-session-persistence",

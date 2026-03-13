@@ -41,7 +41,7 @@ export async function generateAgentAction(
   const system = buildAgentSystemPrompt(personality);
   const messages = buildAgentMessages(personality, gameState, recentHistory, currentSituation);
   const model = personality.model ?? models.agent;
-  return chat(model, system, messages, 1024);
+  return chat(model, system, messages);
 }
 
 function buildAgentSystemPrompt(personality: AgentPersonality): string {
@@ -145,5 +145,5 @@ Party context: ${partyContext}`,
     },
   ];
 
-  return chat(models.agent, system, messages, 1024);
+  return chat(models.agent, system, messages);
 }

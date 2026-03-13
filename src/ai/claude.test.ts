@@ -3,12 +3,7 @@ import { buildSpawnArgs, buildSpawnEnv, isRetryable } from "./claude-subprocess.
 
 describe("claude CLI subprocess", () => {
   describe("buildSpawnArgs", () => {
-    const args = buildSpawnArgs(
-      "claude-opus-4-20250514",
-      "You are a DM.",
-      "Describe the room.",
-      2048,
-    );
+    const args = buildSpawnArgs("claude-opus-4-20250514", "You are a DM.", "Describe the room.");
 
     test("starts with claude binary", () => {
       expect(args[0]).toBe("claude");
@@ -32,16 +27,8 @@ describe("claude CLI subprocess", () => {
       expect(args[idx + 1]).toBe("You are a DM.");
     });
 
-    test("passes maxTokens via --max-tokens", () => {
-      const idx = args.indexOf("--max-tokens");
-      expect(idx).toBeGreaterThan(-1);
-      expect(args[idx + 1]).toBe("2048");
-    });
-
-    test("passes custom maxTokens", () => {
-      const custom = buildSpawnArgs("m", "s", "p", 4096);
-      const idx = custom.indexOf("--max-tokens");
-      expect(custom[idx + 1]).toBe("4096");
+    test("does not include --max-tokens (not supported by CLI)", () => {
+      expect(args).not.toContain("--max-tokens");
     });
 
     test("uses text output format", () => {
@@ -130,20 +117,20 @@ describe("claude CLI subprocess", () => {
 
   describe("prompt construction (via buildSpawnArgs)", () => {
     test("single message becomes the prompt", () => {
-      const args = buildSpawnArgs("m", "s", "Solo message.", 2048);
+      const args = buildSpawnArgs("m", "s", "Solo message.");
       const idx = args.indexOf("-p");
       expect(args[idx + 1]).toBe("Solo message.");
     });
 
     test("empty prompt is passed through", () => {
-      const args = buildSpawnArgs("m", "s", "", 2048);
+      const args = buildSpawnArgs("m", "s", "");
       const idx = args.indexOf("-p");
       expect(args[idx + 1]).toBe("");
     });
 
     test("long prompt with newlines is preserved", () => {
       const prompt = "First paragraph.\n\nSecond paragraph.\n\nThird.";
-      const args = buildSpawnArgs("m", "s", prompt, 2048);
+      const args = buildSpawnArgs("m", "s", prompt);
       const idx = args.indexOf("-p");
       expect(args[idx + 1]).toBe(prompt);
     });

@@ -72,6 +72,7 @@ Use the OAuth2 URL Generator in the Developer Portal with the `bot` and `applica
 | `/look [target]` | Ask the DM to describe the environment or something specific |
 | `/whisper @player <msg>` | Private in-character message |
 | `/recap` | DM summarizes the story so far |
+| `/ask <question>` | Ask the DM an out-of-character question about rules or the game |
 | `/inventory` | Show your character's equipment |
 | `/pass` | Skip your turn |
 | `/end` | End the campaign and save final state |
@@ -100,49 +101,11 @@ In combat, turns follow initiative order. The game never auto-advances without h
 
 ## Character Sheets
 
-Upload a markdown file with your character info. The parser is flexible but works best with this structure:
+Upload a markdown (`.md`) file with your character's stats, skills, equipment, and backstory. The bot's parser is flexible — `**Key:** Value`, `Key: Value`, and `- Key: Value` all work.
 
-```markdown
-**Name:** Your Character Name
-**Race:** Half-Elf
-**Class:** Rogue
-**Level:** 3
-**Background:** Criminal
-**Alignment:** Chaotic Neutral
+See the full guide: **[docs/creating-characters.md](docs/creating-characters.md)** — covers the format, what every field means, how to use AI to generate a character if you're new to D&D, and links to learning resources.
 
-**Strength:** 10
-**Dexterity:** 16
-**Constitution:** 14
-**Wisdom:** 12
-**Intelligence:** 13
-**Charisma:** 8
-
-**Armor Class:** 14
-**HP:** 24
-**Speed:** 30
-**Proficiency Bonus:** +2
-
-## Skills
-- Stealth
-- Perception
-- Acrobatics
-- Sleight of Hand
-
-## Equipment
-- Rapier
-- Shortbow
-- Leather armor
-- Thieves' tools
-- Burglar's pack
-
-## Features
-- Sneak Attack (2d6)
-- Cunning Action
-- Expertise (Stealth, Perception)
-
-## Backstory
-A street-smart rogue who learned to survive in the alleys of Waterdeep...
-```
+A ready-to-use sample is included at [`characters/sample-character.md`](characters/sample-character.md) — copy it and make it your own, or use it as-is.
 
 ## Creating AI Agents
 

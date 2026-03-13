@@ -93,4 +93,15 @@ export const commands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
     .setName("end")
     .setDescription("End the campaign and save final state")
     .toJSON(),
+
+  new SlashCommandBuilder()
+    .setName("ask")
+    .setDescription("Ask the DM an out-of-character question about the game")
+    .addStringOption((opt) =>
+      opt
+        .setName("question")
+        .setDescription("Your question (rules, options, what happened, etc.)")
+        .setRequired(true),
+    )
+    .toJSON(),
 ];

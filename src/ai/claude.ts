@@ -1,3 +1,4 @@
+import { log } from "../logger.js";
 import { buildSpawnArgs, buildSpawnEnv, isRetryable } from "./claude-subprocess.js";
 
 interface ChatMessage {
@@ -12,11 +13,12 @@ export async function chat(
   model: string,
   system: string,
   messages: ChatMessage[],
-  maxTokens = 2048,
 ): Promise<string> {
   const prompt = messages.map((m) => m.content).join("\n\n");
-  const args = buildSpawnArgs(model, system, prompt, maxTokens);
+  const args = buildSpawnArgs(model, system, prompt);
   const env = buildSpawnEnv();
+
+  log.debug(`Claude call: model=${model} promptLen=${prompt.length}`);
 
   let lastError: unknown;
 
@@ -34,18 +36,20 @@ export async function chat(
 
       if (exitCode !== 0) {
         const msg = stderr.trim() || `claude exited with code ${exitCode}`;
+        log.error(`Claude CLI failed (exit ${exitCode}): ${msg.slice(0, 200)}`);
         if (isRetryable(msg)) {
           throw new RetryableError(msg);
         }
         throw new Error(`Claude CLI error: ${msg}`);
       }
 
+      log.debug(`Claude response: ${stdout.trim().length} chars`);
       return stdout.trim();
     } catch (err: unknown) {
       lastError = err;
       if (err instanceof RetryableError) {
         const delay = BASE_DELAY * 2 ** attempt;
-        console.warn(`Claude CLI retry ${attempt + 1}/${MAX_RETRIES} in ${delay}ms`);
+        log.warn(`Claude CLI retry ${attempt + 1}/${MAX_RETRIES} in ${delay}ms`);
         await new Promise((r) => setTimeout(r, delay));
         continue;
       }
