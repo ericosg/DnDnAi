@@ -1,38 +1,36 @@
 import {
+  type Attachment,
+  type ChatInputCommandInteraction,
   Client,
-  GatewayIntentBits,
   Events,
+  GatewayIntentBits,
   REST,
   Routes,
-  type ChatInputCommandInteraction,
-  type Message,
   type TextChannel,
-  type Attachment,
 } from "discord.js";
+import { loadAgentPersonality } from "../ai/agent.js";
+import { dmLook, dmNarrate, dmRecap } from "../ai/dm.js";
 import { config } from "../config.js";
-import { commands } from "./commands.js";
+import { buildAgentCharacter, parseCharacterSheet } from "../game/characters.js";
+import { roll } from "../game/dice.js";
+import { processTurn } from "../game/engine.js";
 import {
   createGameState,
-  saveGameState,
   findGameByChannel,
   loadHistory,
   saveCharacter,
+  saveGameState,
 } from "../state/store.js";
-import type { GameState, Player, TurnEntry } from "../state/types.js";
-import { roll, formatDiceResult } from "../game/dice.js";
-import { parseCharacterSheet, buildAgentCharacter } from "../game/characters.js";
-import { loadAgentPersonality } from "../ai/agent.js";
-import { dmNarrate, dmRecap, dmLook } from "../ai/dm.js";
-import { processTurn, clearRound } from "../game/engine.js";
-import { startCombat } from "../game/combat.js";
+import type { Player, TurnEntry } from "../state/types.js";
+import { commands } from "./commands.js";
 import {
-  dmNarrationEmbed,
-  systemEmbed,
-  partyStatusEmbed,
-  inventoryEmbed,
-  whisperEmbed,
-  diceResultText,
   combatStatusEmbed,
+  diceResultText,
+  dmNarrationEmbed,
+  inventoryEmbed,
+  partyStatusEmbed,
+  systemEmbed,
+  whisperEmbed,
 } from "./formatter.js";
 import { sendAsIdentity } from "./webhooks.js";
 
@@ -121,7 +119,7 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
         embeds: [
           systemEmbed(
             "New Campaign Created",
-            "Use `/join` with a character sheet to join, `/add-agent` for AI companions, then `/start` to begin!"
+            "Use `/join` with a character sheet to join, `/add-agent` for AI companions, then `/start` to begin!",
           ),
         ],
       });
@@ -144,6 +142,15 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       const markdown = await fetchAttachment(attachment);
       const sheet = parseCharacterSheet(markdown);
 
+      // Check for character name collision
+      const nameTaken = gameState.players.some(
+        (p) => p.characterSheet.name.toLowerCase() === sheet.name.toLowerCase(),
+      );
+      if (nameTaken) {
+        await interaction.editReply(`A character named "${sheet.name}" is already in the party.`);
+        return;
+      }
+
       const player: Player = {
         id: interaction.user.id,
         name: interaction.user.displayName,
@@ -160,7 +167,7 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
         embeds: [
           systemEmbed(
             `${sheet.name} Joins the Party`,
-            `**${sheet.name}** — ${sheet.race} ${sheet.class} ${sheet.level}\nHP: ${sheet.hp.max} | AC: ${sheet.armorClass}\n\nWelcome, adventurer!`
+            `**${sheet.name}** — ${sheet.race} ${sheet.class} ${sheet.level}\nHP: ${sheet.hp.max} | AC: ${sheet.armorClass}\n\nWelcome, adventurer!`,
           ),
         ],
       });
@@ -185,11 +192,27 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
           return;
         }
 
+        // Check for character name collision
+        const nameTaken = gameState.players.some(
+          (p) => p.characterSheet.name.toLowerCase() === personality.name.toLowerCase(),
+        );
+        if (nameTaken) {
+          await interaction.editReply(
+            `A character named "${personality.name}" is already in the party.`,
+          );
+          return;
+        }
+
         const partyContext = gameState.players
-          .map((p) => `${p.characterSheet.name} (${p.characterSheet.race} ${p.characterSheet.class})`)
+          .map(
+            (p) => `${p.characterSheet.name} (${p.characterSheet.race} ${p.characterSheet.class})`,
+          )
           .join(", ");
 
-        const sheet = await buildAgentCharacter(personality, partyContext || "First member of the party");
+        const sheet = await buildAgentCharacter(
+          personality,
+          partyContext || "First member of the party",
+        );
 
         const player: Player = {
           id: agentId,
@@ -208,12 +231,14 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
           embeds: [
             systemEmbed(
               `${personality.name} Joins the Party`,
-              `**${personality.name}** — ${sheet.race} ${sheet.class} ${sheet.level}\n${personality.description}\n\n*${sheet.backstory.slice(0, 200)}...*`
+              `**${personality.name}** — ${sheet.race} ${sheet.class} ${sheet.level}\n${personality.description}\n\n*${sheet.backstory.slice(0, 200)}...*`,
             ),
           ],
         });
-      } catch (err) {
-        await interaction.editReply(`Could not load agent "${agentName}". Make sure \`agents/${agentName}.md\` exists.`);
+      } catch (_err) {
+        await interaction.editReply(
+          `Could not load agent "${agentName}". Make sure \`agents/${agentName}.md\` exists.`,
+        );
       }
       break;
     }
@@ -226,7 +251,9 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
         return;
       }
       if (gameState.players.length === 0) {
-        await interaction.editReply("No players have joined yet. Use `/join` or `/add-agent` first.");
+        await interaction.editReply(
+          "No players have joined yet. Use `/join` or `/add-agent` first.",
+        );
         return;
       }
 
@@ -238,10 +265,14 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       let openingPrompt: string;
 
       if (history.length > 0) {
-        openingPrompt = "The party reconvenes. Generate a 'Last time on...' recap of the story so far, then describe the current scene and prompt the players for action.";
+        openingPrompt =
+          "The party reconvenes. Generate a 'Last time on...' recap of the story so far, then describe the current scene and prompt the players for action.";
       } else {
         const partyDesc = gameState.players
-          .map((p) => `${p.characterSheet.name} the ${p.characterSheet.race} ${p.characterSheet.class}`)
+          .map(
+            (p) =>
+              `${p.characterSheet.name} the ${p.characterSheet.race} ${p.characterSheet.class}`,
+          )
           .join(", ");
         openingPrompt = `The campaign begins. The party consists of: ${partyDesc}. Narrate a compelling opening scene that brings these characters together and gives them a reason to adventure. End with a clear hook or prompt for action.`;
       }
@@ -291,10 +322,13 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       try {
         const result = roll(notation, label);
         await interaction.reply(
-          `**${interaction.user.displayName}** rolls ${diceResultText(result)}`
+          `**${interaction.user.displayName}** rolls ${diceResultText(result)}`,
         );
       } catch {
-        await interaction.reply({ content: `Invalid dice notation: \`${notation}\``, ephemeral: true });
+        await interaction.reply({
+          content: `Invalid dice notation: \`${notation}\``,
+          ephemeral: true,
+        });
       }
       break;
     }
@@ -438,7 +472,7 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
         embeds: [
           systemEmbed(
             "Campaign Ended",
-            `The adventure concludes after ${gameState.turnCount} turns.\nFinal state has been saved. Use \`/new-game\` to start a new campaign.`
+            `The adventure concludes after ${gameState.turnCount} turns.\nFinal state has been saved. Use \`/new-game\` to start a new campaign.`,
           ),
         ],
       });
@@ -448,6 +482,15 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
 }
 
 async function fetchAttachment(attachment: Attachment): Promise<string> {
-  const response = await fetch(attachment.url);
-  return response.text();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 10_000);
+  try {
+    const response = await fetch(attachment.url, { signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(`Failed to fetch attachment: ${response.status} ${response.statusText}`);
+    }
+    return await response.text();
+  } finally {
+    clearTimeout(timeout);
+  }
 }

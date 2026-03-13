@@ -1,10 +1,10 @@
-import { readFile } from "fs/promises";
-import { existsSync } from "fs";
-import path from "path";
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import matter from "gray-matter";
 import { AGENTS_DIR, models } from "../config.js";
+import type { AgentPersonality, GameState, TurnEntry } from "../state/types.js";
 import { chat } from "./claude.js";
-import type { AgentPersonality, TurnEntry, GameState } from "../state/types.js";
 
 export async function loadAgentPersonality(name: string): Promise<AgentPersonality> {
   const filePath = path.join(AGENTS_DIR, `${name}.md`);
@@ -36,7 +36,7 @@ export async function generateAgentAction(
   personality: AgentPersonality,
   gameState: GameState,
   recentHistory: TurnEntry[],
-  currentSituation: string
+  currentSituation: string,
 ): Promise<string> {
   const system = buildAgentSystemPrompt(personality);
   const messages = buildAgentMessages(personality, gameState, recentHistory, currentSituation);
@@ -45,38 +45,48 @@ export async function generateAgentAction(
 }
 
 function buildAgentSystemPrompt(personality: AgentPersonality): string {
-  return `You are ${personality.name}, a ${personality.race} ${personality.class} (Level ${personality.level}) in a D&D 5e campaign.
+  const sections: string[] = [
+    `You are ${personality.name}, a ${personality.race} ${personality.class} (Level ${personality.level}) in a D&D 5e campaign.`,
+  ];
 
-## Your Personality
-${personality.rawContent}
+  // rawContent includes personality prose, combat style, and roleplay notes
+  if (personality.rawContent.trim()) {
+    sections.push(personality.rawContent.trim());
+  }
 
-## Voice & Style
-${personality.voice || `Speak in character as ${personality.name}. Be concise — 1-3 sentences for actions, 1-2 for dialogue.`}
+  // Only add structured sections if rawContent doesn't already cover them
+  if (personality.voice) {
+    sections.push(`## Voice & Style\n${personality.voice}`);
+  }
 
-## Traits
-${personality.traits.map((t) => `- ${t}`).join("\n")}
+  // Structured traits/flaws/goals supplement the prose (not duplicated in rawContent)
+  if (personality.traits.length) {
+    sections.push(`## Key Traits\n${personality.traits.map((t) => `- ${t}`).join("\n")}`);
+  }
+  if (personality.flaws.length) {
+    sections.push(`## Flaws\n${personality.flaws.map((f) => `- ${f}`).join("\n")}`);
+  }
+  if (personality.goals.length) {
+    sections.push(`## Goals\n${personality.goals.map((g) => `- ${g}`).join("\n")}`);
+  }
 
-## Flaws
-${personality.flaws.map((f) => `- ${f}`).join("\n")}
-
-## Goals
-${personality.goals.map((g) => `- ${g}`).join("\n")}
-
-## Rules
+  sections.push(`## Rules
 - Always stay in character
 - Respond with what ${personality.name} SAYS and DOES
 - Keep responses concise (2-4 sentences)
 - Use > prefix for in-character speech/actions
 - When you want to make an attack or skill check, describe the attempt — the DM will call for rolls
 - Never control other characters or narrate outcomes
-- React to the current situation naturally based on your personality`;
+- React to the current situation naturally based on your personality`);
+
+  return sections.join("\n\n");
 }
 
 function buildAgentMessages(
   personality: AgentPersonality,
   gameState: GameState,
   recentHistory: TurnEntry[],
-  currentSituation: string
+  currentSituation: string,
 ): { role: "user" | "assistant"; content: string }[] {
   const historyText = recentHistory
     .map((t) => {
@@ -86,7 +96,10 @@ function buildAgentMessages(
     .join("\n");
 
   const partyInfo = gameState.players
-    .map((p) => `- ${p.characterSheet.name} (${p.characterSheet.race} ${p.characterSheet.class}${p.isAgent ? ", AI" : ""})`)
+    .map(
+      (p) =>
+        `- ${p.characterSheet.name} (${p.characterSheet.race} ${p.characterSheet.class}${p.isAgent ? ", AI" : ""})`,
+    )
     .join("\n");
 
   return [
@@ -108,7 +121,7 @@ What does ${personality.name} do or say? Respond in character.`,
 
 export async function generateBackstory(
   personality: AgentPersonality,
-  partyContext: string
+  partyContext: string,
 ): Promise<string> {
   const system = `You are a creative writer for D&D 5e. Generate a compelling backstory for a character based on their personality file and mechanical spec. The backstory should be 2-3 paragraphs, vivid, and hint at motivations. Write in third person.`;
 
