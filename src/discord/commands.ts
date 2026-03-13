@@ -1,6 +1,6 @@
 import {
-  SlashCommandBuilder,
   type RESTPostAPIChatInputApplicationCommandsJSONBody,
+  SlashCommandBuilder,
 } from "discord.js";
 
 export const commands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
@@ -16,7 +16,7 @@ export const commands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
       opt
         .setName("character")
         .setDescription("Your character sheet (markdown file)")
-        .setRequired(true)
+        .setRequired(true),
     )
     .toJSON(),
 
@@ -24,10 +24,7 @@ export const commands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
     .setName("add-agent")
     .setDescription("Add an AI agent to the game")
     .addStringOption((opt) =>
-      opt
-        .setName("name")
-        .setDescription("Agent name (matches agents/<name>.md)")
-        .setRequired(true)
+      opt.setName("name").setDescription("Agent name (matches agents/<name>.md)").setRequired(true),
     )
     .toJSON(),
 
@@ -48,13 +45,10 @@ export const commands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
       opt
         .setName("notation")
         .setDescription("Dice notation (e.g., 2d6+3, d20, 4d6kh3)")
-        .setRequired(true)
+        .setRequired(true),
     )
     .addStringOption((opt) =>
-      opt
-        .setName("label")
-        .setDescription("What this roll is for")
-        .setRequired(false)
+      opt.setName("label").setDescription("What this roll is for").setRequired(false),
     )
     .toJSON(),
 
@@ -65,7 +59,7 @@ export const commands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
       opt
         .setName("target")
         .setDescription("What to look at (leave blank for general)")
-        .setRequired(false)
+        .setRequired(false),
     )
     .toJSON(),
 
@@ -73,16 +67,10 @@ export const commands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
     .setName("whisper")
     .setDescription("Send a private in-character message")
     .addUserOption((opt) =>
-      opt
-        .setName("player")
-        .setDescription("Who to whisper to")
-        .setRequired(true)
+      opt.setName("player").setDescription("Who to whisper to").setRequired(true),
     )
     .addStringOption((opt) =>
-      opt
-        .setName("message")
-        .setDescription("Your whisper")
-        .setRequired(true)
+      opt.setName("message").setDescription("Your whisper").setRequired(true),
     )
     .toJSON(),
 

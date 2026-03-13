@@ -15,7 +15,7 @@ export async function chat(
   model: string,
   system: string,
   messages: ChatMessage[],
-  maxTokens = 2048
+  maxTokens = 2048,
 ): Promise<string> {
   let lastError: unknown;
 
@@ -32,11 +32,8 @@ export async function chat(
       return textBlock?.text ?? "";
     } catch (err: unknown) {
       lastError = err;
-      if (
-        err instanceof Anthropic.RateLimitError ||
-        err instanceof Anthropic.InternalServerError
-      ) {
-        const delay = BASE_DELAY * Math.pow(2, attempt);
+      if (err instanceof Anthropic.RateLimitError || err instanceof Anthropic.InternalServerError) {
+        const delay = BASE_DELAY * 2 ** attempt;
         console.warn(`Claude API retry ${attempt + 1}/${MAX_RETRIES} in ${delay}ms`);
         await new Promise((r) => setTimeout(r, delay));
         continue;

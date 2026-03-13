@@ -105,12 +105,7 @@ export interface GameState {
 }
 
 export interface OrchestratorDecision {
-  action:
-    | "prompt_agent"
-    | "prompt_dm"
-    | "wait_for_human"
-    | "advance_combat"
-    | "skip";
+  action: "prompt_agent" | "prompt_dm" | "wait_for_human" | "advance_combat" | "skip";
   targetPlayerId?: string;
   reason: string;
   isIC: boolean;

@@ -1,8 +1,8 @@
-import { mkdir, readFile, writeFile } from "fs/promises";
-import { existsSync } from "fs";
-import path from "path";
+import { existsSync } from "node:fs";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { DATA_DIR } from "../config.js";
-import type { GameState, TurnEntry, CharacterSheet } from "./types.js";
+import type { CharacterSheet, GameState, TurnEntry } from "./types.js";
 
 function gamePath(gameId: string): string {
   return path.join(DATA_DIR, gameId);
@@ -17,7 +17,11 @@ function historyPath(gameId: string): string {
 }
 
 function characterPath(gameId: string, name: string): string {
-  return path.join(gamePath(gameId), "characters", `${name.toLowerCase().replace(/\s+/g, "-")}.json`);
+  return path.join(
+    gamePath(gameId),
+    "characters",
+    `${name.toLowerCase().replace(/\s+/g, "-")}.json`,
+  );
 }
 
 async function ensureDir(dir: string): Promise<void> {
@@ -45,7 +49,7 @@ export async function loadGameState(gameId: string): Promise<GameState | null> {
 export async function findGameByChannel(channelId: string): Promise<GameState | null> {
   const gamesDir = DATA_DIR;
   if (!existsSync(gamesDir)) return null;
-  const { readdir } = await import("fs/promises");
+  const { readdir } = await import("node:fs/promises");
   const entries = await readdir(gamesDir, { withFileTypes: true });
   for (const entry of entries) {
     if (entry.isDirectory()) {

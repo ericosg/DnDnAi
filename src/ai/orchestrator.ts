@@ -1,8 +1,8 @@
-import { chat } from "./claude.js";
 import { models } from "../config.js";
-import type { GameState, TurnEntry, OrchestratorDecision } from "../state/types.js";
+import type { GameState, OrchestratorDecision, TurnEntry } from "../state/types.js";
+import { chat } from "./claude.js";
 
-const ORCHESTRATOR_SYSTEM = `You are the flow controller for a D&D game running in Discord. Your job is to decide what happens next.
+const _ORCHESTRATOR_SYSTEM = `You are the flow controller for a D&D game running in Discord. Your job is to decide what happens next.
 
 You will receive the current game state, recent history, and the last message. You must decide:
 1. Is this message in-character (IC) or out-of-character (OOC)?
@@ -29,7 +29,7 @@ export async function getNextAction(
   gameState: GameState,
   history: TurnEntry[],
   lastEntry: TurnEntry,
-  respondedThisRound: Set<string>
+  respondedThisRound: Set<string>,
 ): Promise<OrchestratorDecision> {
   // Fast path: combat mode — follow initiative order
   if (gameState.combat.active) {
@@ -41,14 +41,12 @@ export async function getNextAction(
     return { action: "skip", reason: "OOC message, no game action needed", isIC: false };
   }
 
-  const recentHistory = history.slice(-6);
+  const _recentHistory = history.slice(-6);
   const humanPlayers = gameState.players.filter((p) => !p.isAgent);
   const agentPlayers = gameState.players.filter((p) => p.isAgent);
 
   // Check which agents haven't responded
-  const unrespondedAgents = agentPlayers.filter(
-    (p) => !respondedThisRound.has(p.id)
-  );
+  const unrespondedAgents = agentPlayers.filter((p) => !respondedThisRound.has(p.id));
 
   // If there are agents that haven't responded, prompt the next one
   if (unrespondedAgents.length > 0) {
@@ -61,9 +59,7 @@ export async function getNextAction(
   }
 
   // Check if any human hasn't responded
-  const unrespondedHumans = humanPlayers.filter(
-    (p) => !respondedThisRound.has(p.id)
-  );
+  const unrespondedHumans = humanPlayers.filter((p) => !respondedThisRound.has(p.id));
 
   if (unrespondedHumans.length > 0) {
     return {
@@ -84,7 +80,7 @@ export async function getNextAction(
 
 function getCombatNextAction(
   gameState: GameState,
-  respondedThisRound: Set<string>
+  respondedThisRound: Set<string>,
 ): OrchestratorDecision {
   const combat = gameState.combat;
   const currentCombatant = combat.combatants[combat.turnIndex];
@@ -136,10 +132,7 @@ function getCombatNextAction(
  * Use AI to determine if ambiguous messages are IC or OOC
  * (Used as fallback when > prefix detection isn't clear)
  */
-export async function classifyMessage(
-  message: string,
-  context: string
-): Promise<boolean> {
+export async function classifyMessage(message: string, context: string): Promise<boolean> {
   const response = await chat(
     models.orchestrator,
     "You classify Discord messages in a D&D game as in-character (IC) or out-of-character (OOC). Respond with just 'IC' or 'OOC'.",
@@ -149,7 +142,7 @@ export async function classifyMessage(
         content: `Context: ${context}\n\nMessage: "${message}"\n\nIs this IC or OOC?`,
       },
     ],
-    10
+    10,
   );
   return response.trim().toUpperCase() === "IC";
 }

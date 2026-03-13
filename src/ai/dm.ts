@@ -1,6 +1,6 @@
-import { chat } from "./claude.js";
-import { models, HISTORY_WINDOW, COMPRESS_EVERY } from "../config.js";
+import { COMPRESS_EVERY, HISTORY_WINDOW, models } from "../config.js";
 import type { GameState, TurnEntry } from "../state/types.js";
+import { chat } from "./claude.js";
 
 const DM_IDENTITY = `You are the Dungeon Master for a D&D 5e campaign running in Discord.
 
@@ -24,7 +24,7 @@ const DM_IDENTITY = `You are the Dungeon Master for a D&D 5e campaign running in
 export function buildDMPrompt(
   gameState: GameState,
   history: TurnEntry[],
-  currentActions: string
+  currentActions: string,
 ): { system: string; messages: { role: "user" | "assistant"; content: string }[] } {
   // Layer 1: Identity + rules (static)
   let system = DM_IDENTITY;
@@ -91,20 +91,17 @@ export function buildDMPrompt(
 export async function dmNarrate(
   gameState: GameState,
   history: TurnEntry[],
-  currentActions: string
+  currentActions: string,
 ): Promise<string> {
   const { system, messages } = buildDMPrompt(gameState, history, currentActions);
   return chat(models.dm, system, messages, 2048);
 }
 
-export async function dmRecap(
-  gameState: GameState,
-  history: TurnEntry[]
-): Promise<string> {
+export async function dmRecap(gameState: GameState, history: TurnEntry[]): Promise<string> {
   const { system, messages } = buildDMPrompt(
     gameState,
     history,
-    "Please provide a dramatic recap of the adventure so far, summarizing key events, discoveries, and character moments. Write it as a 'Previously on...' narration."
+    "Please provide a dramatic recap of the adventure so far, summarizing key events, discoveries, and character moments. Write it as a 'Previously on...' narration.",
   );
   return chat(models.dm, system, messages, 1024);
 }
@@ -112,7 +109,7 @@ export async function dmRecap(
 export async function dmLook(
   gameState: GameState,
   history: TurnEntry[],
-  target?: string
+  target?: string,
 ): Promise<string> {
   const prompt = target
     ? `A player wants to examine: "${target}". Describe what they see, hear, and sense. Include any details that might be relevant for gameplay.`
@@ -124,7 +121,7 @@ export async function dmLook(
 
 export async function compressNarrative(
   gameState: GameState,
-  history: TurnEntry[]
+  history: TurnEntry[],
 ): Promise<string> {
   const existing = gameState.narrativeSummary
     ? `Previous summary:\n${gameState.narrativeSummary}\n\n`
@@ -135,7 +132,8 @@ export async function compressNarrative(
     .map((t) => `[${t.playerName}] ${t.content}`)
     .join("\n");
 
-  const system = "You are a concise narrative summarizer for a D&D campaign. Combine the existing summary with recent events into a coherent 2-4 paragraph narrative summary. Focus on key plot points, character developments, and important discoveries. Omit mechanical details (dice rolls, HP changes) unless plot-relevant.";
+  const system =
+    "You are a concise narrative summarizer for a D&D campaign. Combine the existing summary with recent events into a coherent 2-4 paragraph narrative summary. Focus on key plot points, character developments, and important discoveries. Omit mechanical details (dice rolls, HP changes) unless plot-relevant.";
 
   const messages: { role: "user" | "assistant"; content: string }[] = [
     {
