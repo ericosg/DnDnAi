@@ -36,7 +36,7 @@ TypeScript + Bun runtime, discord.js for Discord, Claude CLI for AI (uses Pro/Ma
 3. `game/engine.ts:processTurn()` records the entry, then runs `orchestratorLoop()`
 4. The orchestrator (`ai/orchestrator.ts:getNextAction()`) deterministically decides: prompt an AI agent, call the DM, wait for a human, or advance combat
 5. For agents: `ai/agent.ts` generates an in-character response using the personality file, posts via webhook
-6. For DM: `ai/dm.ts` generates narration with a 5-layer prompt, engine processes dice directives (`[[ROLL:...]]`) and combat signals (`[[COMBAT:START/END]]`)
+6. For DM: `ai/dm.ts` generates narration with a 5-layer prompt, then `ai/guardrail.ts` (Haiku) checks for player agency violations before posting. If the DM narrated/controlled a PC, it re-generates with feedback. Engine processes dice directives (`[[ROLL:...]]`) and combat signals (`[[COMBAT:START/END]]`)
 7. After DM resolves, the round clears and the cycle restarts
 8. State auto-persists to JSON after every turn; narrative compresses every 10 turns
 
@@ -47,6 +47,7 @@ TypeScript + Bun runtime, discord.js for Discord, Claude CLI for AI (uses Pro/Ma
 | DM | Opus | Narrative quality, rule adjudication |
 | Agents | Sonnet | Good roleplay, cost-effective (per-agent override via frontmatter) |
 | Orchestrator | Haiku | Fast flow control, mostly deterministic |
+| Guardrail | Haiku | Reviews DM output for player agency violations |
 
 All AI calls are stateless — context is rebuilt from game state + sliding history window each call.
 

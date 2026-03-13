@@ -114,6 +114,8 @@ The current player actions go in the user message, not the system prompt.
 
 Separate functions for different DM tasks: `dmNarrate()` (main resolution), `dmRecap()` (story summary), `dmLook()` (environment description), `dmAsk()` (OOC player questions), `compressNarrative()` (periodic summarization).
 
+**guardrail.ts** / **guardrail-check.ts** — Player agency enforcement. After every DM response, Haiku reviews the narration against a list of player character names, checking if the DM narrated/controlled any PC's actions, speech, thoughts, or attempts. If a violation is detected, the DM re-generates with explicit feedback. Pure helper functions (prompt building, response parsing) are in `guardrail-check.ts` for testability. The guardrail is fail-safe — if it errors or returns unparseable output, the response is allowed through.
+
 **agent.ts** — Loads personality from `agents/*.md` via gray-matter. Builds a system prompt from the personality data (name, race, class, voice, traits, flaws, goals, full markdown body). Generates in-character actions given game state and recent history. Also generates AI backstories for new agents joining the party.
 
 ### State Layer (`src/state/`)
