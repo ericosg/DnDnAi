@@ -1,14 +1,14 @@
-import type { GameState, TurnEntry, DiceResult, Player } from "../state/types.js";
-import { saveGameState, appendHistory, loadHistory, saveHistory } from "../state/store.js";
-import { getNextAction } from "../ai/orchestrator.js";
-import { generateAgentAction, loadAgentPersonality } from "../ai/agent.js";
-import { dmNarrate, compressNarrative } from "../ai/dm.js";
-import { parseDiceDirective, roll, formatDiceResult } from "./dice.js";
-import { advanceTurn, startCombat, endCombat } from "./combat.js";
-import { AGENT_DELAY_MS, COMPRESS_EVERY, HISTORY_WINDOW } from "../config.js";
 import type { TextChannel } from "discord.js";
-import { sendAsIdentity } from "../discord/webhooks.js";
+import { generateAgentAction, loadAgentPersonality } from "../ai/agent.js";
+import { compressNarrative, dmNarrate } from "../ai/dm.js";
+import { getNextAction } from "../ai/orchestrator.js";
+import { AGENT_DELAY_MS, COMPRESS_EVERY, HISTORY_WINDOW } from "../config.js";
 import { dmNarrationEmbed } from "../discord/formatter.js";
+import { sendAsIdentity } from "../discord/webhooks.js";
+import { appendHistory, loadHistory, saveGameState } from "../state/store.js";
+import type { DiceResult, GameState, TurnEntry } from "../state/types.js";
+import { advanceTurn, endCombat, startCombat } from "./combat.js";
+import { formatDiceResult, parseDiceDirective, roll } from "./dice.js";
 
 // Track who has responded this round per game
 const roundResponses = new Map<string, Set<string>>();
@@ -17,6 +17,7 @@ function getResponded(gameId: string): Set<string> {
   if (!roundResponses.has(gameId)) {
     roundResponses.set(gameId, new Set());
   }
+  // biome-ignore lint/style/noNonNullAssertion: guaranteed by set above
   return roundResponses.get(gameId)!;
 }
 
@@ -35,7 +36,7 @@ export function markResponded(gameId: string, playerId: string): void {
 export async function processTurn(
   gameState: GameState,
   entry: TurnEntry,
-  channel: TextChannel
+  channel: TextChannel,
 ): Promise<void> {
   // Record the entry
   await appendHistory(gameState.id, entry);
@@ -58,10 +59,7 @@ export async function processTurn(
   }
 }
 
-async function orchestratorLoop(
-  gameState: GameState,
-  channel: TextChannel
-): Promise<void> {
+async function orchestratorLoop(gameState: GameState, channel: TextChannel): Promise<void> {
   const maxIterations = gameState.players.length + 2; // prevent infinite loops
   let iterations = 0;
 
@@ -115,7 +113,7 @@ async function handleAgentTurn(
   gameState: GameState,
   agentPlayerId: string,
   history: TurnEntry[],
-  channel: TextChannel
+  channel: TextChannel,
 ): Promise<void> {
   const player = gameState.players.find((p) => p.id === agentPlayerId);
   if (!player || !player.agentFile) return;
@@ -124,9 +122,7 @@ async function handleAgentTurn(
   await new Promise((r) => setTimeout(r, AGENT_DELAY_MS));
 
   try {
-    const personality = await loadAgentPersonality(
-      player.agentFile.replace(/\.md$/, "")
-    );
+    const personality = await loadAgentPersonality(player.agentFile.replace(/\.md$/, ""));
 
     const recentHistory = history.slice(-HISTORY_WINDOW);
     const currentSituation = recentHistory
@@ -138,7 +134,7 @@ async function handleAgentTurn(
       personality,
       gameState,
       recentHistory,
-      currentSituation
+      currentSituation,
     );
 
     // Post as agent identity via webhook
@@ -167,7 +163,7 @@ async function handleAgentTurn(
 async function handleDMTurn(
   gameState: GameState,
   history: TurnEntry[],
-  channel: TextChannel
+  channel: TextChannel,
 ): Promise<void> {
   // Collect recent player actions for DM to resolve
   const responded = getResponded(gameState.id);
@@ -180,6 +176,11 @@ async function handleDMTurn(
   try {
     let dmResponse = await dmNarrate(gameState, history, recentActions);
 
+    if (!dmResponse || !dmResponse.trim()) {
+      await channel.send("*The Dungeon Master pauses to gather their thoughts...*");
+      return;
+    }
+
     // Process dice directives
     const directives = parseDiceDirective(dmResponse);
     const diceResults: DiceResult[] = [];
@@ -191,7 +192,7 @@ async function handleDMTurn(
       // Replace the directive in the DM text with the result
       dmResponse = dmResponse.replace(
         `[[ROLL:${directive.notation} FOR:${directive.forName} REASON:${directive.reason}]]`,
-        formatDiceResult(result)
+        formatDiceResult(result),
       );
     }
 

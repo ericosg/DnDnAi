@@ -11,21 +11,19 @@ export function parseDiceNotation(notation: string): {
   keep?: { type: "h" | "l"; count: number };
 } {
   const cleaned = notation.toLowerCase().replace(/\s/g, "");
-  const match = cleaned.match(
-    /^(\d*)d(\d+)(?:k([hl])(\d+))?([+-]\d+)?$/
-  );
+  const match = cleaned.match(/^(\d*)d(\d+)(?:k([hl])(\d+))?([+-]\d+)?$/);
   if (!match) throw new Error(`Invalid dice notation: ${notation}`);
 
   const [, countStr, sidesStr, keepType, keepCountStr, modStr] = match;
   return {
-    count: countStr ? parseInt(countStr) : 1,
-    sides: parseInt(sidesStr),
-    modifier: modStr ? parseInt(modStr) : 0,
+    count: countStr ? parseInt(countStr, 10) : 1,
+    sides: parseInt(sidesStr, 10),
+    modifier: modStr ? parseInt(modStr, 10) : 0,
     keep:
       keepType && keepCountStr
         ? {
             type: keepType as "h" | "l",
-            count: parseInt(keepCountStr),
+            count: parseInt(keepCountStr, 10),
           }
         : undefined,
   };
@@ -47,9 +45,7 @@ export function roll(notation: string, label?: string): DiceResult {
   let sum: number;
 
   if (parsed.keep) {
-    const sorted = [...rolls].sort((a, b) =>
-      parsed.keep!.type === "h" ? b - a : a - b
-    );
+    const sorted = [...rolls].sort((a, b) => (parsed.keep?.type === "h" ? b - a : a - b));
     kept = sorted.slice(0, parsed.keep.count);
     sum = kept.reduce((a, b) => a + b, 0);
   } else {
@@ -105,9 +101,7 @@ export function formatDiceResult(result: DiceResult): string {
     parts.push(`kept [${result.kept.join(", ")}]`);
   }
   if (result.modifier !== 0) {
-    parts.push(
-      `${result.modifier >= 0 ? "+" : ""}${result.modifier}`
-    );
+    parts.push(`${result.modifier >= 0 ? "+" : ""}${result.modifier}`);
   }
   parts.push(`= **${result.total}**`);
 
@@ -122,15 +116,16 @@ export function formatDiceResult(result: DiceResult): string {
  * Parse DM dice directives like [[ROLL:d20+5 FOR:Grimbold REASON:attack roll]]
  */
 export function parseDiceDirective(
-  text: string
+  text: string,
 ): { notation: string; forName: string; reason: string }[] {
-  const regex = /\[\[ROLL:([^\s]+)\s+FOR:([^\s]+)\s+REASON:([^\]]+)\]\]/g;
+  const regex = /\[\[ROLL\s*:\s*([^\s]+)\s+FOR\s*:\s*(.+?)\s+REASON\s*:\s*([^\]]+)\]\]/g;
   const results: { notation: string; forName: string; reason: string }[] = [];
-  let match;
+  let match: RegExpExecArray | null = null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: idiomatic regex exec loop
   while ((match = regex.exec(text)) !== null) {
     results.push({
-      notation: match[1],
-      forName: match[2],
+      notation: match[1].trim(),
+      forName: match[2].trim(),
       reason: match[3].trim(),
     });
   }

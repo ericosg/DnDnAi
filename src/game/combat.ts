@@ -1,4 +1,4 @@
-import type { GameState, Combatant, Player, DiceResult } from "../state/types.js";
+import type { Combatant, DiceResult, GameState, Player } from "../state/types.js";
 import { roll } from "./dice.js";
 
 export function rollInitiative(player: Player): { combatant: Combatant; roll: DiceResult } {
@@ -33,8 +33,10 @@ export function startCombat(gameState: GameState): DiceResult[] {
     if (b.initiative !== a.initiative) return b.initiative - a.initiative;
     const playerA = gameState.players.find((p) => p.id === a.playerId);
     const playerB = gameState.players.find((p) => p.id === b.playerId);
-    return (playerB?.characterSheet.abilityScores.dexterity ?? 0) -
-           (playerA?.characterSheet.abilityScores.dexterity ?? 0);
+    return (
+      (playerB?.characterSheet.abilityScores.dexterity ?? 0) -
+      (playerA?.characterSheet.abilityScores.dexterity ?? 0)
+    );
   });
 
   gameState.combat = {
@@ -48,7 +50,7 @@ export function startCombat(gameState: GameState): DiceResult[] {
 }
 
 export function advanceTurn(gameState: GameState): void {
-  const combat = gameState.combat;
+  const { combat } = gameState;
   if (!combat.active) return;
 
   combat.turnIndex++;
@@ -71,20 +73,27 @@ export function advanceTurn(gameState: GameState): void {
       combat.turnIndex++;
     }
   }
+
+  // Auto-end combat when all combatants are dead
+  if (isCombatOver(gameState)) {
+    endCombat(gameState);
+  }
 }
 
 export function applyDamage(
   gameState: GameState,
   targetName: string,
-  damage: number
+  damage: number,
 ): { combatant: Combatant; overkill: boolean } | null {
   const combatant = gameState.combat.combatants.find(
-    (c) => c.name.toLowerCase() === targetName.toLowerCase()
+    (c) => c.name.toLowerCase() === targetName.toLowerCase(),
   );
   if (!combatant) return null;
 
-  combatant.hp.temp = Math.max(0, combatant.hp.temp - damage);
-  const remaining = damage - (combatant.hp.temp > 0 ? 0 : damage);
+  const originalTemp = combatant.hp.temp;
+  combatant.hp.temp = Math.max(0, originalTemp - damage);
+  const absorbed = originalTemp - combatant.hp.temp;
+  const remaining = damage - absorbed;
   if (remaining > 0) {
     combatant.hp.current = Math.max(0, combatant.hp.current - remaining);
   }
@@ -103,10 +112,10 @@ export function applyDamage(
 export function applyHealing(
   gameState: GameState,
   targetName: string,
-  healing: number
+  healing: number,
 ): Combatant | null {
   const combatant = gameState.combat.combatants.find(
-    (c) => c.name.toLowerCase() === targetName.toLowerCase()
+    (c) => c.name.toLowerCase() === targetName.toLowerCase(),
   );
   if (!combatant) return null;
 
@@ -120,7 +129,9 @@ export function applyHealing(
   // Clear death saves on healing from 0
   if (combatant.hp.current > 0) {
     combatant.deathSaves = { successes: 0, failures: 0 };
-    combatant.conditions = combatant.conditions.filter((c) => c !== "unconscious" && c !== "stable");
+    combatant.conditions = combatant.conditions.filter(
+      (c) => c !== "unconscious" && c !== "stable",
+    );
   }
 
   return combatant;

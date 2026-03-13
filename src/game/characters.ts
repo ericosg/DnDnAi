@@ -1,5 +1,12 @@
-import type { CharacterSheet, AgentPersonality } from "../state/types.js";
 import { generateBackstory } from "../ai/agent.js";
+import type { AgentPersonality, CharacterSheet } from "../state/types.js";
+
+/** Parse an integer safely, returning the fallback on NaN. */
+function safeInt(value: string | null, fallback: number): number {
+  if (!value) return fallback;
+  const parsed = parseInt(value, 10);
+  return Number.isNaN(parsed) ? fallback : parsed;
+}
 
 /**
  * Parse a markdown character sheet into structured JSON.
@@ -12,30 +19,37 @@ export function parseCharacterSheet(markdown: string): CharacterSheet {
     name: extractField(lines, "name") || "Unknown",
     race: extractField(lines, "race") || "Unknown",
     class: extractField(lines, "class") || "Unknown",
-    level: parseInt(extractField(lines, "level") || "1"),
+    level: safeInt(extractField(lines, "level"), 1),
     background: extractField(lines, "background") || "Unknown",
     alignment: extractField(lines, "alignment") || "Neutral",
     abilityScores: {
-      strength: parseInt(extractField(lines, "strength", "str") || "10"),
-      dexterity: parseInt(extractField(lines, "dexterity", "dex") || "10"),
-      constitution: parseInt(extractField(lines, "constitution", "con") || "10"),
-      wisdom: parseInt(extractField(lines, "wisdom", "wis") || "10"),
-      intelligence: parseInt(extractField(lines, "intelligence", "int") || "10"),
-      charisma: parseInt(extractField(lines, "charisma", "cha") || "10"),
+      strength: safeInt(extractField(lines, "strength", "str"), 10),
+      dexterity: safeInt(extractField(lines, "dexterity", "dex"), 10),
+      constitution: safeInt(extractField(lines, "constitution", "con"), 10),
+      wisdom: safeInt(extractField(lines, "wisdom", "wis"), 10),
+      intelligence: safeInt(extractField(lines, "intelligence", "int"), 10),
+      charisma: safeInt(extractField(lines, "charisma", "cha"), 10),
     },
-    proficiencyBonus: parseInt(extractField(lines, "proficiency bonus", "proficiency") || "2"),
+    proficiencyBonus: safeInt(extractField(lines, "proficiency bonus", "proficiency"), 2),
     savingThrows: extractList(lines, "saving throws"),
     skills: extractList(lines, "skills", "proficient skills"),
     hp: {
-      max: parseInt(extractField(lines, "hp", "hit points", "max hp") || "10"),
-      current: parseInt(extractField(lines, "hp", "hit points", "max hp") || "10"),
+      max: safeInt(extractField(lines, "hp", "hit points", "max hp"), 10),
+      current: safeInt(extractField(lines, "hp", "hit points", "max hp"), 10),
       temp: 0,
     },
-    armorClass: parseInt(extractField(lines, "armor class", "ac") || "10"),
-    initiative: parseInt(extractField(lines, "initiative") || "0"),
-    speed: parseInt(extractField(lines, "speed") || "30"),
+    armorClass: safeInt(extractField(lines, "armor class", "ac"), 10),
+    initiative: safeInt(extractField(lines, "initiative"), 0),
+    speed: safeInt(extractField(lines, "speed"), 30),
     equipment: extractList(lines, "equipment", "inventory", "gear"),
-    features: extractList(lines, "features", "traits", "abilities", "class features", "racial features"),
+    features: extractList(
+      lines,
+      "features",
+      "traits",
+      "abilities",
+      "class features",
+      "racial features",
+    ),
     backstory: extractSection(lines, "backstory", "background story") || "",
     personality: extractField(lines, "personality") || undefined,
     ideals: extractField(lines, "ideals") || undefined,
@@ -59,9 +73,9 @@ function extractField(lines: string[], ...keys: string[]): string | null {
   for (const line of lines) {
     const lower = line.toLowerCase().trim();
     for (const key of keys) {
-      // Match "**Key:** Value" or "Key: Value" or "- Key: Value"
+      // Match "**Key:** Value", "**Key**: Value", "Key: Value", or "- Key: Value"
       const patterns = [
-        new RegExp(`^\\*\\*${key}\\*\\*[:\\s]+(.+)`, "i"),
+        new RegExp(`^\\*\\*${key}\\s*:?\\s*\\*\\*\\s*:?\\s*(.+)`, "i"),
         new RegExp(`^-?\\s*${key}[:\\s]+(.+)`, "i"),
         new RegExp(`^#{1,3}\\s*${key}$`, "i"),
       ];
@@ -70,7 +84,7 @@ function extractField(lines: string[], ...keys: string[]): string | null {
         if (match) {
           // Get the actual line (not lowered) for value
           const actualMatch = line.trim().match(pat);
-          if (actualMatch && actualMatch[1]) {
+          if (actualMatch?.[1]) {
             return actualMatch[1].trim().replace(/\*\*/g, "");
           }
         }
@@ -89,7 +103,13 @@ function extractList(lines: string[], ...sectionNames: string[]): string[] {
     const lower = trimmed.toLowerCase();
 
     // Check if we're entering a target section
-    if (sectionNames.some((name) => lower.match(new RegExp(`^#{1,3}\\s*${name}`, "i")) || lower.match(new RegExp(`^\\*\\*${name}\\*\\*`, "i")))) {
+    if (
+      sectionNames.some(
+        (name) =>
+          lower.match(new RegExp(`^#{1,3}\\s*${name}`, "i")) ||
+          lower.match(new RegExp(`^\\*\\*${name}\\s*:?\\s*\\*\\*`, "i")),
+      )
+    ) {
       inSection = true;
       continue;
     }
@@ -110,11 +130,12 @@ function extractList(lines: string[], ...sectionNames: string[]): string[] {
     for (const line of lines) {
       const lower = line.toLowerCase().trim();
       for (const name of sectionNames) {
-        const match = lower.match(new RegExp(`^\\*\\*${name}\\*\\*[:\\s]+(.+)`, "i")) ||
-                      lower.match(new RegExp(`^-?\\s*${name}[:\\s]+(.+)`, "i"));
+        const match =
+          lower.match(new RegExp(`^\\*\\*${name}\\s*:?\\s*\\*\\*\\s*:?\\s*(.+)`, "i")) ||
+          lower.match(new RegExp(`^-?\\s*${name}[:\\s]+(.+)`, "i"));
         if (match) {
           const actualMatch = line.trim().match(new RegExp(`${name}[:\\s]+(.+)`, "i"));
-          if (actualMatch && actualMatch[1]) {
+          if (actualMatch?.[1]) {
             return actualMatch[1].split(/,\s*/).map((s) => s.trim().replace(/\*\*/g, ""));
           }
         }
@@ -157,7 +178,7 @@ function extractSection(lines: string[], ...sectionNames: string[]): string | nu
  */
 export async function buildAgentCharacter(
   personality: AgentPersonality,
-  partyContext: string
+  partyContext: string,
 ): Promise<CharacterSheet> {
   const backstory = await generateBackstory(personality, partyContext);
 
@@ -174,8 +195,12 @@ export async function buildAgentCharacter(
       background: "Adventurer",
       alignment: "Neutral",
       abilityScores: {
-        strength: 10, dexterity: 10, constitution: 10,
-        wisdom: 10, intelligence: 10, charisma: 10,
+        strength: 10,
+        dexterity: 10,
+        constitution: 10,
+        wisdom: 10,
+        intelligence: 10,
+        charisma: 10,
       },
       proficiencyBonus: 2,
       savingThrows: [],
