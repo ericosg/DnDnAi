@@ -1,0 +1,138 @@
+import type { DiceResult } from "../state/types.js";
+
+/**
+ * Parse and roll dice notation like "2d6+3", "d20", "4d6kh3", "d20-1"
+ * Supports: NdS, NdSkh/klN, +/- modifiers
+ */
+export function parseDiceNotation(notation: string): {
+  count: number;
+  sides: number;
+  modifier: number;
+  keep?: { type: "h" | "l"; count: number };
+} {
+  const cleaned = notation.toLowerCase().replace(/\s/g, "");
+  const match = cleaned.match(
+    /^(\d*)d(\d+)(?:k([hl])(\d+))?([+-]\d+)?$/
+  );
+  if (!match) throw new Error(`Invalid dice notation: ${notation}`);
+
+  const [, countStr, sidesStr, keepType, keepCountStr, modStr] = match;
+  return {
+    count: countStr ? parseInt(countStr) : 1,
+    sides: parseInt(sidesStr),
+    modifier: modStr ? parseInt(modStr) : 0,
+    keep:
+      keepType && keepCountStr
+        ? {
+            type: keepType as "h" | "l",
+            count: parseInt(keepCountStr),
+          }
+        : undefined,
+  };
+}
+
+function rollDie(sides: number): number {
+  return Math.floor(Math.random() * sides) + 1;
+}
+
+export function roll(notation: string, label?: string): DiceResult {
+  const parsed = parseDiceNotation(notation);
+  const rolls: number[] = [];
+
+  for (let i = 0; i < parsed.count; i++) {
+    rolls.push(rollDie(parsed.sides));
+  }
+
+  let kept: number[] | undefined;
+  let sum: number;
+
+  if (parsed.keep) {
+    const sorted = [...rolls].sort((a, b) =>
+      parsed.keep!.type === "h" ? b - a : a - b
+    );
+    kept = sorted.slice(0, parsed.keep.count);
+    sum = kept.reduce((a, b) => a + b, 0);
+  } else {
+    sum = rolls.reduce((a, b) => a + b, 0);
+  }
+
+  return {
+    notation,
+    rolls,
+    modifier: parsed.modifier,
+    total: sum + parsed.modifier,
+    kept,
+    label,
+  };
+}
+
+export function rollAdvantage(modifier = 0, label?: string): DiceResult {
+  const r1 = rollDie(20);
+  const r2 = rollDie(20);
+  const best = Math.max(r1, r2);
+  return {
+    notation: `2d20kh1${modifier >= 0 ? "+" : ""}${modifier}`,
+    rolls: [r1, r2],
+    modifier,
+    total: best + modifier,
+    kept: [best],
+    label,
+  };
+}
+
+export function rollDisadvantage(modifier = 0, label?: string): DiceResult {
+  const r1 = rollDie(20);
+  const r2 = rollDie(20);
+  const worst = Math.min(r1, r2);
+  return {
+    notation: `2d20kl1${modifier >= 0 ? "+" : ""}${modifier}`,
+    rolls: [r1, r2],
+    modifier,
+    total: worst + modifier,
+    kept: [worst],
+    label,
+  };
+}
+
+export function formatDiceResult(result: DiceResult): string {
+  const parts: string[] = [];
+  parts.push(`\`${result.notation}\``);
+
+  if (result.rolls.length > 1 || result.kept) {
+    parts.push(`[${result.rolls.join(", ")}]`);
+  }
+  if (result.kept && result.kept.length !== result.rolls.length) {
+    parts.push(`kept [${result.kept.join(", ")}]`);
+  }
+  if (result.modifier !== 0) {
+    parts.push(
+      `${result.modifier >= 0 ? "+" : ""}${result.modifier}`
+    );
+  }
+  parts.push(`= **${result.total}**`);
+
+  if (result.label) {
+    parts.push(`(${result.label})`);
+  }
+
+  return parts.join(" ");
+}
+
+/**
+ * Parse DM dice directives like [[ROLL:d20+5 FOR:Grimbold REASON:attack roll]]
+ */
+export function parseDiceDirective(
+  text: string
+): { notation: string; forName: string; reason: string }[] {
+  const regex = /\[\[ROLL:([^\s]+)\s+FOR:([^\s]+)\s+REASON:([^\]]+)\]\]/g;
+  const results: { notation: string; forName: string; reason: string }[] = [];
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    results.push({
+      notation: match[1],
+      forName: match[2],
+      reason: match[3].trim(),
+    });
+  }
+  return results;
+}
