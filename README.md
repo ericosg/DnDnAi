@@ -176,7 +176,7 @@ See [docs/architecture.md](docs/architecture.md) for full technical details.
 ## Development
 
 ```bash
-bun test                       # 132 unit + integration tests
+bun test                       # 204 unit + integration tests
 bunx tsc --noEmit              # type-check
 bunx biome check src/          # lint + format check
 ```
