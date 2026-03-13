@@ -1,0 +1,6 @@
+[test]
+
+[test.env]
+DISCORD_TOKEN = "test-token"
+ANTHROPIC_API_KEY = "test-key"
+GUILD_ID = "test-guild"

@@ -1,0 +1,151 @@
+import { describe, expect, mock, test } from "bun:test";
+
+// Mock config and claude to avoid env var / API requirements
+mock.module("../config.js", () => ({
+  config: { discordToken: "test", anthropicApiKey: "test", guildId: "test" },
+  models: { dm: "test", agent: "test", orchestrator: "test" },
+  DATA_DIR: "data/games",
+  AGENTS_DIR: "agents",
+  HISTORY_WINDOW: 8,
+  COMPRESS_EVERY: 10,
+  AGENT_DELAY_MS: 0,
+}));
+mock.module("../ai/claude.js", () => ({
+  chat: async () => "A mocked backstory.",
+}));
+
+const { parseCharacterSheet } = await import("./characters.js");
+
+const GRIMBOLD_SHEET = `**Name:** Grimbold Ironforge
+**Race:** Mountain Dwarf
+**Class:** Fighter (Champion)
+**Level:** 3
+**Background:** Soldier
+**Alignment:** Lawful Neutral
+
+**Strength:** 16
+**Dexterity:** 12
+**Constitution:** 16
+**Wisdom:** 13
+**Intelligence:** 10
+**Charisma:** 8
+
+**Proficiency Bonus:** +2
+**Armor Class:** 18
+**HP:** 31
+**Speed:** 25
+**Initiative:** +1
+
+## Saving Throws
+- Strength
+- Constitution
+
+## Skills
+- Athletics
+- Intimidation
+- Perception
+- Survival
+
+## Equipment
+- Battleaxe
+- Handaxes (2)
+- Chain mail
+- Shield
+- Explorer's pack
+- Dwarven ale flask (never empty, somehow)
+- Whetstone (obsessively maintained)
+
+## Features
+- Fighting Style: Defense (+1 AC while wearing armor)
+- Second Wind (1d10+3 HP, bonus action, 1/short rest)
+- Action Surge (1 additional action, 1/short rest)
+- Improved Critical (crit on 19-20)
+- Darkvision (60 ft)
+- Dwarven Resilience (advantage on saves vs. poison)
+- Stonecunning (double proficiency on History checks for stonework)`;
+
+describe("parseCharacterSheet", () => {
+  test("parses Grimbold fixture correctly", () => {
+    const sheet = parseCharacterSheet(GRIMBOLD_SHEET);
+
+    expect(sheet.name).toBe("Grimbold Ironforge");
+    expect(sheet.race).toBe("Mountain Dwarf");
+    expect(sheet.class).toBe("Fighter (Champion)");
+    expect(sheet.level).toBe(3);
+    expect(sheet.background).toBe("Soldier");
+    expect(sheet.alignment).toBe("Lawful Neutral");
+  });
+
+  test("parses ability scores", () => {
+    const sheet = parseCharacterSheet(GRIMBOLD_SHEET);
+
+    expect(sheet.abilityScores.strength).toBe(16);
+    expect(sheet.abilityScores.dexterity).toBe(12);
+    expect(sheet.abilityScores.constitution).toBe(16);
+    expect(sheet.abilityScores.wisdom).toBe(13);
+    expect(sheet.abilityScores.intelligence).toBe(10);
+    expect(sheet.abilityScores.charisma).toBe(8);
+  });
+
+  test("parses combat stats", () => {
+    const sheet = parseCharacterSheet(GRIMBOLD_SHEET);
+
+    expect(sheet.armorClass).toBe(18);
+    expect(sheet.hp.max).toBe(31);
+    expect(sheet.hp.current).toBe(31);
+    expect(sheet.speed).toBe(25);
+    expect(sheet.initiative).toBe(1);
+  });
+
+  test("parses list sections", () => {
+    const sheet = parseCharacterSheet(GRIMBOLD_SHEET);
+
+    expect(sheet.savingThrows).toContain("Strength");
+    expect(sheet.savingThrows).toContain("Constitution");
+    expect(sheet.skills).toContain("Athletics");
+    expect(sheet.skills).toContain("Perception");
+    expect(sheet.equipment).toContain("Battleaxe");
+    expect(sheet.equipment.length).toBe(7);
+    expect(sheet.features.length).toBe(7);
+  });
+
+  test("defaults for missing fields", () => {
+    const sheet = parseCharacterSheet("**Name:** Minimal Character");
+
+    expect(sheet.name).toBe("Minimal Character");
+    expect(sheet.race).toBe("Unknown");
+    expect(sheet.class).toBe("Unknown");
+    expect(sheet.level).toBe(1);
+    expect(sheet.abilityScores.strength).toBe(10);
+    expect(sheet.hp.max).toBe(10);
+    expect(sheet.armorClass).toBe(10);
+    expect(sheet.speed).toBe(30);
+  });
+
+  test("safeInt handles garbage input", () => {
+    const sheet = parseCharacterSheet(`**Name:** Bad Data
+**Strength:** abc
+**Level:** not-a-number
+**HP:** ???`);
+
+    expect(sheet.abilityScores.strength).toBe(10);
+    expect(sheet.level).toBe(1);
+    expect(sheet.hp.max).toBe(10);
+  });
+
+  test("calculates initiative from DEX when not specified", () => {
+    const sheet = parseCharacterSheet(`**Name:** Dex Test
+**Dexterity:** 16`);
+
+    // DEX 16 → modifier = (16-10)/2 = 3
+    expect(sheet.initiative).toBe(3);
+  });
+
+  test("uses explicit initiative over DEX calculation", () => {
+    const sheet = parseCharacterSheet(`**Name:** Init Test
+**Dexterity:** 16
+**Initiative:** +5`);
+
+    expect(sheet.initiative).toBe(5);
+  });
+});
