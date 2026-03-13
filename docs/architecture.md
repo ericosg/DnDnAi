@@ -63,7 +63,7 @@ Discord Channel
 **webhooks.ts** — Creates and caches Discord webhooks per channel+name pair. Each AI character and the DM get their own webhook so they appear as distinct users in Discord. Handles message splitting for the 2000-character Discord limit.
 
 **formatter.ts** — Builds Discord embeds. Visual identity system:
-- DM narration: purple sidebar embeds
+- DM narration: purple sidebar embeds (auto-split across multiple embeds if >4096 chars)
 - System messages: gray embeds
 - Combat status: red embeds with initiative markers
 - Party status: blue embeds
@@ -112,7 +112,7 @@ Has an AI-powered `classifyMessage()` fallback for ambiguous IC/OOC detection, b
 
 The current player actions go in the user message, not the system prompt.
 
-Separate functions for different DM tasks: `dmNarrate()` (main resolution), `dmRecap()` (story summary), `dmLook()` (environment description), `compressNarrative()` (periodic summarization).
+Separate functions for different DM tasks: `dmNarrate()` (main resolution), `dmRecap()` (story summary), `dmLook()` (environment description), `dmAsk()` (OOC player questions), `compressNarrative()` (periodic summarization).
 
 **agent.ts** — Loads personality from `agents/*.md` via gray-matter. Builds a system prompt from the personality data (name, race, class, voice, traits, flaws, goals, full markdown body). Generates in-character actions given game state and recent history. Also generates AI backstories for new agents joining the party.
 
@@ -126,6 +126,14 @@ Separate functions for different DM tasks: `dmNarrate()` (main resolution), `dmR
 - `CombatState` / `Combatant` — combat tracking with initiative, conditions, death saves
 - `AgentPersonality` — parsed agent personality file
 - `OrchestratorDecision` — what the orchestrator decided (action + target + reason)
+
+### Logging (`src/logger.ts`)
+
+Structured logger with configurable verbosity via `LOG_LEVEL` env var. Levels: `error` (0), `warn` (1), `info` (2), `debug` (3). Defaults to `info`.
+
+At `info` level, logs show the full turn lifecycle: turn received → orchestrator decisions → agent/DM Claude calls (with char counts) → dice directives processed → responses posted → round cleared. At `debug` level, additionally shows orchestrator iteration details and responded-player sets per iteration.
+
+### State Layer (`src/state/`)
 
 **store.ts** — JSON file I/O. All data lives under `data/games/<uuid>/`:
 - `state.json` — core game state
@@ -173,7 +181,8 @@ data/games/
 - History is append-only (never trimmed, only the sliding window is sent to AI)
 - Narrative summary compresses every 10 turns to manage context growth
 - All game data is gitignored
-- On restart, the bot can resume any game by finding its channel ID
+- On restart, the bot resumes any game automatically — the next player action loads state from disk
+- The only thing lost on restart is the in-memory round tracker; the next action starts a fresh round with full history context
 
 ## Context Management Strategy
 

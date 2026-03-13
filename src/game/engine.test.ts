@@ -78,7 +78,7 @@ mock.module("../discord/webhooks.js", () => ({
 }));
 
 mock.module("../discord/formatter.js", () => ({
-  dmNarrationEmbed: (text: string) => ({ description: text, color: 0x7b2d8b }),
+  dmNarrationEmbeds: (text: string) => [{ description: text, color: 0x7b2d8b }],
 }));
 
 const { processTurn, markResponded } = await import("./engine.js");

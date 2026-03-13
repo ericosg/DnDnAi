@@ -3,7 +3,7 @@ import { generateAgentAction, loadAgentPersonality } from "../ai/agent.js";
 import { compressNarrative, dmNarrate } from "../ai/dm.js";
 import { getNextAction } from "../ai/orchestrator.js";
 import { AGENT_DELAY_MS, COMPRESS_EVERY, HISTORY_WINDOW } from "../config.js";
-import { dmNarrationEmbed } from "../discord/formatter.js";
+import { dmNarrationEmbeds } from "../discord/formatter.js";
 import { sendAsIdentity } from "../discord/webhooks.js";
 import { log } from "../logger.js";
 import { appendHistory, loadHistory, saveGameState } from "../state/store.js";
@@ -255,7 +255,7 @@ async function handleDMTurn(
 
     // Post DM narration as embed via webhook
     await sendAsIdentity(channel, "Dungeon Master", "", {
-      embeds: [dmNarrationEmbed(dmResponse)],
+      embeds: dmNarrationEmbeds(dmResponse),
     });
     log.info("DM turn: narration posted to Discord");
 

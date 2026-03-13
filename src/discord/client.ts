@@ -27,7 +27,7 @@ import { commands } from "./commands.js";
 import {
   combatStatusEmbed,
   diceResultText,
-  dmNarrationEmbed,
+  dmNarrationEmbeds,
   inventoryEmbed,
   partyStatusEmbed,
   systemEmbed,
@@ -284,7 +284,7 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       const narration = await dmNarrate(gameState, history, openingPrompt);
 
       await sendAsIdentity(channel, "Dungeon Master", "", {
-        embeds: [dmNarrationEmbed(narration)],
+        embeds: dmNarrationEmbeds(narration),
       });
 
       const entry: TurnEntry = {
@@ -349,7 +349,7 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       const description = await dmLook(gameState, history, target);
 
       await sendAsIdentity(channel, "Dungeon Master", "", {
-        embeds: [dmNarrationEmbed(description)],
+        embeds: dmNarrationEmbeds(description),
       });
       await interaction.editReply("The DM surveys the scene...");
       break;
@@ -415,7 +415,7 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       const recap = await dmRecap(gameState, history);
 
       await sendAsIdentity(channel, "Dungeon Master", "", {
-        embeds: [dmNarrationEmbed(`**Previously, on our adventure...**\n\n${recap}`)],
+        embeds: dmNarrationEmbeds(`**Previously, on our adventure...**\n\n${recap}`),
       });
       await interaction.editReply("The DM recounts the tale...");
       break;
@@ -476,11 +476,9 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       const answer = await dmAsk(gameState, history, question);
 
       await sendAsIdentity(channel, "Dungeon Master", "", {
-        embeds: [
-          dmNarrationEmbed(
-            `**OOC — ${interaction.user.displayName} asks:**\n> ${question}\n\n${answer}`,
-          ),
-        ],
+        embeds: dmNarrationEmbeds(
+          `**OOC — ${interaction.user.displayName} asks:**\n> ${question}\n\n${answer}`,
+        ),
       });
       await interaction.editReply("The DM has answered your question.");
       break;

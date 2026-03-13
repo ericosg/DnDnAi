@@ -101,6 +101,17 @@ The markdown character sheet parser is deliberately flexible. It recognizes:
 ### Required Fields (with defaults)
 If any field is missing, it gets a sensible default (e.g., 10 for ability scores, "Unknown" for race/class, 30 for speed). The parser won't reject an incomplete sheet.
 
+## OOC Questions (`/ask`)
+
+Players can ask the DM out-of-character questions without affecting game state:
+- `/ask How does sneak attack work?`
+- `/ask What options do I have here?`
+- `/ask What happened to the merchant we met earlier?`
+
+The DM answers with full game context (party, history, narrative summary) but the question and answer are clearly marked as OOC. The response appears as a DM embed visible to everyone. No turn is consumed and the orchestrator is not triggered.
+
+Plain messages (without `>`) are ignored by the game engine entirely — use `/ask` when you actually want the DM to answer.
+
 ## Whispers
 
 `/whisper @player message` sends a private in-character message:
@@ -118,7 +129,9 @@ If any field is missing, it gets a sensible default (e.g., 10 for ability scores
 
 ### Resuming
 - If `/start` is called on a game with existing history, the DM generates a "last time on..." recap instead of a new opening
-- On bot restart, games resume automatically — state is loaded from JSON when a message arrives in the game's channel
+- On bot restart, games resume automatically — no special command needed. State is loaded from JSON when any player action arrives in the game's channel
+- The only thing lost on restart is the in-memory round tracker (who has acted this cycle). The next player action starts a fresh round, but the DM has full history context so narration remains coherent
+- Use `/recap` after a restart to get a DM summary of the story so far, or just `> action` to keep playing
 
 ### Ending
 - `/end` sets status to "ended" and saves final state

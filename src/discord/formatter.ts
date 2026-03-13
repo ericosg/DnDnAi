@@ -4,9 +4,52 @@ import type { CombatState, DiceResult, GameState, Player } from "../state/types.
 
 const DM_COLOR = 0x7b2d8b; // purple sidebar
 
+const EMBED_DESC_LIMIT = 4096;
+
+export function dmNarrationEmbeds(text: string): EmbedBuilder[] {
+  if (text.length <= EMBED_DESC_LIMIT) {
+    return [
+      new EmbedBuilder()
+        .setDescription(text)
+        .setColor(DM_COLOR)
+        .setAuthor({ name: "Dungeon Master" }),
+    ];
+  }
+
+  // Split into chunks at paragraph boundaries
+  const embeds: EmbedBuilder[] = [];
+  let remaining = text;
+  while (remaining.length > 0) {
+    let chunk: string;
+    if (remaining.length <= EMBED_DESC_LIMIT) {
+      chunk = remaining;
+      remaining = "";
+    } else {
+      // Try to split at a double newline (paragraph), then single newline
+      let splitAt = remaining.lastIndexOf("\n\n", EMBED_DESC_LIMIT);
+      if (splitAt < EMBED_DESC_LIMIT / 2) {
+        splitAt = remaining.lastIndexOf("\n", EMBED_DESC_LIMIT);
+      }
+      if (splitAt < EMBED_DESC_LIMIT / 2) {
+        splitAt = EMBED_DESC_LIMIT;
+      }
+      chunk = remaining.slice(0, splitAt);
+      remaining = remaining.slice(splitAt).trimStart();
+    }
+
+    const embed = new EmbedBuilder().setDescription(chunk).setColor(DM_COLOR);
+    if (embeds.length === 0) {
+      embed.setAuthor({ name: "Dungeon Master" });
+    }
+    embeds.push(embed);
+  }
+  return embeds;
+}
+
+/** @deprecated Use dmNarrationEmbeds() instead — this throws on text > 4096 chars */
 export function dmNarrationEmbed(text: string): EmbedBuilder {
   return new EmbedBuilder()
-    .setDescription(text)
+    .setDescription(text.slice(0, EMBED_DESC_LIMIT))
     .setColor(DM_COLOR)
     .setAuthor({ name: "Dungeon Master" });
 }

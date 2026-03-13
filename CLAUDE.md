@@ -52,13 +52,21 @@ All AI calls are stateless — context is rebuilt from game state + sliding hist
 
 ### Key Protocols
 
-- **DM dice directives**: DM AI outputs `[[ROLL:d20+5 FOR:Name REASON:text]]` — engine rolls real dice and injects results. AI never simulates randomness.
+- **DM dice directives**: DM AI outputs `[[ROLL:d20+5 FOR:Name REASON:text]]` — engine rolls real dice and injects results. AI never simulates randomness. Directives are resolved instantly before the message is posted — the DM narrates outcomes in the same response.
 - **Combat signals**: `[[COMBAT:START]]` and `[[COMBAT:END]]` in DM output trigger the combat state machine.
-- **IC vs OOC**: `>` prefix = in-character (advances game state). No prefix = out-of-character (orchestrator skips).
-- **Webhooks**: Each AI identity (agents + DM) gets a separate Discord webhook with custom name/avatar. DM uses purple embeds; agents use plain text.
+- **IC vs OOC**: `>` prefix = in-character (advances game state). No prefix = out-of-character (orchestrator skips). Players can use `/ask` for OOC questions to the DM.
+- **Webhooks**: Each AI identity (agents + DM) gets a separate Discord webhook with custom name/avatar. DM uses purple embeds (auto-split if >4096 chars); agents use plain text.
 - **Agent personality files**: `agents/*.md` with gray-matter frontmatter + markdown body. The `characterSpec` field contains a character sheet in the same markdown format human players upload.
 - **Player IDs**: Humans = Discord user ID. Agents = `agent:<name>`.
 - **Round tracking**: In-memory `roundResponses` map in `game/engine.ts`. Cleared after DM resolves. Not persisted.
+
+### Logging
+
+Structured logger (`src/logger.ts`) with configurable verbosity via `LOG_LEVEL` env var (`error`, `warn`, `info`, `debug`). Defaults to `info`. At `debug` level, logs include orchestrator iteration details and responded-player sets. At `info`, logs show the full turn lifecycle: turn received → orchestrator decisions → agent/DM Claude calls → responses posted → round cleared.
+
+### Resumability
+
+The bot is fully resumable across restarts. All game state persists to JSON; AI calls are stateless. On restart, the bot reconnects to Discord and responds to the next player action by loading state from disk. The only thing lost is the in-memory round tracker — the next player action starts a fresh round, but the DM still has full history context. No special resume command is needed; just keep playing.
 
 ### Persistence
 
@@ -77,6 +85,7 @@ Game lookup scans all game directories for matching channel ID.
 
 - `docs/architecture.md` — system diagram, module responsibilities, data flow, context management
 - `docs/design-decisions.md` — why each major choice was made
+- `docs/creating-characters.md` — how to create a character sheet for human players (format, AI generation tips, sample)
 - `docs/creating-agents.md` — how to write agent personality files
 - `docs/game-rules.md` — D&D 5e rules as implemented, deviations, dice system, combat
 
