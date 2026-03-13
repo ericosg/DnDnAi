@@ -1,6 +1,7 @@
 import type { TextChannel } from "discord.js";
 import { generateAgentAction, loadAgentPersonality } from "../ai/agent.js";
 import { compressNarrative, dmNarrate } from "../ai/dm.js";
+import { checkDMResponse } from "../ai/guardrail.js";
 import { getNextAction } from "../ai/orchestrator.js";
 import { AGENT_DELAY_MS, COMPRESS_EVERY, HISTORY_WINDOW } from "../config.js";
 import { dmNarrationEmbeds } from "../discord/formatter.js";
@@ -213,6 +214,25 @@ async function handleDMTurn(
       log.warn("DM returned empty response");
       await channel.send("*The Dungeon Master pauses to gather their thoughts...*");
       return;
+    }
+
+    // Guardrail: check for player agency violations
+    const pcNames = gameState.players.map((p) => p.characterSheet.name);
+    const guardrail = await checkDMResponse(dmResponse, pcNames);
+    if (!guardrail.pass) {
+      log.warn(`Guardrail violation: ${guardrail.violation}`);
+      log.info("DM turn: re-generating with guardrail feedback...");
+      const feedback = `${recentActions}\n\n[SYSTEM: Your previous response was rejected because it violated player agency. Violation: "${guardrail.violation}". Remember: NEVER narrate what player characters do, say, think, feel, or attempt. Only describe the world, NPCs, and outcomes of actions players have ALREADY stated. Re-write your response without controlling any player character.]`;
+      dmResponse = await dmNarrate(gameState, history, feedback);
+      log.info(`DM turn: re-generated response ready (${dmResponse?.length ?? 0} chars)`);
+
+      if (!dmResponse || !dmResponse.trim()) {
+        log.warn("DM returned empty response on retry");
+        await channel.send("*The Dungeon Master pauses to gather their thoughts...*");
+        return;
+      }
+    } else {
+      log.info("Guardrail: pass");
     }
 
     // Process dice directives

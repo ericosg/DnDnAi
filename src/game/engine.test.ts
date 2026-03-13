@@ -81,6 +81,10 @@ mock.module("../discord/formatter.js", () => ({
   dmNarrationEmbeds: (text: string) => [{ description: text, color: 0x7b2d8b }],
 }));
 
+mock.module("../ai/guardrail.js", () => ({
+  checkDMResponse: async () => ({ pass: true }),
+}));
+
 const { processTurn, markResponded } = await import("./engine.js");
 
 function makePlayer(overrides: Partial<Player> = {}): Player {
