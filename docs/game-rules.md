@@ -137,6 +137,18 @@ Plain messages (without `>`) are ignored by the game engine entirely — use `/a
 - `/end` sets status to "ended" and saves final state
 - A new game can be created in the same channel after ending
 
+## DM Notes
+
+The DM maintains persistent notes in `data/games/<id>/dm-notes/` that survive across sessions:
+
+- `characters/{name}.md` — things learned about characters beyond their sheet (secrets, details revealed in RP, player-specified info like pronouns or languages)
+- `world.md` — NPCs created, locations described, factions, lore established during play
+- `plot.md` — active plot threads, hooks planted, mysteries, planned encounters
+- `rulings.md` — rules interpretations made during this campaign (for consistency)
+- `session-log.md` — brief log of key events
+
+The DM reads these notes before responding and updates them when new information is established. This ensures narrative consistency across sessions.
+
 ## What's Not Implemented (Yet)
 - Spell slots and spell management
 - Inventory management (adding/removing items during play)

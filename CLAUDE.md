@@ -50,10 +50,12 @@ TypeScript + Bun runtime, discord.js for Discord, Claude CLI for AI (uses Pro/Ma
 | Orchestrator | Haiku | Fast flow control, mostly deterministic |
 | Guardrail | Haiku | Reviews DM output for player agency violations and agent output for world-fact invention |
 
-All AI calls are stateless — context is rebuilt from game state + sliding history window each call.
+All AI calls are stateless — context is rebuilt from game state + sliding history window each call. The DM runs as an agentic Claude Code CLI process with read-only file access (Read, Glob, Grep tools) so it can verify character data, check full history, and consult rules docs before responding.
 
 ### Key Protocols
 
+- **Agentic DM**: The DM runs with `--allowedTools Read,Write,Edit,Glob,Grep` so it can read character sheet JSONs, the full history, the SRD rules, and maintain its own persistent notes. The system prompt includes file paths for all game data. The DM's Character Reference section in the prompt provides a quick summary of each character's mechanical details (ability scores, features, spells, equipment, gender), while file access lets it dig deeper when needed. The DM looks up rules in the SRD rather than relying on training data, preventing hallucination of abilities or incorrect rule applications.
+- **DM Notes (persistent memory)**: The DM maintains notes in `data/games/<id>/dm-notes/` — character details learned in RP (`characters/{name}.md`), world state (`world.md`), plot threads (`plot.md`), rules rulings (`rulings.md`), and a session log (`session-log.md`). The DM reads these before responding and writes to them when it learns something new. Directory is seeded with templates on `/start`.
 - **DM dice directives**: DM AI outputs `[[ROLL:d20+5 FOR:Name REASON:text]]` — engine rolls real dice and injects results. AI never simulates randomness. Directives are resolved instantly before the message is posted — the DM narrates outcomes in the same response.
 - **Damage/heal directives**: DM outputs `[[DAMAGE:2d6+3 TARGET:Name REASON:text]]` or `[[HEAL:1d8+3 TARGET:Name REASON:text]]` — engine rolls dice and calls `applyDamage()`/`applyHealing()` in `combat.ts` to update combatant and character sheet HP. Results display inline with updated HP values.
 - **Combat signals**: `[[COMBAT:START]]` and `[[COMBAT:END]]` in DM output trigger the combat state machine.
@@ -86,6 +88,7 @@ All runtime data in `data/games/<uuid>/` (gitignored):
 - `state.json` — core game state (players, combat, narrative summary)
 - `history.json` — append-only turn log
 - `characters/*.json` — parsed character sheets
+- `dm-notes/` — DM's persistent memory (world state, character notes, plot threads, rulings, session log)
 
 Game lookup scans all game directories for matching channel ID.
 
@@ -95,7 +98,7 @@ Game lookup scans all game directories for matching channel ID.
 
 ### Testing
 
-Tests across 11 files. Agent tests (`ai/agent.test.ts`) load every agent file from disk, verify frontmatter fields, and run each `characterSpec` through `parseCharacterSheet()` to validate stats, ability scores, equipment, and features parse correctly. Tests also verify all agents have unique names and unique race+class combinations. Formatter tests cover the `/character` embed builder (section filtering, ability modifiers, edge cases) and DM narration splitting. DM prompt tests (`ai/dm.test.ts`) verify prompt construction: party info, narrative summary, combat state, history formatting, and `/ask` asker identity mapping. Other test files cover dice, combat, character parsing, orchestrator, engine, guardrails, webhooks, and Claude subprocess.
+Tests across 11 files. Agent tests (`ai/agent.test.ts`) load every agent file from disk, verify frontmatter fields, and run each `characterSpec` through `parseCharacterSheet()` to validate stats, ability scores, equipment, and features parse correctly. Tests also verify all agents have unique names and unique race+class combinations. Formatter tests cover the `/character` embed builder (section filtering, ability modifiers, edge cases) and DM narration splitting. DM prompt tests (`ai/dm.test.ts`) verify prompt construction: party info, character reference (ability scores, features, spells, gender), file paths (SRD, dm-notes), combat state, history formatting, `/ask` verification instructions, and DM allowed tools. Other test files cover dice, combat, character parsing, orchestrator, engine, guardrails, webhooks, and Claude subprocess.
 
 Note on Bun test isolation: `mock.module()` is global and pollutes across files. Tests that need mocked modules use pure-function extraction patterns (e.g., `guardrail-check.ts`, `claude-subprocess.ts`, `dm-prompt.ts`) or direct file I/O to avoid cross-file mock collisions.
 
@@ -106,6 +109,7 @@ Note on Bun test isolation: `mock.module()` is global and pollutes across files.
 - `docs/creating-characters.md` — how to create a character sheet for human players (format, AI generation tips, sample)
 - `docs/creating-agents.md` — how to write agent personality files
 - `docs/game-rules.md` — D&D 5e rules as implemented, deviations, dice system, combat
+- `docs/srd/` — D&D 5e SRD 5.1 (CC-BY-4.0) in markdown — the DM reads these files to look up rules, class features, spells, and monster stats instead of guessing from training data. See `docs/srd/README.md` for the index.
 
 ## Origin & Context
 

@@ -1,7 +1,7 @@
 import { COMPRESS_EVERY, models } from "../config.js";
 import type { GameState, TurnEntry } from "../state/types.js";
 import { chat } from "./claude.js";
-import { buildAskPrompt, buildDMPrompt } from "./dm-prompt.js";
+import { buildAskPrompt, buildDMPrompt, DM_ALLOWED_TOOLS } from "./dm-prompt.js";
 
 export { buildDMPrompt } from "./dm-prompt.js";
 
@@ -11,16 +11,16 @@ export async function dmNarrate(
   currentActions: string,
 ): Promise<string> {
   const { system, messages } = buildDMPrompt(gameState, history, currentActions);
-  return chat(models.dm, system, messages);
+  return chat(models.dm, system, messages, DM_ALLOWED_TOOLS);
 }
 
 export async function dmRecap(gameState: GameState, history: TurnEntry[]): Promise<string> {
   const { system, messages } = buildDMPrompt(
     gameState,
     history,
-    "Please provide a dramatic recap of the adventure so far, summarizing key events, discoveries, and character moments. Write it as a 'Previously on...' narration.",
+    "Please provide a dramatic recap of the adventure so far, summarizing key events, discoveries, and character moments. Write it as a 'Previously on...' narration. Read the full history.json file to ensure accuracy.",
   );
-  return chat(models.dm, system, messages);
+  return chat(models.dm, system, messages, DM_ALLOWED_TOOLS);
 }
 
 export async function dmLook(
@@ -33,7 +33,7 @@ export async function dmLook(
     : `A player looks around. Describe the current environment in detail — sights, sounds, smells, and anything notable they might interact with.`;
 
   const { system, messages } = buildDMPrompt(gameState, history, prompt);
-  return chat(models.dm, system, messages);
+  return chat(models.dm, system, messages, DM_ALLOWED_TOOLS);
 }
 
 export async function dmAsk(
@@ -47,7 +47,7 @@ export async function dmAsk(
     history,
     buildAskPrompt(question, askerName),
   );
-  return chat(models.dm, system, messages);
+  return chat(models.dm, system, messages, DM_ALLOWED_TOOLS);
 }
 
 export async function compressNarrative(

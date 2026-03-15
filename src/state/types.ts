@@ -5,6 +5,7 @@ export interface CharacterSheet {
   level: number;
   background: string;
   alignment: string;
+  gender?: string;
   abilityScores: {
     strength: number;
     dexterity: number;

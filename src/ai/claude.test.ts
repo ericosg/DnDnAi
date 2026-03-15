@@ -115,6 +115,31 @@ describe("claude CLI subprocess", () => {
     });
   });
 
+  describe("allowedTools parameter", () => {
+    test("omits --allowedTools when no tools specified", () => {
+      const args = buildSpawnArgs("m", "s", "p");
+      expect(args).not.toContain("--allowedTools");
+    });
+
+    test("omits --allowedTools when empty array", () => {
+      const args = buildSpawnArgs("m", "s", "p", []);
+      expect(args).not.toContain("--allowedTools");
+    });
+
+    test("includes --allowedTools with comma-separated tool names", () => {
+      const args = buildSpawnArgs("m", "s", "p", ["Read", "Write", "Grep"]);
+      const idx = args.indexOf("--allowedTools");
+      expect(idx).toBeGreaterThan(-1);
+      expect(args[idx + 1]).toBe("Read,Write,Grep");
+    });
+
+    test("single tool is passed without commas", () => {
+      const args = buildSpawnArgs("m", "s", "p", ["Read"]);
+      const idx = args.indexOf("--allowedTools");
+      expect(args[idx + 1]).toBe("Read");
+    });
+  });
+
   describe("prompt construction (via buildSpawnArgs)", () => {
     test("single message becomes the prompt", () => {
       const args = buildSpawnArgs("m", "s", "Solo message.");

@@ -4,8 +4,13 @@
  */
 
 /** Build the CLI argument array for a `claude -p` subprocess call. */
-export function buildSpawnArgs(model: string, system: string, prompt: string): string[] {
-  return [
+export function buildSpawnArgs(
+  model: string,
+  system: string,
+  prompt: string,
+  allowedTools?: string[],
+): string[] {
+  const args = [
     "claude",
     "-p",
     prompt,
@@ -18,6 +23,12 @@ export function buildSpawnArgs(model: string, system: string, prompt: string): s
     "--no-session-persistence",
     "--dangerously-skip-permissions",
   ];
+
+  if (allowedTools?.length) {
+    args.push("--allowedTools", allowedTools.join(","));
+  }
+
+  return args;
 }
 
 /**

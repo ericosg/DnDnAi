@@ -22,6 +22,7 @@ export function parseCharacterSheet(markdown: string): CharacterSheet {
     level: safeInt(extractField(lines, "level"), 1),
     background: extractField(lines, "background") || "Unknown",
     alignment: extractField(lines, "alignment") || "Neutral",
+    gender: extractField(lines, "gender", "sex", "pronouns") || undefined,
     abilityScores: {
       strength: safeInt(extractField(lines, "strength", "str"), 10),
       dexterity: safeInt(extractField(lines, "dexterity", "dex"), 10),

@@ -24,6 +24,10 @@ function characterPath(gameId: string, name: string): string {
   );
 }
 
+function dmNotesPath(gameId: string): string {
+  return path.join(gamePath(gameId), "dm-notes");
+}
+
 async function ensureDir(dir: string): Promise<void> {
   if (!existsSync(dir)) {
     await mkdir(dir, { recursive: true });
@@ -118,6 +122,41 @@ export async function findActiveGames(): Promise<GameState[]> {
     }
   }
   return games;
+}
+
+// --- DM Notes ---
+
+export async function initDMNotes(gameId: string): Promise<void> {
+  const notesDir = dmNotesPath(gameId);
+  await ensureDir(notesDir);
+  await ensureDir(path.join(notesDir, "characters"));
+
+  // Seed with empty template files so the DM knows the structure
+  const worldPath = path.join(notesDir, "world.md");
+  if (!existsSync(worldPath)) {
+    await writeFile(
+      worldPath,
+      "# World Notes\n\nNPCs, locations, and lore established during play.\n",
+    );
+  }
+
+  const plotPath = path.join(notesDir, "plot.md");
+  if (!existsSync(plotPath)) {
+    await writeFile(
+      plotPath,
+      "# Plot Threads\n\nActive hooks, mysteries, and planned encounters.\n",
+    );
+  }
+
+  const rulingsPath = path.join(notesDir, "rulings.md");
+  if (!existsSync(rulingsPath)) {
+    await writeFile(rulingsPath, "# Rulings\n\nRules interpretations made during this campaign.\n");
+  }
+
+  const sessionLogPath = path.join(notesDir, "session-log.md");
+  if (!existsSync(sessionLogPath)) {
+    await writeFile(sessionLogPath, "# Session Log\n\nKey events by session.\n");
+  }
 }
 
 // --- Factory ---

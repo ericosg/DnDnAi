@@ -19,7 +19,9 @@ mock.module("../config.js", () => ({
   },
 }));
 
-const { buildDMPrompt, buildAskPrompt, DM_IDENTITY } = await import("./dm-prompt.js");
+const { buildDMPrompt, buildAskPrompt, DM_IDENTITY, DM_ALLOWED_TOOLS } = await import(
+  "./dm-prompt.js"
+);
 
 function makeGameState(overrides: Partial<GameState> = {}): GameState {
   return {
@@ -131,6 +133,41 @@ describe("DM_IDENTITY", () => {
     expect(DM_IDENTITY).toContain("[[COMBAT:START]]");
     expect(DM_IDENTITY).toContain("[[COMBAT:END]]");
   });
+
+  test("instructs DM to check Character Reference before making claims", () => {
+    expect(DM_IDENTITY).toContain("Character Reference section");
+    expect(DM_IDENTITY).toContain("if it's not listed, they don't have it");
+  });
+
+  test("instructs DM to use correct pronouns", () => {
+    expect(DM_IDENTITY).toContain("gender");
+    expect(DM_IDENTITY).toContain("they/them");
+  });
+
+  test("instructs DM about data access and SRD", () => {
+    expect(DM_IDENTITY).toContain("docs/srd/");
+    expect(DM_IDENTITY).toContain("look it up");
+  });
+
+  test("instructs DM about persistent notes", () => {
+    expect(DM_IDENTITY).toContain("DM Notes");
+    expect(DM_IDENTITY).toContain("dm-notes/");
+    expect(DM_IDENTITY).toContain("world.md");
+    expect(DM_IDENTITY).toContain("plot.md");
+  });
+});
+
+describe("DM_ALLOWED_TOOLS", () => {
+  test("includes read-only tools", () => {
+    expect(DM_ALLOWED_TOOLS).toContain("Read");
+    expect(DM_ALLOWED_TOOLS).toContain("Glob");
+    expect(DM_ALLOWED_TOOLS).toContain("Grep");
+  });
+
+  test("includes write tools for DM notes", () => {
+    expect(DM_ALLOWED_TOOLS).toContain("Write");
+    expect(DM_ALLOWED_TOOLS).toContain("Edit");
+  });
 });
 
 describe("buildDMPrompt", () => {
@@ -209,6 +246,66 @@ describe("buildDMPrompt", () => {
     const { system } = buildDMPrompt(gs, [], "test");
 
     expect(system).not.toContain("## Combat");
+  });
+
+  test("system prompt includes character reference with mechanical details", () => {
+    const gs = makeGameState();
+    // Add features and spells to verify they appear
+    gs.players[0].characterSheet.features = ["Sneak Attack", "Cunning Action"];
+    gs.players[0].characterSheet.skills = ["Stealth", "Perception"];
+    const { system } = buildDMPrompt(gs, [], "test");
+
+    expect(system).toContain("## Character Reference");
+    expect(system).toContain("### Fūsetsu");
+    expect(system).toContain("DEX 16(+3)");
+    expect(system).toContain("Features: Sneak Attack, Cunning Action");
+    expect(system).toContain("Skills: Stealth, Perception");
+    expect(system).toContain("### Grimbold Ironforge");
+    expect(system).toContain("STR 16(+3)");
+  });
+
+  test("character reference includes gender when present", () => {
+    const gs = makeGameState();
+    gs.players[0].characterSheet.gender = "Male";
+    const { system } = buildDMPrompt(gs, [], "test");
+
+    expect(system).toContain("Male");
+  });
+
+  test("character reference includes spells when present", () => {
+    const gs = makeGameState();
+    gs.players[1].characterSheet.spells = ["Sacred Flame", "Healing Word"];
+    const { system } = buildDMPrompt(gs, [], "test");
+
+    expect(system).toContain("Spells: Sacred Flame, Healing Word");
+  });
+
+  test("system prompt includes file paths with game-specific data dir", () => {
+    const gs = makeGameState();
+    const { system } = buildDMPrompt(gs, [], "test");
+
+    expect(system).toContain("## File Paths");
+    expect(system).toContain("data/games/test-game/history.json");
+    expect(system).toContain("data/games/test-game/state.json");
+    expect(system).toContain("data/games/test-game/dm-notes/");
+  });
+
+  test("file paths include SRD references", () => {
+    const gs = makeGameState();
+    const { system } = buildDMPrompt(gs, [], "test");
+
+    expect(system).toContain("docs/srd/README.md");
+    expect(system).toContain("docs/srd/02 classes.md");
+    expect(system).toContain("docs/srd/08 spellcasting.md");
+    expect(system).toContain("docs/srd/07 combat.md");
+  });
+
+  test("file paths include character sheet paths", () => {
+    const gs = makeGameState();
+    const { system } = buildDMPrompt(gs, [], "test");
+
+    expect(system).toContain("data/games/test-game/characters/fūsetsu.json");
+    expect(system).toContain("data/games/test-game/characters/grimbold-ironforge.json");
   });
 
   test("messages include recent history when present", () => {
@@ -300,5 +397,19 @@ describe("buildAskPrompt", () => {
     const prompt = buildAskPrompt("test?");
 
     expect(prompt).toContain("OUT-OF-CHARACTER QUESTION");
+  });
+
+  test("instructs DM to verify character data before answering", () => {
+    const prompt = buildAskPrompt("What can I do?", "Fūsetsu");
+
+    expect(prompt).toContain("Read the character's JSON file");
+    expect(prompt).toContain("never assume features from higher levels");
+  });
+
+  test("instructs DM to check rules and history when relevant", () => {
+    const prompt = buildAskPrompt("How does grappling work?", "Fūsetsu");
+
+    expect(prompt).toContain("docs/game-rules.md");
+    expect(prompt).toContain("history.json");
   });
 });

@@ -154,4 +154,24 @@ describe("parseCharacterSheet", () => {
 
     expect(sheet.initiative).toBe(5);
   });
+
+  test("parses gender field", () => {
+    const sheet = parseCharacterSheet(`**Name:** Gendered Character
+**Gender:** Male`);
+
+    expect(sheet.gender).toBe("Male");
+  });
+
+  test("parses pronouns as gender alias", () => {
+    const sheet = parseCharacterSheet(`**Name:** Pronoun Character
+**Pronouns:** she/her`);
+
+    expect(sheet.gender).toBe("she/her");
+  });
+
+  test("gender is undefined when not specified", () => {
+    const sheet = parseCharacterSheet("**Name:** No Gender");
+
+    expect(sheet.gender).toBeUndefined();
+  });
 });

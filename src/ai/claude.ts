@@ -13,9 +13,10 @@ export async function chat(
   model: string,
   system: string,
   messages: ChatMessage[],
+  allowedTools?: string[],
 ): Promise<string> {
   const prompt = messages.map((m) => m.content).join("\n\n");
-  const args = buildSpawnArgs(model, system, prompt);
+  const args = buildSpawnArgs(model, system, prompt, allowedTools);
   const env = buildSpawnEnv();
 
   log.debug(`Claude call: model=${model} promptLen=${prompt.length}`);

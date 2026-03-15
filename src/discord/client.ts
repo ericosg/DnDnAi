@@ -20,6 +20,7 @@ import {
   createGameState,
   findActiveGames,
   findGameByChannel,
+  initDMNotes,
   loadHistory,
   saveCharacter,
   saveGameState,
@@ -317,6 +318,7 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
 
       gameState.status = "active";
       await saveGameState(gameState);
+      await initDMNotes(gameState.id);
 
       // Check if there's existing history (resume)
       const history = await loadHistory(gameState.id);
