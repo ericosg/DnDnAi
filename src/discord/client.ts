@@ -11,13 +11,14 @@ import {
 } from "discord.js";
 import { loadAgentPersonality } from "../ai/agent.js";
 import { dmAsk, dmLook, dmNarrate, dmRecap } from "../ai/dm.js";
-import { config } from "../config.js";
+import { config, VERSION } from "../config.js";
 import { buildAgentCharacter, parseCharacterSheet } from "../game/characters.js";
 import { roll } from "../game/dice.js";
-import { processTurn } from "../game/engine.js";
+import { processTurn, resumeOrchestrator } from "../game/engine.js";
 import { log } from "../logger.js";
 import {
   createGameState,
+  findActiveGames,
   findGameByChannel,
   loadHistory,
   saveCharacter,
@@ -50,6 +51,7 @@ export function createBot(): Client {
   client.once(Events.ClientReady, async (c) => {
     log.info(`Logged in as ${c.user.tag}`);
     await registerCommands(c.user.id);
+    await autoResume(c);
   });
 
   client.on(Events.InteractionCreate, async (interaction) => {
@@ -108,6 +110,50 @@ async function registerCommands(botUserId: string): Promise<void> {
     body: commands,
   });
   log.info(`Registered ${commands.length} slash commands`);
+}
+
+async function autoResume(client: Client): Promise<void> {
+  const games = await findActiveGames();
+  if (games.length === 0) {
+    log.info("No active games to resume");
+    return;
+  }
+
+  log.info(`Found ${games.length} active game(s) to resume`);
+
+  for (const gameState of games) {
+    try {
+      const channel = await client.channels.fetch(gameState.channelId);
+      if (!channel || !channel.isTextBased()) {
+        log.warn(`Could not find channel ${gameState.channelId} for game ${gameState.id}`);
+        continue;
+      }
+
+      const textChannel = channel as TextChannel;
+      const playerCount = gameState.players.length;
+      const mode = gameState.combat.active
+        ? `Combat: Round ${gameState.combat.round}`
+        : "Exploration mode";
+
+      await textChannel.send({
+        embeds: [
+          systemEmbed(
+            `DnDnAi v${VERSION} — Back Online`,
+            `Game in progress — ${playerCount} players, turn ${gameState.turnCount}.\n${mode}\n\nUse \`/recap\` to catch up. The adventure continues!`,
+          ),
+        ],
+      });
+
+      log.info(
+        `Posted startup greeting for game ${gameState.id} in channel ${gameState.channelId}`,
+      );
+
+      // Kick off the orchestrator to resume pending AI turns
+      resumeOrchestrator(gameState, textChannel);
+    } catch (err) {
+      log.error(`Failed to resume game ${gameState.id}:`, err);
+    }
+  }
 }
 
 async function handleCommand(interaction: ChatInputCommandInteraction): Promise<void> {

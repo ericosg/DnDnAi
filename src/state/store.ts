@@ -106,6 +106,20 @@ export async function loadCharacter(gameId: string, name: string): Promise<Chara
   return JSON.parse(raw) as CharacterSheet;
 }
 
+export async function findActiveGames(): Promise<GameState[]> {
+  if (!existsSync(DATA_DIR)) return [];
+  const { readdir } = await import("node:fs/promises");
+  const entries = await readdir(DATA_DIR, { withFileTypes: true });
+  const games: GameState[] = [];
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      const state = await loadGameState(entry.name);
+      if (state && state.status === "active") games.push(state);
+    }
+  }
+  return games;
+}
+
 // --- Factory ---
 
 export function createGameState(id: string, channelId: string, guildId: string): GameState {

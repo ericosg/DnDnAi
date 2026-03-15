@@ -53,6 +53,18 @@ export function markResponded(gameId: string, playerId: string): void {
 }
 
 /**
+ * Resume the orchestrator loop for an active game after bot restart.
+ * Checks if AI agents need to act and prompts them if so.
+ */
+export function resumeOrchestrator(gameState: GameState, channel: TextChannel): Promise<void> {
+  return withGameLock(gameState.id, async () => {
+    log.info(`Resume: running orchestrator for game ${gameState.id}`);
+    await orchestratorLoop(gameState, channel);
+    await saveGameState(gameState);
+  });
+}
+
+/**
  * Process a new turn entry and drive the game forward.
  * Called after a human player acts or a system event occurs.
  *

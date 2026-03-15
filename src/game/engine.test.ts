@@ -100,7 +100,7 @@ mock.module("../ai/guardrail.js", () => ({
   checkAgentResponse: async () => ({ pass: true }),
 }));
 
-const { processTurn, markResponded, clearRound } = await import("./engine.js");
+const { processTurn, resumeOrchestrator, markResponded, clearRound } = await import("./engine.js");
 
 function makePlayer(overrides: Partial<Player> = {}): Player {
   return {
@@ -650,6 +650,113 @@ describe("engine — typing indicators", () => {
     // DM should have been called twice: once for human, once for agent
     const dmMessages = sentMessages.filter((m) => m.name === "Dungeon Master");
     expect(dmMessages.length).toBe(2);
+  });
+
+  test("resumeOrchestrator prompts agent when it is their turn", async () => {
+    const gs = makeGameState();
+    // Seed history (simulates restart with existing game)
+    appendedHistory.push({
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "dm",
+      playerName: "Dungeon Master",
+      type: "dm-narration",
+      content: "The party stands in the dungeon.",
+    });
+    // roundResponses is empty (simulates restart) — agent hasn't responded
+
+    await resumeOrchestrator(gs, mockChannel as never);
+
+    // Agent should have been prompted
+    const agentMessages = sentMessages.filter((m) => m.name === "Grimbold");
+    expect(agentMessages).toHaveLength(1);
+  });
+
+  test("resumeOrchestrator prompts agent in combat when it is their turn", async () => {
+    const gs = makeGameState();
+    // Seed history
+    appendedHistory.push({
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "dm",
+      playerName: "Dungeon Master",
+      type: "dm-narration",
+      content: "Combat rages on.",
+    });
+    gs.combat = {
+      active: true,
+      round: 4,
+      turnIndex: 1, // Agent's turn
+      combatants: [
+        {
+          playerId: "human1",
+          name: "Fusetsu",
+          initiative: 25,
+          hp: { max: 24, current: 24, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+        {
+          playerId: "agent:grimbold",
+          name: "Grimbold Ironforge",
+          initiative: 6,
+          hp: { max: 31, current: 31, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+      ],
+    };
+
+    await resumeOrchestrator(gs, mockChannel as never);
+
+    // Agent should have been prompted
+    const agentMessages = sentMessages.filter((m) => m.name === "Grimbold");
+    expect(agentMessages).toHaveLength(1);
+
+    // DM should have resolved the agent's action
+    const dmMessages = sentMessages.filter((m) => m.name === "Dungeon Master");
+    expect(dmMessages.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("resumeOrchestrator does nothing when it is a human turn in combat", async () => {
+    const gs = makeGameState();
+    // Seed history
+    appendedHistory.push({
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "dm",
+      playerName: "Dungeon Master",
+      type: "dm-narration",
+      content: "Combat rages on.",
+    });
+    gs.combat = {
+      active: true,
+      round: 4,
+      turnIndex: 0, // Human's turn
+      combatants: [
+        {
+          playerId: "human1",
+          name: "Fusetsu",
+          initiative: 25,
+          hp: { max: 24, current: 24, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+        {
+          playerId: "agent:grimbold",
+          name: "Grimbold Ironforge",
+          initiative: 6,
+          hp: { max: 31, current: 31, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+      ],
+    };
+
+    await resumeOrchestrator(gs, mockChannel as never);
+
+    // No agent or DM messages — just waiting for human
+    expect(sentMessages).toHaveLength(0);
   });
 
   test("typing count matches AI turns in multi-agent party", async () => {

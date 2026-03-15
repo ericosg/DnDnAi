@@ -61,7 +61,7 @@ All AI calls are stateless — context is rebuilt from game state + sliding hist
 - **Webhooks**: Each AI identity (agents + DM) gets a separate Discord webhook with custom name/avatar. DM uses purple embeds (auto-split if >4096 chars); agents use plain text.
 - **Agent personality files**: `agents/*.md` with gray-matter frontmatter + markdown body. The `characterSpec` field contains a character sheet in the same markdown format human players upload. 11 pre-built agents ship in `agents/` covering all 9 non-Fighter classes plus the original Fighter (Grimbold) and a second Bard (Pumpernickle). All are levels 1-3 with unique race+class combos.
 - **Player IDs**: Humans = Discord user ID. Agents = `agent:<name>`.
-- **Round tracking**: In-memory `roundResponses` map in `game/engine.ts`. Cleared after DM resolves. Not persisted.
+- **Round tracking**: In-memory `roundResponses` map in `game/engine.ts`. Cleared after DM resolves. Not persisted — on restart, `autoResume()` runs the orchestrator with an empty set, which correctly prompts pending AI agents.
 - **Turn mutex**: Per-game promise chain in `game/engine.ts` serializes concurrent `processTurn` calls. Prevents duplicate agent/DM responses when multiple humans act simultaneously.
 
 ### Typing Indicators
@@ -78,7 +78,7 @@ Configurable via `NARRATIVE_STYLE` env var (`concise`, `standard`, `elaborate`).
 
 ### Resumability
 
-The bot is fully resumable across restarts. All game state persists to JSON; AI calls are stateless. On restart, the bot reconnects to Discord and responds to the next player action by loading state from disk. The only thing lost is the in-memory round tracker — the next player action starts a fresh round, but the DM still has full history context. No special resume command is needed; just keep playing.
+The bot is fully resumable across restarts. All game state persists to JSON; AI calls are stateless. On startup, `autoResume()` in `discord/client.ts` scans for active games, posts a startup greeting embed in each game's channel, and runs the orchestrator loop via `resumeOrchestrator()` in `game/engine.ts` to prompt any pending AI agent turns. This prevents deadlocks where AI agents would never act after a restart mid-combat. No `/start` command is needed to resume — the bot auto-detects and continues.
 
 ### Persistence
 

@@ -1,3 +1,5 @@
+export const VERSION = "0.29";
+
 const required = (name: string): string => {
   const val = process.env[name];
   if (!val) throw new Error(`Missing required env var: ${name}`);
