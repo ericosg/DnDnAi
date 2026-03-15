@@ -71,6 +71,46 @@ export function buildSpawnEnv(): Record<string, string | undefined> {
   };
 }
 
+/** Parse stream-json output, extracting tool uses and the final text response. */
+export function parseStreamJson(stdout: string): {
+  resultText: string;
+  toolUses: { name: string; input: Record<string, unknown> }[];
+  numTurns: number;
+} {
+  let resultText = "";
+  const toolUses: { name: string; input: Record<string, unknown> }[] = [];
+  const textBlocks: string[] = [];
+  let numTurns = 0;
+
+  for (const line of stdout.split("\n")) {
+    if (!line.trim()) continue;
+    try {
+      const event = JSON.parse(line);
+
+      if (event.type === "assistant" && event.message?.content) {
+        for (const block of event.message.content) {
+          if (block.type === "tool_use") {
+            toolUses.push({ name: block.name, input: block.input ?? {} });
+          } else if (block.type === "text" && block.text) {
+            textBlocks.push(block.text);
+          }
+        }
+      }
+
+      if (event.type === "result") {
+        resultText = event.result ?? "";
+        numTurns = event.num_turns ?? 0;
+      }
+    } catch {
+      // Skip malformed lines
+    }
+  }
+
+  // Use result text if available, otherwise fall back to collected text blocks
+  const finalText = (resultText || textBlocks.join("\n\n")).trim();
+  return { resultText: finalText, toolUses, numTurns };
+}
+
 /** Returns true if a CLI error message indicates a retryable condition. */
 export function isRetryable(errorMsg: string): boolean {
   return (

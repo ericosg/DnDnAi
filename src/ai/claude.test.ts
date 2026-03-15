@@ -3,6 +3,7 @@ import {
   buildSpawnArgs,
   buildSpawnEnv,
   isRetryable,
+  parseStreamJson,
   summarizeToolInput,
 } from "./claude-subprocess.js";
 
@@ -132,6 +133,16 @@ describe("claude CLI subprocess", () => {
       const idx = args.indexOf("--output-format");
       expect(args[idx + 1]).toBe("stream-json");
     });
+
+    test("adds --verbose when using stream-json", () => {
+      const args = buildSpawnArgs("m", "s", "p", [], "stream-json");
+      expect(args).toContain("--verbose");
+    });
+
+    test("does not add --verbose for text output", () => {
+      const args = buildSpawnArgs("m", "s", "p");
+      expect(args).not.toContain("--verbose");
+    });
   });
 
   describe("allowedTools parameter", () => {
@@ -212,6 +223,78 @@ describe("claude CLI subprocess", () => {
     test("unknown tool shows truncated JSON", () => {
       const result = summarizeToolInput("Unknown", { foo: "bar" });
       expect(result).toContain("foo");
+    });
+  });
+
+  describe("parseStreamJson", () => {
+    test("extracts result text from result event", () => {
+      const stdout = '{"type":"result","result":"The cave is dark.","num_turns":1}\n';
+      const parsed = parseStreamJson(stdout);
+      expect(parsed.resultText).toBe("The cave is dark.");
+      expect(parsed.toolUses).toHaveLength(0);
+    });
+
+    test("extracts tool uses from assistant events", () => {
+      const stdout = [
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"docs/srd/07 combat.md"}}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"The answer is..."}]}}',
+        '{"type":"result","result":"The answer is...","num_turns":2}',
+      ].join("\n");
+      const parsed = parseStreamJson(stdout);
+      expect(parsed.toolUses).toHaveLength(1);
+      expect(parsed.toolUses[0].name).toBe("Read");
+      expect(parsed.toolUses[0].input.file_path).toBe("docs/srd/07 combat.md");
+      expect(parsed.numTurns).toBe(2);
+    });
+
+    test("falls back to text blocks when result is empty", () => {
+      const stdout = [
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"The DM narrates..."}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Write","input":{"file_path":"notes.md","content":"x"}}]}}',
+        '{"type":"result","result":"","num_turns":3}',
+      ].join("\n");
+      const parsed = parseStreamJson(stdout);
+      expect(parsed.resultText).toBe("The DM narrates...");
+    });
+
+    test("joins multiple text blocks with double newline", () => {
+      const stdout = [
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"Paragraph one."}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"Paragraph two."}]}}',
+        '{"type":"result","result":"","num_turns":2}',
+      ].join("\n");
+      const parsed = parseStreamJson(stdout);
+      expect(parsed.resultText).toBe("Paragraph one.\n\nParagraph two.");
+    });
+
+    test("skips malformed JSON lines", () => {
+      const stdout = [
+        "not valid json",
+        '{"type":"result","result":"Valid result.","num_turns":1}',
+        "another bad line",
+      ].join("\n");
+      const parsed = parseStreamJson(stdout);
+      expect(parsed.resultText).toBe("Valid result.");
+    });
+
+    test("handles empty stdout", () => {
+      const parsed = parseStreamJson("");
+      expect(parsed.resultText).toBe("");
+      expect(parsed.toolUses).toHaveLength(0);
+      expect(parsed.numTurns).toBe(0);
+    });
+
+    test("handles multiple tool uses across turns", () => {
+      const stdout = [
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Glob","input":{"pattern":"dm-notes/*"}},{"type":"tool_use","name":"Read","input":{"file_path":"dm-notes/world.md"}}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"Response."},{"type":"tool_use","name":"Write","input":{"file_path":"dm-notes/plot.md","content":"updated"}}]}}',
+        '{"type":"result","result":"Response.","num_turns":3}',
+      ].join("\n");
+      const parsed = parseStreamJson(stdout);
+      expect(parsed.toolUses).toHaveLength(3);
+      expect(parsed.toolUses[0].name).toBe("Glob");
+      expect(parsed.toolUses[1].name).toBe("Read");
+      expect(parsed.toolUses[2].name).toBe("Write");
     });
   });
 });

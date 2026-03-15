@@ -3,6 +3,7 @@ import {
   buildSpawnArgs,
   buildSpawnEnv,
   isRetryable,
+  parseStreamJson,
   summarizeToolInput,
 } from "./claude-subprocess.js";
 
@@ -106,48 +107,22 @@ export async function chatAgentic(
         throw new Error(`Claude CLI error: ${msg}`);
       }
 
-      // Parse stream-json output: one JSON object per line
-      let resultText = "";
-      let toolUseCount = 0;
-      // Collect text blocks from all assistant messages as fallback
-      const textBlocks: string[] = [];
+      // Parse stream-json output and log tool uses
+      const parsed = parseStreamJson(stdout);
 
-      for (const line of stdout.split("\n")) {
-        if (!line.trim()) continue;
-        try {
-          const event = JSON.parse(line);
-
-          // Log tool use events and collect text blocks from assistant messages
-          if (event.type === "assistant" && event.message?.content) {
-            for (const block of event.message.content) {
-              if (block.type === "tool_use") {
-                toolUseCount++;
-                const summary = summarizeToolInput(block.name, block.input ?? {});
-                log.info(`  ${label} tool: ${block.name} → ${summary}`);
-              } else if (block.type === "text" && block.text) {
-                textBlocks.push(block.text);
-              }
-            }
-          }
-
-          // Extract final result
-          if (event.type === "result") {
-            resultText = event.result ?? "";
-            if (event.num_turns && event.num_turns > 1) {
-              log.info(
-                `  ${label} agentic: ${toolUseCount} tool calls across ${event.num_turns} turns`,
-              );
-            }
-          }
-        } catch {
-          // Skip malformed lines
-        }
+      for (const tool of parsed.toolUses) {
+        const summary = summarizeToolInput(tool.name, tool.input);
+        log.info(`  ${label} tool: ${tool.name} → ${summary}`);
       }
 
-      // Use result text if available, otherwise fall back to collected text blocks
-      const finalText = resultText || textBlocks.join("\n\n");
-      log.debug(`Claude agentic response: ${finalText.length} chars`);
-      return finalText.trim();
+      if (parsed.toolUses.length > 0 && parsed.numTurns > 1) {
+        log.info(
+          `  ${label} agentic: ${parsed.toolUses.length} tool calls across ${parsed.numTurns} turns`,
+        );
+      }
+
+      log.debug(`Claude agentic response: ${parsed.resultText.length} chars`);
+      return parsed.resultText;
     } catch (err: unknown) {
       lastError = err;
       if (err instanceof RetryableError) {
