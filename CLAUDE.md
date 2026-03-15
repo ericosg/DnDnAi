@@ -62,9 +62,9 @@ All AI calls are stateless — context is rebuilt from game state + sliding hist
 - **Player IDs**: Humans = Discord user ID. Agents = `agent:<name>`.
 - **Round tracking**: In-memory `roundResponses` map in `game/engine.ts`. Cleared after DM resolves. Not persisted.
 
-### Thinking Indicators
+### Typing Indicators
 
-While AI agents and the DM are generating responses, the bot posts a temporary in-character message (e.g., *"Grimbold is thinking..."*) via the character's webhook, so it appears to come from the character — not a generic "Bot is typing..." indicator. The message is automatically deleted when the real response is posted. `sendThinkingIndicator()` in `discord/webhooks.ts` handles sending and returns a dismiss function. Fail-safe: if sending or deleting the indicator fails, it's silently ignored.
+While AI agents and the DM are generating responses, the bot shows the native Discord "is typing..." indicator on the channel. `startTyping()` in `discord/webhooks.ts` sends the typing signal immediately and refreshes it every 8 seconds (Discord's typing indicator expires after ~10s). Returns a stop function that clears the refresh interval. Fail-safe: if `sendTyping()` fails, it's silently ignored.
 
 ### Logging
 

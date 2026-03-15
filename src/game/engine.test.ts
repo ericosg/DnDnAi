@@ -71,7 +71,8 @@ mock.module("../ai/agent.js", () => ({
 
 // Mock Discord webhooks and formatter
 let sentMessages: { name: string; content: string; embeds?: unknown[] }[] = [];
-let thinkingIndicators: { name: string; dismissed: boolean }[] = [];
+let typingStarted = 0;
+let typingStopped = 0;
 
 mock.module("../discord/webhooks.js", () => ({
   sendAsIdentity: async (
@@ -82,11 +83,10 @@ mock.module("../discord/webhooks.js", () => ({
   ) => {
     sentMessages.push({ name, content, embeds: options?.embeds });
   },
-  sendThinkingIndicator: async (_channel: unknown, name: string) => {
-    const indicator = { name, dismissed: false };
-    thinkingIndicators.push(indicator);
+  startTyping: (_channel: unknown) => {
+    typingStarted++;
     return () => {
-      indicator.dismissed = true;
+      typingStopped++;
     };
   },
 }));
@@ -196,7 +196,8 @@ beforeEach(() => {
   appendedHistory = [];
   savedStates = [];
   sentMessages = [];
-  thinkingIndicators = [];
+  typingStarted = 0;
+  typingStopped = 0;
   dmNarrateResponse = "The party advances through the dungeon.";
   agentResponse = "> Grimbold grumbles and follows.";
 });
@@ -304,8 +305,8 @@ describe("engine — full round", () => {
   });
 });
 
-describe("engine — thinking indicators", () => {
-  test("thinking indicator shown for agent and DM during full round", async () => {
+describe("engine — typing indicators", () => {
+  test("typing started for agent and DM during full round", async () => {
     const gs = makeGameState();
     const entry: TurnEntry = {
       id: 1,
@@ -318,14 +319,11 @@ describe("engine — thinking indicators", () => {
 
     await processTurn(gs, entry, mockChannel as never);
 
-    // Should have indicators for agent (Grimbold) and DM
-    const agentIndicator = thinkingIndicators.find((i) => i.name === "Grimbold");
-    const dmIndicator = thinkingIndicators.find((i) => i.name === "Dungeon Master");
-    expect(agentIndicator).toBeDefined();
-    expect(dmIndicator).toBeDefined();
+    // Should have started typing for agent + DM
+    expect(typingStarted).toBe(2);
   });
 
-  test("thinking indicators are dismissed after responses", async () => {
+  test("typing stopped after responses", async () => {
     const gs = makeGameState();
     const entry: TurnEntry = {
       id: 1,
@@ -338,13 +336,11 @@ describe("engine — thinking indicators", () => {
 
     await processTurn(gs, entry, mockChannel as never);
 
-    // All indicators should be dismissed
-    for (const indicator of thinkingIndicators) {
-      expect(indicator.dismissed).toBe(true);
-    }
+    // All typing indicators should be stopped
+    expect(typingStopped).toBe(typingStarted);
   });
 
-  test("DM thinking indicator shown for DM-only turn", async () => {
+  test("typing started for DM-only turn", async () => {
     const gs = makeGameState();
     const entry: TurnEntry = {
       id: 1,
@@ -358,32 +354,12 @@ describe("engine — thinking indicators", () => {
     markResponded(gs.id, "agent:grimbold");
     await processTurn(gs, entry, mockChannel as never);
 
-    const dmIndicator = thinkingIndicators.find((i) => i.name === "Dungeon Master");
-    expect(dmIndicator).toBeDefined();
-    expect(dmIndicator?.dismissed).toBe(true);
+    // Only DM typing
+    expect(typingStarted).toBe(1);
+    expect(typingStopped).toBe(1);
   });
 
-  test("thinking indicator uses character name not bot name", async () => {
-    const gs = makeGameState();
-    const entry: TurnEntry = {
-      id: 1,
-      timestamp: new Date().toISOString(),
-      playerId: "human1",
-      playerName: "Fusetsu",
-      type: "ic",
-      content: "I wait.",
-    };
-
-    await processTurn(gs, entry, mockChannel as never);
-
-    // No indicator should use a generic name like "Bot"
-    for (const indicator of thinkingIndicators) {
-      expect(indicator.name).not.toBe("Bot");
-      expect(indicator.name.length).toBeGreaterThan(0);
-    }
-  });
-
-  test("thinking indicator dismissed even on empty DM response", async () => {
+  test("typing stopped even on empty DM response", async () => {
     dmNarrateResponse = "";
 
     const gs = makeGameState();
@@ -399,8 +375,6 @@ describe("engine — thinking indicators", () => {
     markResponded(gs.id, "agent:grimbold");
     await processTurn(gs, entry, mockChannel as never);
 
-    const dmIndicator = thinkingIndicators.find((i) => i.name === "Dungeon Master");
-    expect(dmIndicator).toBeDefined();
-    expect(dmIndicator?.dismissed).toBe(true);
+    expect(typingStopped).toBe(typingStarted);
   });
 });

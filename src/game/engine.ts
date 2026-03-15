@@ -5,7 +5,7 @@ import { checkAgentResponse, checkDMResponse } from "../ai/guardrail.js";
 import { getNextAction } from "../ai/orchestrator.js";
 import { AGENT_DELAY_MS, COMPRESS_EVERY, HISTORY_WINDOW } from "../config.js";
 import { dmNarrationEmbeds } from "../discord/formatter.js";
-import { sendAsIdentity, sendThinkingIndicator } from "../discord/webhooks.js";
+import { sendAsIdentity, startTyping } from "../discord/webhooks.js";
 import { log } from "../logger.js";
 import { appendHistory, loadHistory, saveGameState } from "../state/store.js";
 import type { DiceResult, GameState, TurnEntry } from "../state/types.js";
@@ -144,12 +144,10 @@ async function handleAgentTurn(
   if (!player || !player.agentFile) return;
 
   log.info(`Agent turn: ${player.name} — generating response...`);
+  const stopTyping = startTyping(channel);
 
   try {
     const personality = await loadAgentPersonality(player.agentFile.replace(/\.md$/, ""));
-    const dismissThinking = await sendThinkingIndicator(channel, player.name, {
-      avatarUrl: personality.avatarUrl ?? undefined,
-    });
 
     // Pacing delay
     await new Promise((r) => setTimeout(r, AGENT_DELAY_MS));
@@ -189,7 +187,7 @@ async function handleAgentTurn(
       log.info(`Agent guardrail (${player.name}): pass`);
     }
 
-    dismissThinking();
+    stopTyping();
 
     // Post as agent identity via webhook
     await sendAsIdentity(channel, player.name, response, {
@@ -211,6 +209,7 @@ async function handleAgentTurn(
     markResponded(gameState.id, player.id);
     gameState.turnCount++;
   } catch (err) {
+    stopTyping();
     log.error(`Agent ${player.name}: failed to generate action:`, err);
   }
 }
@@ -229,7 +228,7 @@ async function handleDMTurn(
     .join("\n");
 
   log.info("DM turn: calling Claude for narration...");
-  const dismissThinking = await sendThinkingIndicator(channel, "Dungeon Master");
+  const stopTyping = startTyping(channel);
   log.debug(
     `DM prompt: resolving actions from ${responded.size} players (${recentActions.length} chars)`,
   );
@@ -239,7 +238,7 @@ async function handleDMTurn(
 
     if (!dmResponse || !dmResponse.trim()) {
       log.warn("DM returned empty response");
-      dismissThinking();
+      stopTyping();
       await channel.send("*The Dungeon Master pauses to gather their thoughts...*");
       return;
     }
@@ -256,7 +255,7 @@ async function handleDMTurn(
 
       if (!dmResponse || !dmResponse.trim()) {
         log.warn("DM returned empty response on retry");
-        dismissThinking();
+        stopTyping();
         await channel.send("*The Dungeon Master pauses to gather their thoughts...*");
         return;
       }
@@ -264,7 +263,7 @@ async function handleDMTurn(
       log.info("Guardrail: pass");
     }
 
-    dismissThinking();
+    stopTyping();
 
     // Process dice directives
     const directives = parseDiceDirective(dmResponse);
@@ -324,7 +323,7 @@ async function handleDMTurn(
     await appendHistory(gameState.id, entry);
     gameState.turnCount++;
   } catch (err) {
-    dismissThinking();
+    stopTyping();
     log.error("DM turn: failed to generate narration:", err);
     await channel.send("*The Dungeon Master pauses to gather their thoughts...*");
   }

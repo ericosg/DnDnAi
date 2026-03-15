@@ -1,10 +1,4 @@
-import type {
-  EmbedBuilder,
-  Message,
-  TextChannel,
-  Webhook,
-  WebhookMessageCreateOptions,
-} from "discord.js";
+import type { EmbedBuilder, TextChannel, Webhook, WebhookMessageCreateOptions } from "discord.js";
 
 const webhookCache = new Map<string, Webhook>();
 
@@ -100,28 +94,17 @@ export function splitMessage(text: string, maxLen: number): string[] {
 }
 
 /**
- * Send a temporary "thinking" message as a character identity.
- * Returns a cleanup function that deletes the message.
- * Fail-safe: if sending or deleting fails, it's silently ignored.
+ * Start the native Discord "is typing..." indicator on a channel.
+ * Sends it immediately and refreshes every 8 seconds (Discord typing
+ * indicator expires after ~10s). Returns a stop function.
+ * Fail-safe: if sendTyping fails, it's silently ignored.
  */
-export async function sendThinkingIndicator(
-  channel: TextChannel,
-  name: string,
-  options?: { avatarUrl?: string },
-): Promise<() => void> {
-  try {
-    const webhook = await getOrCreateWebhook(channel, name, options?.avatarUrl);
-    const msg = (await webhook.send({
-      username: name,
-      content: `*${name} is thinking...*`,
-      ...(options?.avatarUrl && { avatarURL: options.avatarUrl }),
-    })) as Message;
-    return () => {
-      msg.delete().catch(() => {});
-    };
-  } catch {
-    return () => {};
-  }
+export function startTyping(channel: TextChannel): () => void {
+  channel.sendTyping().catch(() => {});
+  const interval = setInterval(() => {
+    channel.sendTyping().catch(() => {});
+  }, 8_000);
+  return () => clearInterval(interval);
 }
 
 export function clearWebhookCache(): void {
