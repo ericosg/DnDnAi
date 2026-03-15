@@ -182,7 +182,7 @@ function makeGameState(): GameState {
 }
 
 // Minimal mock channel with send method
-const mockChannel = { send: async () => {} } as unknown;
+const mockChannel = { send: async () => {}, sendTyping: async () => {} } as unknown;
 
 beforeEach(() => {
   appendedHistory = [];
