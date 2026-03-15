@@ -409,7 +409,14 @@ describe("buildAskPrompt", () => {
   test("instructs DM to check rules and history when relevant", () => {
     const prompt = buildAskPrompt("How does grappling work?", "Fūsetsu");
 
-    expect(prompt).toContain("docs/game-rules.md");
+    expect(prompt).toContain("docs/srd/");
     expect(prompt).toContain("history.json");
+  });
+
+  test("instructs DM to log rulings after answering", () => {
+    const prompt = buildAskPrompt("Can I sneak attack with a thrown dagger?", "Fūsetsu");
+
+    expect(prompt).toContain("rulings.md");
+    expect(prompt).toContain("AFTER answering");
   });
 });
