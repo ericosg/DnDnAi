@@ -109,19 +109,23 @@ export async function chatAgentic(
       // Parse stream-json output: one JSON object per line
       let resultText = "";
       let toolUseCount = 0;
+      // Collect text blocks from all assistant messages as fallback
+      const textBlocks: string[] = [];
 
       for (const line of stdout.split("\n")) {
         if (!line.trim()) continue;
         try {
           const event = JSON.parse(line);
 
-          // Log tool use events
+          // Log tool use events and collect text blocks from assistant messages
           if (event.type === "assistant" && event.message?.content) {
             for (const block of event.message.content) {
               if (block.type === "tool_use") {
                 toolUseCount++;
                 const summary = summarizeToolInput(block.name, block.input ?? {});
                 log.info(`  ${label} tool: ${block.name} → ${summary}`);
+              } else if (block.type === "text" && block.text) {
+                textBlocks.push(block.text);
               }
             }
           }
@@ -140,8 +144,10 @@ export async function chatAgentic(
         }
       }
 
-      log.debug(`Claude agentic response: ${resultText.length} chars`);
-      return resultText.trim();
+      // Use result text if available, otherwise fall back to collected text blocks
+      const finalText = resultText || textBlocks.join("\n\n");
+      log.debug(`Claude agentic response: ${finalText.length} chars`);
+      return finalText.trim();
     } catch (err: unknown) {
       lastError = err;
       if (err instanceof RetryableError) {
