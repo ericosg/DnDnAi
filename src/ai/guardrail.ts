@@ -15,8 +15,9 @@ export type { GuardrailResult } from "./guardrail-check.js";
 export async function checkDMResponse(
   dmResponse: string,
   playerCharacterNames: string[],
+  statedActions?: string,
 ): Promise<GuardrailResult> {
-  const prompt = buildGuardrailPrompt(dmResponse, playerCharacterNames);
+  const prompt = buildGuardrailPrompt(dmResponse, playerCharacterNames, statedActions);
 
   try {
     const response = await chat(models.orchestrator, GUARDRAIL_SYSTEM, [

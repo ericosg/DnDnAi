@@ -291,7 +291,7 @@ async function handleDMTurn(
     // Guardrail: check for player agency violations (only human PCs — AI agents
     // have already declared actions, so DM is expected to narrate their outcomes)
     const pcNames = gameState.players.filter((p) => !p.isAgent).map((p) => p.characterSheet.name);
-    const guardrail = await checkDMResponse(dmResponse, pcNames);
+    const guardrail = await checkDMResponse(dmResponse, pcNames, recentActions);
     if (!guardrail.pass) {
       log.warn(`Guardrail violation: ${guardrail.violation}`);
       log.info("DM turn: re-generating with guardrail feedback...");

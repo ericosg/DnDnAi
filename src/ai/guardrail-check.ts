@@ -21,8 +21,16 @@ NOT violations:
 - Addressing a PC directly ("Fūsetsu — what do you do?")
 - Referencing what a PC already did in past tense based on their stated action
 
+## Important Context
+You will also receive what the players explicitly stated they are doing this turn. The DM IS allowed to narrate the execution and outcome of these stated actions. For example:
+- Player says "I cast Sacred Flame on Creature B" → DM can narrate the flame descending, the creature dodging or being hit, damage dealt
+- Player says "I attack with my sword" → DM can narrate the swing, the hit/miss, the damage
+- Player says "I stand my ground" → DM can describe the PC holding position
+
+The DM is only violating agency if it narrates actions, speech, or decisions the player NEVER stated.
+
 ## Instructions
-You will receive the DM's narration and a list of player character names. Respond with EXACTLY one JSON object:
+You will receive the DM's narration, player character names, and what those players stated they are doing. Respond with EXACTLY one JSON object:
 {"pass": true}
 or
 {"pass": false, "violation": "<brief description of what the DM did wrong and which PC was controlled>"}`;
@@ -33,8 +41,17 @@ export interface GuardrailResult {
 }
 
 /** Build the user prompt sent to the guardrail model. */
-export function buildGuardrailPrompt(dmResponse: string, playerCharacterNames: string[]): string {
-  return `## Player Characters (these must NOT be controlled by the DM)\n${playerCharacterNames.map((n) => `- ${n}`).join("\n")}\n\n## DM Narration to Check\n${dmResponse}`;
+export function buildGuardrailPrompt(
+  dmResponse: string,
+  playerCharacterNames: string[],
+  statedActions?: string,
+): string {
+  let prompt = `## Player Characters (these must NOT be controlled by the DM)\n${playerCharacterNames.map((n) => `- ${n}`).join("\n")}`;
+  if (statedActions) {
+    prompt += `\n\n## What Players Stated They Are Doing This Turn\n${statedActions}`;
+  }
+  prompt += `\n\n## DM Narration to Check\n${dmResponse}`;
+  return prompt;
 }
 
 // --- Agent Guardrail ---
