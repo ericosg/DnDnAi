@@ -181,13 +181,23 @@ function makeGameState(): GameState {
   };
 }
 
-// Minimal mock channel with send method
-const mockChannel = { send: async () => {}, sendTyping: async () => {} } as unknown;
+// Minimal mock channel with send method and typing tracker
+let typingCalls: number;
+let typingActive: boolean;
+const mockChannel = {
+  send: async () => {},
+  sendTyping: async () => {
+    typingCalls++;
+    typingActive = true;
+  },
+} as unknown;
 
 beforeEach(() => {
   appendedHistory = [];
   savedStates = [];
   sentMessages = [];
+  typingCalls = 0;
+  typingActive = false;
   dmNarrateResponse = "The party advances through the dungeon.";
   agentResponse = "> Grimbold grumbles and follows.";
 });
@@ -292,5 +302,64 @@ describe("engine — full round", () => {
     // No DM entry should be recorded (guard caught it)
     const dmEntries = appendedHistory.filter((e) => e.playerId === "dm");
     expect(dmEntries).toHaveLength(0);
+  });
+});
+
+describe("engine — typing indicators", () => {
+  test("sendTyping is called during agent turn", async () => {
+    const gs = makeGameState();
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I move forward.",
+    };
+
+    await processTurn(gs, entry, mockChannel as never);
+
+    // At least one typing call for agent, one for DM
+    expect(typingCalls).toBeGreaterThanOrEqual(2);
+  });
+
+  test("sendTyping is called for DM-only turn", async () => {
+    const gs = makeGameState();
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I search the room.",
+    };
+
+    // Pre-mark agent so only DM runs
+    markResponded(gs.id, "agent:grimbold");
+
+    await processTurn(gs, entry, mockChannel as never);
+
+    // At least one typing call for DM
+    expect(typingCalls).toBeGreaterThanOrEqual(1);
+  });
+
+  test("sendTyping is called even when DM response is empty", async () => {
+    dmNarrateResponse = "";
+
+    const gs = makeGameState();
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I wait.",
+    };
+
+    markResponded(gs.id, "agent:grimbold");
+    await processTurn(gs, entry, mockChannel as never);
+
+    // Typing was triggered even though response was empty (it starts before the call)
+    expect(typingCalls).toBeGreaterThanOrEqual(1);
   });
 });

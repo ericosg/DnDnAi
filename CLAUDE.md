@@ -62,6 +62,10 @@ All AI calls are stateless — context is rebuilt from game state + sliding hist
 - **Player IDs**: Humans = Discord user ID. Agents = `agent:<name>`.
 - **Round tracking**: In-memory `roundResponses` map in `game/engine.ts`. Cleared after DM resolves. Not persisted.
 
+### Typing Indicators
+
+The bot shows Discord's "is typing..." indicator while AI agents and the DM are generating responses. A `startTyping()` helper in `game/engine.ts` fires `channel.sendTyping()` immediately and refreshes every 8 seconds (Discord's indicator lasts ~10s) to keep it alive during long Opus calls. The interval is cleared when the response is ready or on error, so it never leaks.
+
 ### Logging
 
 Structured logger (`src/logger.ts`) with configurable verbosity via `LOG_LEVEL` env var (`error`, `warn`, `info`, `debug`). Defaults to `info`. At `debug` level, logs include orchestrator iteration details and responded-player sets. At `info`, logs show the full turn lifecycle: turn received → orchestrator decisions → agent/DM Claude calls → responses posted → round cleared.
@@ -89,7 +93,7 @@ Game lookup scans all game directories for matching channel ID.
 
 ### Testing
 
-204 tests across 10 files. Agent tests (`ai/agent.test.ts`) load every agent file from disk, verify frontmatter fields, and run each `characterSpec` through `parseCharacterSheet()` to validate stats, ability scores, equipment, and features parse correctly. Tests also verify all agents have unique names and unique race+class combinations. Other test files cover dice, combat, character parsing, orchestrator, engine, guardrails, formatter, webhooks, and Claude subprocess.
+207 tests across 10 files. Agent tests (`ai/agent.test.ts`) load every agent file from disk, verify frontmatter fields, and run each `characterSpec` through `parseCharacterSheet()` to validate stats, ability scores, equipment, and features parse correctly. Tests also verify all agents have unique names and unique race+class combinations. Other test files cover dice, combat, character parsing, orchestrator, engine, guardrails, formatter, webhooks, and Claude subprocess.
 
 Note on Bun test isolation: `mock.module()` is global and pollutes across files. Tests that need mocked modules use pure-function extraction patterns (e.g., `guardrail-check.ts`, `claude-subprocess.ts`) or direct file I/O to avoid cross-file mock collisions.
 
