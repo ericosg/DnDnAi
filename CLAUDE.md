@@ -62,9 +62,9 @@ All AI calls are stateless — context is rebuilt from game state + sliding hist
 - **Player IDs**: Humans = Discord user ID. Agents = `agent:<name>`.
 - **Round tracking**: In-memory `roundResponses` map in `game/engine.ts`. Cleared after DM resolves. Not persisted.
 
-### Typing Indicators
+### Thinking Indicators
 
-The bot shows Discord's "is typing..." indicator while AI agents and the DM are generating responses. A `startTyping()` helper in `game/engine.ts` fires `channel.sendTyping()` immediately and refreshes every 8 seconds (Discord's indicator lasts ~10s) to keep it alive during long Opus calls. The interval is cleared when the response is ready or on error, so it never leaks.
+While AI agents and the DM are generating responses, the bot posts a temporary in-character message (e.g., *"Grimbold is thinking..."*) via the character's webhook, so it appears to come from the character — not a generic "Bot is typing..." indicator. The message is automatically deleted when the real response is posted. `sendThinkingIndicator()` in `discord/webhooks.ts` handles sending and returns a dismiss function. Fail-safe: if sending or deleting the indicator fails, it's silently ignored.
 
 ### Logging
 
@@ -93,7 +93,7 @@ Game lookup scans all game directories for matching channel ID.
 
 ### Testing
 
-207 tests across 10 files. Agent tests (`ai/agent.test.ts`) load every agent file from disk, verify frontmatter fields, and run each `characterSpec` through `parseCharacterSheet()` to validate stats, ability scores, equipment, and features parse correctly. Tests also verify all agents have unique names and unique race+class combinations. Other test files cover dice, combat, character parsing, orchestrator, engine, guardrails, formatter, webhooks, and Claude subprocess.
+209 tests across 10 files. Agent tests (`ai/agent.test.ts`) load every agent file from disk, verify frontmatter fields, and run each `characterSpec` through `parseCharacterSheet()` to validate stats, ability scores, equipment, and features parse correctly. Tests also verify all agents have unique names and unique race+class combinations. Other test files cover dice, combat, character parsing, orchestrator, engine, guardrails, formatter, webhooks, and Claude subprocess.
 
 Note on Bun test isolation: `mock.module()` is global and pollutes across files. Tests that need mocked modules use pure-function extraction patterns (e.g., `guardrail-check.ts`, `claude-subprocess.ts`) or direct file I/O to avoid cross-file mock collisions.
 
