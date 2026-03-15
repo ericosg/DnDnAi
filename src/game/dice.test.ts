@@ -77,6 +77,42 @@ describe("roll", () => {
     const result = roll("d20", "attack roll");
     expect(result.label).toBe("attack roll");
   });
+
+  test("compound: 1d6+3+1d6 (weapon + mod + sneak attack)", () => {
+    for (let i = 0; i < 50; i++) {
+      const result = roll("1d6+3+1d6");
+      expect(result.rolls).toHaveLength(2); // two d6 rolls
+      expect(result.modifier).toBe(3);
+      expect(result.total).toBeGreaterThanOrEqual(5); // 1+3+1
+      expect(result.total).toBeLessThanOrEqual(15); // 6+3+6
+    }
+  });
+
+  test("compound: 2d6+1d8+5 (multiple dice groups + modifier)", () => {
+    for (let i = 0; i < 50; i++) {
+      const result = roll("2d6+1d8+5");
+      expect(result.rolls).toHaveLength(3); // two d6 + one d8
+      expect(result.modifier).toBe(5);
+      expect(result.total).toBeGreaterThanOrEqual(8); // 1+1+1+5
+      expect(result.total).toBeLessThanOrEqual(25); // 6+6+8+5
+    }
+  });
+
+  test("compound: preserves original notation", () => {
+    const result = roll("1d6+3+1d6", "sneak attack damage");
+    expect(result.notation).toBe("1d6+3+1d6");
+    expect(result.label).toBe("sneak attack damage");
+  });
+
+  test("simple expression with modifier still works", () => {
+    for (let i = 0; i < 50; i++) {
+      const result = roll("1d6+3");
+      expect(result.rolls).toHaveLength(1);
+      expect(result.modifier).toBe(3);
+      expect(result.total).toBeGreaterThanOrEqual(4);
+      expect(result.total).toBeLessThanOrEqual(9);
+    }
+  });
 });
 
 describe("parseDiceDirective", () => {

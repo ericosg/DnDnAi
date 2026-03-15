@@ -34,6 +34,49 @@ function rollDie(sides: number): number {
 }
 
 export function roll(notation: string, label?: string): DiceResult {
+  // Check for compound expressions like "1d6+3+1d6" or "2d6+1d8+5"
+  // Split into terms, preserving +/- signs
+  const cleaned = notation.replace(/\s/g, "");
+  const terms = cleaned.match(/[+-]?[^+-]+/g) ?? [cleaned];
+
+  // If it's a simple expression, use the fast path
+  if (terms.length <= 1 || !cleaned.match(/d.*d/i)) {
+    return rollSimple(notation, label);
+  }
+
+  // Compound expression: roll each dice term, sum flat modifiers
+  const allRolls: number[] = [];
+  let totalModifier = 0;
+  let sum = 0;
+
+  for (const term of terms) {
+    const trimmed = term.replace(/^\+/, "");
+    if (/d/i.test(trimmed)) {
+      // It's a dice term like "1d6" or "-2d4"
+      const result = rollSimple(trimmed);
+      allRolls.push(...result.rolls);
+      sum += result.total;
+    } else {
+      // It's a flat modifier like "+3" or "-1"
+      const mod = parseInt(trimmed, 10);
+      if (!Number.isNaN(mod)) {
+        totalModifier += mod;
+        sum += mod;
+      }
+    }
+  }
+
+  return {
+    notation,
+    rolls: allRolls,
+    modifier: totalModifier,
+    total: sum,
+    kept: undefined,
+    label,
+  };
+}
+
+function rollSimple(notation: string, label?: string): DiceResult {
   const parsed = parseDiceNotation(notation);
   const rolls: number[] = [];
 
