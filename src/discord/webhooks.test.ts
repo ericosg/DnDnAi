@@ -1,5 +1,41 @@
-import { describe, expect, test } from "bun:test";
-import { splitMessage } from "./webhooks.js";
+import { afterEach, describe, expect, test } from "bun:test";
+import { splitMessage, startTyping } from "./webhooks.js";
+
+describe("startTyping", () => {
+  const activeIntervals: ReturnType<typeof startTyping>[] = [];
+
+  afterEach(() => {
+    for (const stop of activeIntervals) stop();
+    activeIntervals.length = 0;
+  });
+
+  test("calls sendTyping immediately", () => {
+    let called = 0;
+    const channel = { sendTyping: () => ({ catch: () => ++called }) } as never;
+    const stop = startTyping(channel);
+    activeIntervals.push(stop);
+    expect(called).toBe(1);
+  });
+
+  test("returns a stop function", () => {
+    const channel = { sendTyping: () => ({ catch: () => {} }) } as never;
+    const stop = startTyping(channel);
+    expect(typeof stop).toBe("function");
+    stop(); // should not throw
+  });
+
+  test("handles sendTyping errors silently", () => {
+    const channel = {
+      sendTyping: () => ({
+        catch: (fn: (e: Error) => void) => fn(new Error("fail")),
+      }),
+    } as never;
+    // Should not throw
+    const stop = startTyping(channel);
+    activeIntervals.push(stop);
+    stop();
+  });
+});
 
 describe("splitMessage", () => {
   test("returns single chunk when under limit", () => {

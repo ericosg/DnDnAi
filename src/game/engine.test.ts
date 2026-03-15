@@ -377,4 +377,97 @@ describe("engine — typing indicators", () => {
 
     expect(typingStopped).toBe(typingStarted);
   });
+
+  test("typing stopped after dice directive processing", async () => {
+    dmNarrateResponse = "Fusetsu checks. [[ROLL:d20+5 FOR:Fusetsu REASON:perception check]] Done.";
+
+    const gs = makeGameState();
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I check for traps.",
+    };
+
+    markResponded(gs.id, "agent:grimbold");
+    await processTurn(gs, entry, mockChannel as never);
+
+    expect(typingStarted).toBe(1);
+    expect(typingStopped).toBe(1);
+  });
+
+  test("typing stopped after combat signal processing", async () => {
+    dmNarrateResponse = "Enemies attack! [[COMBAT:START]]";
+
+    const gs = makeGameState();
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I kick open the door.",
+    };
+
+    markResponded(gs.id, "agent:grimbold");
+    await processTurn(gs, entry, mockChannel as never);
+
+    expect(typingStopped).toBe(typingStarted);
+  });
+
+  test("no typing started when orchestrator waits for human", async () => {
+    // Game with only humans, no agents — after one human acts,
+    // orchestrator should wait for the other (no typing needed)
+    const gs = makeGameState();
+    gs.players = [
+      makePlayer({ id: "human1", name: "Human1" }),
+      makePlayer({ id: "human2", name: "Human2" }),
+    ];
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I wait for my ally.",
+    };
+
+    await processTurn(gs, entry, mockChannel as never);
+
+    // Orchestrator should wait for human2 — no AI calls, no typing
+    expect(typingStarted).toBe(0);
+  });
+
+  test("typing count matches AI turns in multi-agent party", async () => {
+    const gs = makeGameState();
+    // Add a second agent
+    gs.players.push({
+      id: "agent:criella",
+      name: "Criella",
+      isAgent: true,
+      characterSheet: {
+        ...makeAgent().characterSheet,
+        name: "Criella Arkalis",
+      },
+      agentFile: "criella.md",
+      joinedAt: new Date().toISOString(),
+    });
+
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I move forward.",
+    };
+
+    await processTurn(gs, entry, mockChannel as never);
+
+    // 2 agents + 1 DM = 3 typing indicators
+    expect(typingStarted).toBe(3);
+    expect(typingStopped).toBe(3);
+  });
 });
