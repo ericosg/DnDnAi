@@ -1,5 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { formatDiceResult, parseDiceDirective, parseDiceNotation, roll } from "./dice.js";
+import {
+  formatDiceResult,
+  parseDamageDirective,
+  parseDiceDirective,
+  parseDiceNotation,
+  parseHealDirective,
+  roll,
+} from "./dice.js";
 
 describe("parseDiceNotation", () => {
   test("simple d20", () => {
@@ -111,6 +118,56 @@ describe("parseDiceDirective", () => {
 
   test("returns empty array for no directives", () => {
     const results = parseDiceDirective("Just some normal text");
+    expect(results).toHaveLength(0);
+  });
+});
+
+describe("parseDamageDirective", () => {
+  test("parses standard damage directive", () => {
+    const text = "[[DAMAGE:2d6+3 TARGET:Grimbold REASON:longsword hit]]";
+    const results = parseDamageDirective(text);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({
+      notation: "2d6+3",
+      targetName: "Grimbold",
+      reason: "longsword hit",
+    });
+  });
+
+  test("parses multiple damage directives", () => {
+    const text =
+      "[[DAMAGE:1d8+2 TARGET:Grimbold REASON:bite]] and [[DAMAGE:1d6 TARGET:Nyx REASON:claw]]";
+    const results = parseDamageDirective(text);
+    expect(results).toHaveLength(2);
+  });
+
+  test("parses multi-word target names", () => {
+    const text = "[[DAMAGE:2d6+3 TARGET:Grimbold Ironforge REASON:longsword hit]]";
+    const results = parseDamageDirective(text);
+    expect(results).toHaveLength(1);
+    expect(results[0].targetName).toBe("Grimbold Ironforge");
+  });
+
+  test("returns empty array for no directives", () => {
+    const results = parseDamageDirective("Just some normal text");
+    expect(results).toHaveLength(0);
+  });
+});
+
+describe("parseHealDirective", () => {
+  test("parses standard heal directive", () => {
+    const text = "[[HEAL:1d8+3 TARGET:Fūsetsu REASON:cure wounds]]";
+    const results = parseHealDirective(text);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({
+      notation: "1d8+3",
+      targetName: "Fūsetsu",
+      reason: "cure wounds",
+    });
+  });
+
+  test("returns empty array for no directives", () => {
+    const results = parseHealDirective("Just some normal text");
     expect(results).toHaveLength(0);
   });
 });

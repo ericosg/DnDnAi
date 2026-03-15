@@ -37,7 +37,7 @@ TypeScript + Bun runtime, discord.js for Discord, Claude CLI for AI (uses Pro/Ma
 4. The orchestrator (`ai/orchestrator.ts:getNextAction()`) deterministically decides: prompt an AI agent, call the DM, wait for a human, or advance combat
 5. For agents: `ai/agent.ts` generates an in-character response using the personality file, posts via webhook
 6. For agents: after generating, `ai/guardrail.ts` (Haiku) checks the response isn't inventing world facts. If it is, the agent re-generates with feedback.
-7. For DM: `ai/dm.ts` generates narration with a 5-layer prompt, then `ai/guardrail.ts` (Haiku) checks for player agency violations before posting. If the DM narrated/controlled a PC, it re-generates with feedback. The DM also pushes back on player overreach (humans or agents declaring world facts). Engine processes dice directives (`[[ROLL:...]]`) and combat signals (`[[COMBAT:START/END]]`)
+7. For DM: `ai/dm.ts` generates narration with a 5-layer prompt, then `ai/guardrail.ts` (Haiku) checks for player agency violations before posting. If the DM narrated/controlled a PC, it re-generates with feedback. The DM also pushes back on player overreach (humans or agents declaring world facts). Engine processes dice directives (`[[ROLL:...]]`), damage/heal directives (`[[DAMAGE:...]]`, `[[HEAL:...]]`), and combat signals (`[[COMBAT:START/END]]`)
 8. After DM resolves, the round clears and the cycle restarts
 9. State auto-persists to JSON after every turn; narrative compresses every 10 turns
 
@@ -55,6 +55,7 @@ All AI calls are stateless — context is rebuilt from game state + sliding hist
 ### Key Protocols
 
 - **DM dice directives**: DM AI outputs `[[ROLL:d20+5 FOR:Name REASON:text]]` — engine rolls real dice and injects results. AI never simulates randomness. Directives are resolved instantly before the message is posted — the DM narrates outcomes in the same response.
+- **Damage/heal directives**: DM outputs `[[DAMAGE:2d6+3 TARGET:Name REASON:text]]` or `[[HEAL:1d8+3 TARGET:Name REASON:text]]` — engine rolls dice and calls `applyDamage()`/`applyHealing()` in `combat.ts` to update combatant and character sheet HP. Results display inline with updated HP values.
 - **Combat signals**: `[[COMBAT:START]]` and `[[COMBAT:END]]` in DM output trigger the combat state machine.
 - **IC vs OOC**: `>` prefix = in-character (advances game state). No prefix = out-of-character (orchestrator skips). Players can use `/ask` for OOC questions to the DM.
 - **Webhooks**: Each AI identity (agents + DM) gets a separate Discord webhook with custom name/avatar. DM uses purple embeds (auto-split if >4096 chars); agents use plain text.

@@ -9,8 +9,14 @@ import { sendAsIdentity, startTyping } from "../discord/webhooks.js";
 import { log } from "../logger.js";
 import { appendHistory, loadHistory, saveGameState } from "../state/store.js";
 import type { DiceResult, GameState, TurnEntry } from "../state/types.js";
-import { advanceTurn, endCombat, startCombat } from "./combat.js";
-import { formatDiceResult, parseDiceDirective, roll } from "./dice.js";
+import { advanceTurn, applyDamage, applyHealing, endCombat, startCombat } from "./combat.js";
+import {
+  formatDiceResult,
+  parseDamageDirective,
+  parseDiceDirective,
+  parseHealDirective,
+  roll,
+} from "./dice.js";
 
 // Per-game mutex: ensures only one processTurn runs at a time per game.
 // Concurrent calls are queued and execute sequentially.
@@ -95,7 +101,7 @@ async function processTurnInner(
 }
 
 async function orchestratorLoop(gameState: GameState, channel: TextChannel): Promise<void> {
-  const maxIterations = gameState.players.length + 2; // prevent infinite loops
+  const maxIterations = gameState.players.length * 2 + 2; // prevent infinite loops
   let iterations = 0;
 
   while (iterations < maxIterations) {
@@ -126,14 +132,15 @@ async function orchestratorLoop(gameState: GameState, channel: TextChannel): Pro
         clearRound(gameState.id);
         log.info("Round cleared — ready for next player input");
 
-        // If combat, advance turn
+        // If combat, advance turn and continue loop (next combatant may be an AI agent)
         if (gameState.combat.active) {
           advanceTurn(gameState);
           log.info(
             `Combat: advanced to turn ${gameState.combat.turnIndex}, round ${gameState.combat.round}`,
           );
+          break;
         }
-        return; // DM narration ends this orchestration cycle
+        return; // Non-combat: DM narration ends this orchestration cycle
       }
 
       case "wait_for_human": {
@@ -310,6 +317,56 @@ async function handleDMTurn(
         `[[ROLL:${directive.notation} FOR:${directive.forName} REASON:${directive.reason}]]`,
         formatDiceResult(result),
       );
+    }
+
+    // Process damage directives
+    const damageDirectives = parseDamageDirective(dmResponse);
+    for (const directive of damageDirectives) {
+      const result = roll(directive.notation, `${directive.targetName}: ${directive.reason}`);
+      diceResults.push(result);
+      const dmgResult = applyDamage(gameState, directive.targetName, result.total);
+      if (dmgResult) {
+        const hpAfter = dmgResult.combatant.hp.current;
+        const hpMax = dmgResult.combatant.hp.max;
+        log.info(
+          `  Damage: ${result.total} to ${directive.targetName} (HP: ${hpAfter}/${hpMax}) — ${directive.reason}`,
+        );
+        dmResponse = dmResponse.replace(
+          `[[DAMAGE:${directive.notation} TARGET:${directive.targetName} REASON:${directive.reason}]]`,
+          `${formatDiceResult(result)} → **${result.total} damage** to ${directive.targetName} (HP: ${hpAfter}/${hpMax})`,
+        );
+      } else {
+        log.warn(`  Damage: target "${directive.targetName}" not found`);
+        dmResponse = dmResponse.replace(
+          `[[DAMAGE:${directive.notation} TARGET:${directive.targetName} REASON:${directive.reason}]]`,
+          formatDiceResult(result),
+        );
+      }
+    }
+
+    // Process heal directives
+    const healDirectives = parseHealDirective(dmResponse);
+    for (const directive of healDirectives) {
+      const result = roll(directive.notation, `${directive.targetName}: ${directive.reason}`);
+      diceResults.push(result);
+      const healed = applyHealing(gameState, directive.targetName, result.total);
+      if (healed) {
+        const hpAfter = healed.hp.current;
+        const hpMax = healed.hp.max;
+        log.info(
+          `  Heal: ${result.total} to ${directive.targetName} (HP: ${hpAfter}/${hpMax}) — ${directive.reason}`,
+        );
+        dmResponse = dmResponse.replace(
+          `[[HEAL:${directive.notation} TARGET:${directive.targetName} REASON:${directive.reason}]]`,
+          `${formatDiceResult(result)} → **${result.total} healed** on ${directive.targetName} (HP: ${hpAfter}/${hpMax})`,
+        );
+      } else {
+        log.warn(`  Heal: target "${directive.targetName}" not found`);
+        dmResponse = dmResponse.replace(
+          `[[HEAL:${directive.notation} TARGET:${directive.targetName} REASON:${directive.reason}]]`,
+          formatDiceResult(result),
+        );
+      }
     }
 
     // Check for combat start/end signals

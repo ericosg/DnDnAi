@@ -100,7 +100,7 @@ mock.module("../ai/guardrail.js", () => ({
   checkAgentResponse: async () => ({ pass: true }),
 }));
 
-const { processTurn, markResponded } = await import("./engine.js");
+const { processTurn, markResponded, clearRound } = await import("./engine.js");
 
 function makePlayer(overrides: Partial<Player> = {}): Player {
   return {
@@ -200,6 +200,7 @@ beforeEach(() => {
   typingStopped = 0;
   dmNarrateResponse = "The party advances through the dungeon.";
   agentResponse = "> Grimbold grumbles and follows.";
+  clearRound("test-game");
 });
 
 describe("engine — full round", () => {
@@ -496,6 +497,159 @@ describe("engine — typing indicators", () => {
 
     // Orchestrator should wait for human2 — no AI calls, no typing
     expect(typingStarted).toBe(0);
+  });
+
+  test("damage directive applies damage to combatant HP", async () => {
+    dmNarrateResponse =
+      "The goblin strikes! [[DAMAGE:1d6+2 TARGET:Grimbold Ironforge REASON:scimitar hit]]";
+
+    const gs = makeGameState();
+    // Set up combat with combatants
+    gs.combat = {
+      active: true,
+      round: 1,
+      turnIndex: 0,
+      combatants: [
+        {
+          playerId: "human1",
+          name: "Fusetsu",
+          initiative: 15,
+          hp: { max: 24, current: 24, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+        {
+          playerId: "agent:grimbold",
+          name: "Grimbold Ironforge",
+          initiative: 10,
+          hp: { max: 31, current: 31, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+      ],
+    };
+
+    markResponded(gs.id, "agent:grimbold");
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I attack.",
+    };
+
+    await processTurn(gs, entry, mockChannel as never);
+
+    // Damage was applied — HP should be reduced
+    const grimbold = gs.combat.combatants.find((c) => c.name === "Grimbold Ironforge");
+    expect(grimbold).toBeDefined();
+    expect(grimbold?.hp.current).toBeLessThan(31);
+
+    // Player sheet HP should also be synced
+    const grimboldPlayer = gs.players.find((p) => p.id === "agent:grimbold");
+    expect(grimboldPlayer?.characterSheet.hp.current).toBe(grimbold?.hp.current);
+
+    // DM narration should contain the formatted result, not the raw directive
+    const dmMessage = sentMessages.find((m) => m.name === "Dungeon Master");
+    expect(dmMessage).toBeDefined();
+    const embed = dmMessage?.embeds?.[0] as { description: string };
+    expect(embed.description).not.toContain("[[DAMAGE:");
+    expect(embed.description).toContain("damage");
+  });
+
+  test("heal directive restores HP", async () => {
+    dmNarrateResponse = "Healing light! [[HEAL:1d8+3 TARGET:Fusetsu REASON:cure wounds]]";
+
+    const gs = makeGameState();
+    gs.players[0].characterSheet.hp.current = 10; // Damaged
+    gs.combat = {
+      active: true,
+      round: 1,
+      turnIndex: 0,
+      combatants: [
+        {
+          playerId: "human1",
+          name: "Fusetsu",
+          initiative: 15,
+          hp: { max: 24, current: 10, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+        {
+          playerId: "agent:grimbold",
+          name: "Grimbold Ironforge",
+          initiative: 10,
+          hp: { max: 31, current: 31, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+      ],
+    };
+
+    markResponded(gs.id, "agent:grimbold");
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I cast cure wounds.",
+    };
+
+    await processTurn(gs, entry, mockChannel as never);
+
+    const fusetsu = gs.combat.combatants.find((c) => c.name === "Fusetsu");
+    expect(fusetsu).toBeDefined();
+    expect(fusetsu?.hp.current).toBeGreaterThan(10);
+    expect(fusetsu?.hp.current).toBeLessThanOrEqual(24);
+  });
+
+  test("combat loop continues to prompt AI agent after DM resolves", async () => {
+    // Set up combat where agent is next after DM resolves human's action
+    const gs = makeGameState();
+    gs.combat = {
+      active: true,
+      round: 1,
+      turnIndex: 0,
+      combatants: [
+        {
+          playerId: "human1",
+          name: "Fusetsu",
+          initiative: 15,
+          hp: { max: 24, current: 24, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+        {
+          playerId: "agent:grimbold",
+          name: "Grimbold Ironforge",
+          initiative: 10,
+          hp: { max: 31, current: 31, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+      ],
+    };
+
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I swing my sword.",
+    };
+
+    await processTurn(gs, entry, mockChannel as never);
+
+    // Agent should have been prompted and posted a message
+    const agentMessage = sentMessages.find((m) => m.name === "Grimbold");
+    expect(agentMessage).toBeDefined();
+
+    // DM should have been called twice: once for human, once for agent
+    const dmMessages = sentMessages.filter((m) => m.name === "Dungeon Master");
+    expect(dmMessages.length).toBe(2);
   });
 
   test("typing count matches AI turns in multi-agent party", async () => {

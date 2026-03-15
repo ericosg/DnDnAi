@@ -131,3 +131,43 @@ export function parseDiceDirective(
   }
   return results;
 }
+
+/**
+ * Parse DM damage directives like [[DAMAGE:2d6+3 TARGET:Grimbold REASON:longsword hit]]
+ */
+export function parseDamageDirective(
+  text: string,
+): { notation: string; targetName: string; reason: string }[] {
+  const regex = /\[\[DAMAGE\s*:\s*([^\s]+)\s+TARGET\s*:\s*(.+?)\s+REASON\s*:\s*([^\]]+)\]\]/g;
+  const results: { notation: string; targetName: string; reason: string }[] = [];
+  let match: RegExpExecArray | null = null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: idiomatic regex exec loop
+  while ((match = regex.exec(text)) !== null) {
+    results.push({
+      notation: match[1].trim(),
+      targetName: match[2].trim(),
+      reason: match[3].trim(),
+    });
+  }
+  return results;
+}
+
+/**
+ * Parse DM heal directives like [[HEAL:1d8+3 TARGET:Fūsetsu REASON:cure wounds]]
+ */
+export function parseHealDirective(
+  text: string,
+): { notation: string; targetName: string; reason: string }[] {
+  const regex = /\[\[HEAL\s*:\s*([^\s]+)\s+TARGET\s*:\s*(.+?)\s+REASON\s*:\s*([^\]]+)\]\]/g;
+  const results: { notation: string; targetName: string; reason: string }[] = [];
+  let match: RegExpExecArray | null = null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: idiomatic regex exec loop
+  while ((match = regex.exec(text)) !== null) {
+    results.push({
+      notation: match[1].trim(),
+      targetName: match[2].trim(),
+      reason: match[3].trim(),
+    });
+  }
+  return results;
+}
