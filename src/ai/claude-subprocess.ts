@@ -9,6 +9,7 @@ export function buildSpawnArgs(
   system: string,
   prompt: string,
   allowedTools?: string[],
+  outputFormat: "text" | "stream-json" = "text",
 ): string[] {
   const args = [
     "claude",
@@ -19,7 +20,7 @@ export function buildSpawnArgs(
     "--system-prompt",
     system,
     "--output-format",
-    "text",
+    outputFormat,
     "--no-session-persistence",
     "--dangerously-skip-permissions",
   ];
@@ -29,6 +30,24 @@ export function buildSpawnArgs(
   }
 
   return args;
+}
+
+/** Summarize a tool_use input for logging (keep it short). */
+export function summarizeToolInput(toolName: string, input: Record<string, unknown>): string {
+  switch (toolName) {
+    case "Read":
+      return `${input.file_path ?? ""}`;
+    case "Write":
+      return `${input.file_path ?? ""} (${typeof input.content === "string" ? input.content.length : 0} chars)`;
+    case "Edit":
+      return `${input.file_path ?? ""}`;
+    case "Glob":
+      return `${input.pattern ?? ""}${input.path ? ` in ${input.path}` : ""}`;
+    case "Grep":
+      return `"${input.pattern ?? ""}"${input.path ? ` in ${input.path}` : ""}`;
+    default:
+      return JSON.stringify(input).slice(0, 100);
+  }
 }
 
 /**

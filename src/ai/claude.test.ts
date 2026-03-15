@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { buildSpawnArgs, buildSpawnEnv, isRetryable } from "./claude-subprocess.js";
+import {
+  buildSpawnArgs,
+  buildSpawnEnv,
+  isRetryable,
+  summarizeToolInput,
+} from "./claude-subprocess.js";
 
 describe("claude CLI subprocess", () => {
   describe("buildSpawnArgs", () => {
@@ -115,6 +120,20 @@ describe("claude CLI subprocess", () => {
     });
   });
 
+  describe("outputFormat parameter", () => {
+    test("defaults to text output format", () => {
+      const args = buildSpawnArgs("m", "s", "p");
+      const idx = args.indexOf("--output-format");
+      expect(args[idx + 1]).toBe("text");
+    });
+
+    test("accepts stream-json output format", () => {
+      const args = buildSpawnArgs("m", "s", "p", [], "stream-json");
+      const idx = args.indexOf("--output-format");
+      expect(args[idx + 1]).toBe("stream-json");
+    });
+  });
+
   describe("allowedTools parameter", () => {
     test("omits --allowedTools when no tools specified", () => {
       const args = buildSpawnArgs("m", "s", "p");
@@ -158,6 +177,41 @@ describe("claude CLI subprocess", () => {
       const args = buildSpawnArgs("m", "s", prompt);
       const idx = args.indexOf("-p");
       expect(args[idx + 1]).toBe(prompt);
+    });
+  });
+
+  describe("summarizeToolInput", () => {
+    test("Read shows file path", () => {
+      expect(summarizeToolInput("Read", { file_path: "docs/srd/07 combat.md" })).toBe(
+        "docs/srd/07 combat.md",
+      );
+    });
+
+    test("Write shows file path and content length", () => {
+      expect(
+        summarizeToolInput("Write", { file_path: "dm-notes/world.md", content: "hello world" }),
+      ).toBe("dm-notes/world.md (11 chars)");
+    });
+
+    test("Glob shows pattern", () => {
+      expect(summarizeToolInput("Glob", { pattern: "dm-notes/**/*.md" })).toBe("dm-notes/**/*.md");
+    });
+
+    test("Glob shows pattern with path", () => {
+      expect(summarizeToolInput("Glob", { pattern: "*.md", path: "dm-notes/" })).toBe(
+        "*.md in dm-notes/",
+      );
+    });
+
+    test("Grep shows pattern and path", () => {
+      expect(summarizeToolInput("Grep", { pattern: "Channel Divinity", path: "docs/srd/" })).toBe(
+        '"Channel Divinity" in docs/srd/',
+      );
+    });
+
+    test("unknown tool shows truncated JSON", () => {
+      const result = summarizeToolInput("Unknown", { foo: "bar" });
+      expect(result).toContain("foo");
     });
   });
 });
