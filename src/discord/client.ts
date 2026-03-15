@@ -4,6 +4,7 @@ import {
   Client,
   Events,
   GatewayIntentBits,
+  MessageFlags,
   REST,
   Routes,
   type TextChannel,
@@ -56,11 +57,16 @@ export function createBot(): Client {
       await handleCommand(interaction);
     } catch (err) {
       log.error("Command error:", err);
-      const msg = { content: "Something went wrong.", ephemeral: true };
       if (interaction.replied || interaction.deferred) {
-        await interaction.followUp(msg);
+        await interaction.followUp({
+          content: "Something went wrong.",
+          flags: MessageFlags.Ephemeral,
+        });
       } else {
-        await interaction.reply(msg);
+        await interaction.reply({
+          content: "Something went wrong.",
+          flags: MessageFlags.Ephemeral,
+        });
       }
     }
   });
@@ -111,7 +117,7 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       if (existing && existing.status !== "ended") {
         await interaction.reply({
           content: "A game is already running in this channel. Use `/end` first.",
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
         return;
       }
@@ -308,7 +314,10 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
     case "status": {
       const gameState = await findGameByChannel(channel.id);
       if (!gameState) {
-        await interaction.reply({ content: "No game in this channel.", ephemeral: true });
+        await interaction.reply({
+          content: "No game in this channel.",
+          flags: MessageFlags.Ephemeral,
+        });
         return;
       }
 
@@ -331,7 +340,7 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       } catch {
         await interaction.reply({
           content: `Invalid dice notation: \`${notation}\``,
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
         });
       }
       break;
@@ -358,7 +367,7 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
     case "whisper": {
       const gameState = await findGameByChannel(channel.id);
       if (!gameState || gameState.status !== "active") {
-        await interaction.reply({ content: "No active game.", ephemeral: true });
+        await interaction.reply({ content: "No active game.", flags: MessageFlags.Ephemeral });
         return;
       }
 
@@ -369,14 +378,17 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       const receiver = gameState.players.find((p) => p.id === targetUser.id);
 
       if (!sender || !receiver) {
-        await interaction.reply({ content: "Both players must be in the game.", ephemeral: true });
+        await interaction.reply({
+          content: "Both players must be in the game.",
+          flags: MessageFlags.Ephemeral,
+        });
         return;
       }
 
       // Send ephemeral to both parties
       await interaction.reply({
         embeds: [whisperEmbed(sender.characterSheet.name, receiver.characterSheet.name, message)],
-        ephemeral: true,
+        flags: MessageFlags.Ephemeral,
       });
 
       // DM the target
@@ -424,27 +436,36 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
     case "inventory": {
       const gameState = await findGameByChannel(channel.id);
       if (!gameState) {
-        await interaction.reply({ content: "No game in this channel.", ephemeral: true });
+        await interaction.reply({
+          content: "No game in this channel.",
+          flags: MessageFlags.Ephemeral,
+        });
         return;
       }
       const player = gameState.players.find((p) => p.id === interaction.user.id);
       if (!player) {
-        await interaction.reply({ content: "You're not in this game.", ephemeral: true });
+        await interaction.reply({
+          content: "You're not in this game.",
+          flags: MessageFlags.Ephemeral,
+        });
         return;
       }
-      await interaction.reply({ embeds: [inventoryEmbed(player)], ephemeral: true });
+      await interaction.reply({ embeds: [inventoryEmbed(player)], flags: MessageFlags.Ephemeral });
       break;
     }
 
     case "pass": {
       const gameState = await findGameByChannel(channel.id);
       if (!gameState || gameState.status !== "active") {
-        await interaction.reply({ content: "No active game.", ephemeral: true });
+        await interaction.reply({ content: "No active game.", flags: MessageFlags.Ephemeral });
         return;
       }
       const player = gameState.players.find((p) => p.id === interaction.user.id);
       if (!player) {
-        await interaction.reply({ content: "You're not in this game.", ephemeral: true });
+        await interaction.reply({
+          content: "You're not in this game.",
+          flags: MessageFlags.Ephemeral,
+        });
         return;
       }
 
@@ -487,7 +508,10 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
     case "end": {
       const gameState = await findGameByChannel(channel.id);
       if (!gameState) {
-        await interaction.reply({ content: "No game in this channel.", ephemeral: true });
+        await interaction.reply({
+          content: "No game in this channel.",
+          flags: MessageFlags.Ephemeral,
+        });
         return;
       }
       gameState.status = "ended";
