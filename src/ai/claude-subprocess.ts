@@ -25,6 +25,10 @@ export function buildSpawnArgs(
     "--dangerously-skip-permissions",
   ];
 
+  if (outputFormat === "stream-json") {
+    args.push("--verbose");
+  }
+
   if (allowedTools?.length) {
     args.push("--allowedTools", allowedTools.join(","));
   }
