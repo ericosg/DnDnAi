@@ -58,7 +58,7 @@ All AI calls are stateless — context is rebuilt from game state + sliding hist
 - **Combat signals**: `[[COMBAT:START]]` and `[[COMBAT:END]]` in DM output trigger the combat state machine.
 - **IC vs OOC**: `>` prefix = in-character (advances game state). No prefix = out-of-character (orchestrator skips). Players can use `/ask` for OOC questions to the DM.
 - **Webhooks**: Each AI identity (agents + DM) gets a separate Discord webhook with custom name/avatar. DM uses purple embeds (auto-split if >4096 chars); agents use plain text.
-- **Agent personality files**: `agents/*.md` with gray-matter frontmatter + markdown body. The `characterSpec` field contains a character sheet in the same markdown format human players upload. 10 pre-built agents ship in `agents/` covering all 9 non-Fighter classes (warlock, bard, paladin, wizard, barbarian, ranger, monk, cleric, sorcerer) plus the original Fighter (Grimbold). All are levels 1-3 with unique race+class combos.
+- **Agent personality files**: `agents/*.md` with gray-matter frontmatter + markdown body. The `characterSpec` field contains a character sheet in the same markdown format human players upload. 11 pre-built agents ship in `agents/` covering all 9 non-Fighter classes plus the original Fighter (Grimbold) and a second Bard (Pumpernickle). All are levels 1-3 with unique race+class combos.
 - **Player IDs**: Humans = Discord user ID. Agents = `agent:<name>`.
 - **Round tracking**: In-memory `roundResponses` map in `game/engine.ts`. Cleared after DM resolves. Not persisted.
 
@@ -93,7 +93,7 @@ Game lookup scans all game directories for matching channel ID.
 
 ### Testing
 
-209 tests across 10 files. Agent tests (`ai/agent.test.ts`) load every agent file from disk, verify frontmatter fields, and run each `characterSpec` through `parseCharacterSheet()` to validate stats, ability scores, equipment, and features parse correctly. Tests also verify all agents have unique names and unique race+class combinations. Other test files cover dice, combat, character parsing, orchestrator, engine, guardrails, formatter, webhooks, and Claude subprocess.
+Tests across 10 files. Agent tests (`ai/agent.test.ts`) load every agent file from disk, verify frontmatter fields, and run each `characterSpec` through `parseCharacterSheet()` to validate stats, ability scores, equipment, and features parse correctly. Tests also verify all agents have unique names and unique race+class combinations. Formatter tests cover the `/character` embed builder (section filtering, ability modifiers, edge cases) and DM narration splitting. Other test files cover dice, combat, character parsing, orchestrator, engine, guardrails, webhooks, and Claude subprocess.
 
 Note on Bun test isolation: `mock.module()` is global and pollutes across files. Tests that need mocked modules use pure-function extraction patterns (e.g., `guardrail-check.ts`, `claude-subprocess.ts`) or direct file I/O to avoid cross-file mock collisions.
 

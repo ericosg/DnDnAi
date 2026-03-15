@@ -26,6 +26,8 @@ import {
 import type { Player, TurnEntry } from "../state/types.js";
 import { commands } from "./commands.js";
 import {
+  type CharacterSection,
+  characterEmbed,
   combatStatusEmbed,
   diceResultText,
   dmNarrationEmbeds,
@@ -430,6 +432,32 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
         embeds: dmNarrationEmbeds(`**Previously, on our adventure...**\n\n${recap}`),
       });
       await interaction.editReply("The DM recounts the tale...");
+      break;
+    }
+
+    case "character": {
+      const gameState = await findGameByChannel(channel.id);
+      if (!gameState) {
+        await interaction.reply({
+          content: "No game in this channel.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      const player = gameState.players.find((p) => p.id === interaction.user.id);
+      if (!player) {
+        await interaction.reply({
+          content: "You're not in this game.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      const sectionOpt = interaction.options.getString("section") ?? "all";
+      const section = sectionOpt === "all" ? undefined : (sectionOpt as CharacterSection);
+      await interaction.reply({
+        embeds: [characterEmbed(player, section)],
+        flags: MessageFlags.Ephemeral,
+      });
       break;
     }
 

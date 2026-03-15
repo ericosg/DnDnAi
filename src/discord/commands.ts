@@ -80,6 +80,25 @@ export const commands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
     .toJSON(),
 
   new SlashCommandBuilder()
+    .setName("character")
+    .setDescription("Show your character sheet")
+    .addStringOption((opt) =>
+      opt
+        .setName("section")
+        .setDescription("Show a specific section")
+        .setRequired(false)
+        .addChoices(
+          { name: "All", value: "all" },
+          { name: "Ability Scores", value: "abilities" },
+          { name: "Skills", value: "skills" },
+          { name: "Features", value: "features" },
+          { name: "Spells", value: "spells" },
+          { name: "Backstory", value: "backstory" },
+        ),
+    )
+    .toJSON(),
+
+  new SlashCommandBuilder()
     .setName("inventory")
     .setDescription("Show your character's equipment")
     .toJSON(),

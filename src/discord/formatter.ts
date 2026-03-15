@@ -113,6 +113,84 @@ export function inventoryEmbed(player: Player): EmbedBuilder {
     .setColor(0xccaa33);
 }
 
+const CHARACTER_COLOR = 0x3388cc; // blue sidebar
+
+export type CharacterSection = "abilities" | "skills" | "features" | "spells" | "backstory";
+
+export function abilityMod(score: number): string {
+  const mod = Math.floor((score - 10) / 2);
+  return mod >= 0 ? `+${mod}` : `${mod}`;
+}
+
+export function characterEmbed(player: Player, section?: CharacterSection): EmbedBuilder {
+  const cs = player.characterSheet;
+  const embed = new EmbedBuilder()
+    .setTitle(cs.name)
+    .setDescription(`${cs.race} ${cs.class} ${cs.level} — ${cs.background}`)
+    .setColor(CHARACTER_COLOR);
+
+  if (!section || section === "abilities") {
+    const abilities = Object.entries(cs.abilityScores)
+      .map(([key, val]) => `**${key.slice(0, 3).toUpperCase()}** ${val} (${abilityMod(val)})`)
+      .join("  ");
+    embed.addFields({ name: "Ability Scores", value: abilities });
+
+    if (!section) {
+      embed.addFields({
+        name: "Combat",
+        value: `AC ${cs.armorClass} | HP ${cs.hp.current}/${cs.hp.max} | Speed ${cs.speed} ft | Initiative ${abilityMod(cs.abilityScores.dexterity)}`,
+      });
+      embed.addFields({
+        name: "Saving Throws",
+        value: cs.savingThrows.length ? cs.savingThrows.join(", ") : "None",
+      });
+    }
+  }
+
+  if (section === "abilities") {
+    embed.addFields({
+      name: "Combat",
+      value: `AC ${cs.armorClass} | HP ${cs.hp.current}/${cs.hp.max} | Speed ${cs.speed} ft | Initiative ${abilityMod(cs.abilityScores.dexterity)}`,
+    });
+    embed.addFields({
+      name: "Saving Throws",
+      value: cs.savingThrows.length ? cs.savingThrows.join(", ") : "None",
+    });
+  }
+
+  if (!section || section === "skills") {
+    embed.addFields({
+      name: "Skills",
+      value: cs.skills.length ? cs.skills.join(", ") : "None",
+    });
+  }
+
+  if (!section || section === "features") {
+    embed.addFields({
+      name: "Features",
+      value: cs.features.length ? cs.features.map((f) => `• ${f}`).join("\n") : "None",
+    });
+  }
+
+  if (!section || section === "spells") {
+    const spells = cs.spells;
+    embed.addFields({
+      name: "Spells",
+      value: spells?.length ? spells.map((s) => `• ${s}`).join("\n") : "No spellcasting",
+    });
+  }
+
+  if (!section || section === "backstory") {
+    embed.addFields({ name: "Backstory", value: cs.backstory.slice(0, 1024) || "None" });
+    if (cs.personality) embed.addFields({ name: "Personality", value: cs.personality });
+    if (cs.ideals) embed.addFields({ name: "Ideals", value: cs.ideals });
+    if (cs.bonds) embed.addFields({ name: "Bonds", value: cs.bonds });
+    if (cs.flaws) embed.addFields({ name: "Flaws", value: cs.flaws });
+  }
+
+  return embed;
+}
+
 export function whisperEmbed(fromName: string, toName: string, message: string): EmbedBuilder {
   return new EmbedBuilder()
     .setTitle(`Whisper from ${fromName}`)

@@ -38,6 +38,7 @@ const ALL_AGENTS = [
   "damakos",
   "seraphina",
   "soveliss",
+  "pumpernickle",
 ];
 
 /** Load agent personality directly from disk (avoids AGENTS_DIR mock issues). */

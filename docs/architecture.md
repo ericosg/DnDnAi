@@ -67,6 +67,7 @@ Discord Channel
 - System messages: gray embeds
 - Combat status: red embeds with initiative markers
 - Party status: blue embeds
+- Character sheet: blue embeds with section filtering (abilities, skills, features, spells, backstory)
 - Inventory: gold embeds
 - Whispers: green embeds
 

@@ -74,6 +74,7 @@ Use the OAuth2 URL Generator in the Developer Portal with the `bot` and `applica
 | `/whisper @player <msg>` | Private in-character message |
 | `/recap` | DM summarizes the story so far |
 | `/ask <question>` | Ask the DM an out-of-character question about rules or the game |
+| `/character [section]` | Show your character sheet (all, abilities, skills, features, spells, backstory) |
 | `/inventory` | Show your character's equipment |
 | `/pass` | Skip your turn |
 | `/end` | End the campaign and save final state |
@@ -124,6 +125,7 @@ Add any of these to your game with `/add-agent <name>`:
 | `damakos` | Damakos "Sorrow" | Tiefling | Monk | 1 | Awkward monk stuck with an embarrassing teenage virtue name |
 | `seraphina` | Seraphina Goodbarrel | Lightfoot Halfling | Cleric | 3 | Militant soup-healer who mothers the entire party |
 | `soveliss` | Soveliss Ilphelkiir | High Elf | Sorcerer | 2 | Aristocrat whose wild magic got him politely exiled |
+| `pumpernickle` | Pumpernickle | Slate (Homebrew) | Bard | 3 | Theatrical slate humanoid whose every threat becomes a performance |
 
 ## Creating AI Agents
 
@@ -176,7 +178,7 @@ See [docs/architecture.md](docs/architecture.md) for full technical details.
 ## Development
 
 ```bash
-bun test                       # 209 unit + integration tests
+bun test                       # unit + integration tests
 bunx tsc --noEmit              # type-check
 bunx biome check src/          # lint + format check
 ```
