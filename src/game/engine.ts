@@ -12,6 +12,21 @@ import type { DiceResult, GameState, TurnEntry } from "../state/types.js";
 import { advanceTurn, endCombat, startCombat } from "./combat.js";
 import { formatDiceResult, parseDiceDirective, roll } from "./dice.js";
 
+// Per-game mutex: ensures only one processTurn runs at a time per game.
+// Concurrent calls are queued and execute sequentially.
+const gameLocks = new Map<string, Promise<void>>();
+
+function withGameLock(gameId: string, fn: () => Promise<void>): Promise<void> {
+  const prev = gameLocks.get(gameId) ?? Promise.resolve();
+  const next = prev.then(fn, fn); // run fn after previous completes (even if it failed)
+  gameLocks.set(gameId, next);
+  // Clean up reference when chain settles to avoid memory leak
+  next.then(() => {
+    if (gameLocks.get(gameId) === next) gameLocks.delete(gameId);
+  });
+  return next;
+}
+
 // Track who has responded this round per game
 const roundResponses = new Map<string, Set<string>>();
 
@@ -34,8 +49,19 @@ export function markResponded(gameId: string, playerId: string): void {
 /**
  * Process a new turn entry and drive the game forward.
  * Called after a human player acts or a system event occurs.
+ *
+ * Uses a per-game mutex to prevent concurrent orchestrator loops
+ * from causing duplicate agent/DM responses.
  */
-export async function processTurn(
+export function processTurn(
+  gameState: GameState,
+  entry: TurnEntry,
+  channel: TextChannel,
+): Promise<void> {
+  return withGameLock(gameState.id, () => processTurnInner(gameState, entry, channel));
+}
+
+async function processTurnInner(
   gameState: GameState,
   entry: TurnEntry,
   channel: TextChannel,

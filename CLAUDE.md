@@ -61,6 +61,7 @@ All AI calls are stateless — context is rebuilt from game state + sliding hist
 - **Agent personality files**: `agents/*.md` with gray-matter frontmatter + markdown body. The `characterSpec` field contains a character sheet in the same markdown format human players upload. 11 pre-built agents ship in `agents/` covering all 9 non-Fighter classes plus the original Fighter (Grimbold) and a second Bard (Pumpernickle). All are levels 1-3 with unique race+class combos.
 - **Player IDs**: Humans = Discord user ID. Agents = `agent:<name>`.
 - **Round tracking**: In-memory `roundResponses` map in `game/engine.ts`. Cleared after DM resolves. Not persisted.
+- **Turn mutex**: Per-game promise chain in `game/engine.ts` serializes concurrent `processTurn` calls. Prevents duplicate agent/DM responses when multiple humans act simultaneously.
 
 ### Typing Indicators
 

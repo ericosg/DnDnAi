@@ -305,6 +305,64 @@ describe("engine — full round", () => {
   });
 });
 
+describe("engine — concurrency", () => {
+  test("concurrent processTurn calls are serialized (no double agent responses)", async () => {
+    const gs = makeGameState();
+    // Add a second human so the first human's action doesn't immediately trigger DM
+    gs.players.push(makePlayer({ id: "human2", name: "Human2" }));
+
+    const entry1: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I move forward.",
+    };
+    const entry2: TurnEntry = {
+      id: 2,
+      timestamp: new Date().toISOString(),
+      playerId: "human2",
+      playerName: "Human2",
+      type: "ic",
+      content: "I follow behind.",
+    };
+
+    // Fire both concurrently — without the mutex, this would cause double agent responses
+    await Promise.all([
+      processTurn(gs, entry1, mockChannel as never),
+      processTurn(gs, entry2, mockChannel as never),
+    ]);
+
+    // Agent should have responded exactly once
+    const agentMessages = sentMessages.filter((m) => m.name === "Grimbold");
+    expect(agentMessages).toHaveLength(1);
+
+    // DM should have narrated exactly once
+    const dmMessages = sentMessages.filter((m) => m.name === "Dungeon Master");
+    expect(dmMessages).toHaveLength(1);
+  });
+
+  test("sequential processTurn calls still work correctly", async () => {
+    const gs = makeGameState();
+    const entry1: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I move forward.",
+    };
+
+    await processTurn(gs, entry1, mockChannel as never);
+
+    const agentMessages = sentMessages.filter((m) => m.name === "Grimbold");
+    expect(agentMessages).toHaveLength(1);
+    const dmMessages = sentMessages.filter((m) => m.name === "Dungeon Master");
+    expect(dmMessages).toHaveLength(1);
+  });
+});
+
 describe("engine — typing indicators", () => {
   test("typing started for agent and DM during full round", async () => {
     const gs = makeGameState();
