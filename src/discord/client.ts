@@ -522,7 +522,9 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
 
       const question = interaction.options.getString("question", true);
       const history = await loadHistory(gameState.id);
-      const answer = await dmAsk(gameState, history, question);
+      const player = gameState.players.find((p) => p.id === interaction.user.id);
+      const askerName = player?.characterSheet.name ?? interaction.user.displayName;
+      const answer = await dmAsk(gameState, history, question, askerName);
 
       await sendAsIdentity(channel, "Dungeon Master", "", {
         embeds: dmNarrationEmbeds(
