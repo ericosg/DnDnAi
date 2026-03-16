@@ -129,6 +129,25 @@ describe("DM_IDENTITY", () => {
     expect(DM_IDENTITY).toContain("sole authority");
   });
 
+  test("contains critical directive selection rules", () => {
+    expect(DM_IDENTITY).toContain("ROLL NEVER changes HP");
+    expect(DM_IDENTITY).toContain("WRONG vs CORRECT");
+    expect(DM_IDENTITY).toContain("DAMAGE");
+    expect(DM_IDENTITY).toContain("HEAL");
+  });
+
+  test("contains XP directive instructions", () => {
+    expect(DM_IDENTITY).toContain("[[XP:");
+    expect(DM_IDENTITY).toContain("TARGET:party");
+  });
+
+  test("contains SPELL/USE/CONCENTRATE/CONDITION directive instructions", () => {
+    expect(DM_IDENTITY).toContain("[[SPELL:");
+    expect(DM_IDENTITY).toContain("[[USE:");
+    expect(DM_IDENTITY).toContain("[[CONCENTRATE:");
+    expect(DM_IDENTITY).toContain("[[CONDITION:");
+  });
+
   test("contains combat signal instructions", () => {
     expect(DM_IDENTITY).toContain("[[COMBAT:START]]");
     expect(DM_IDENTITY).toContain("[[COMBAT:END]]");
@@ -262,6 +281,49 @@ describe("buildDMPrompt", () => {
     expect(system).toContain("Skills: Stealth, Perception");
     expect(system).toContain("### Grimbold Ironforge");
     expect(system).toContain("STR 16(+3)");
+  });
+
+  test("character reference includes XP when present", () => {
+    const gs = makeGameState();
+    gs.players[0].characterSheet.experiencePoints = 450;
+    const { system } = buildDMPrompt(gs, [], "test");
+
+    expect(system).toContain("XP: 450/2700");
+  });
+
+  test("character reference omits XP when not set", () => {
+    const gs = makeGameState();
+    const { system } = buildDMPrompt(gs, [], "test");
+
+    // The character reference lines shouldn't contain XP stats
+    expect(system).not.toContain("XP: 0/");
+    expect(system).not.toContain("| XP:");
+  });
+
+  test("character reference includes spell slots when present", () => {
+    const gs = makeGameState();
+    gs.players[0].characterSheet.spellSlots = [{ level: 1, max: 4, current: 2 }];
+    const { system } = buildDMPrompt(gs, [], "test");
+    expect(system).toContain("Slots: 1st: 2/4");
+  });
+
+  test("character reference includes feature charges when present", () => {
+    const gs = makeGameState();
+    gs.players[1].characterSheet.featureCharges = [
+      { name: "Action Surge", max: 1, current: 1, resetsOn: "short" },
+    ];
+    const { system } = buildDMPrompt(gs, [], "test");
+    expect(system).toContain("Charges: Action Surge: 1/1");
+  });
+
+  test("character reference includes saving throw modifiers", () => {
+    const gs = makeGameState();
+    gs.players[0].characterSheet.savingThrows = ["Dexterity", "Intelligence"];
+    const { system } = buildDMPrompt(gs, [], "test");
+    // DEX 16 (+3) + prof 2 = +5*
+    expect(system).toContain("DEX +5*");
+    // STR 8 (-1), not proficient
+    expect(system).toContain("STR -1");
   });
 
   test("character reference includes gender when present", () => {

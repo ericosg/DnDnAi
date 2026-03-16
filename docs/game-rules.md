@@ -149,10 +149,118 @@ The DM maintains persistent notes in `data/games/<id>/dm-notes/` that survive ac
 
 The DM reads these notes before responding and updates them when new information is established. This ensures narrative consistency across sessions.
 
+## Experience Points & Leveling
+
+### How XP Works
+The DM awards XP using a directive:
+```
+[[XP:300 TARGET:party REASON:defeated the goblins]]
+```
+
+- `TARGET:party` splits XP equally among all players (`Math.floor` per player)
+- `TARGET:CharacterName` awards XP to a single character
+- The engine replaces the directive with formatted text: **+75 XP each** (defeated the goblins)
+
+### When XP Is Awarded
+- After combat (total encounter XP ÷ party size)
+- Milestones and significant discoveries
+- Individual achievements
+
+### Level-Up Thresholds (SRD)
+| Level | XP Required |
+|-------|-------------|
+| 2 | 300 |
+| 3 | 900 |
+| 4 | 2,700 |
+| 5 | 6,500 |
+| 10 | 64,000 |
+| 20 | 355,000 |
+
+When a character crosses a threshold, the engine appends "**Ready to level up!**" — but leveling is **not automatic**. Leveling involves player choices (HP roll, ability scores, new features) and must be done manually.
+
+### XP in the UI
+- `/character` embed shows XP progress: `XP 300/2700 (level 3)`
+- The DM's Character Reference includes XP when tracked
+- Character sheet parser recognizes `**Experience Points:** N` or `**XP:** N`
+
+## Spell Slots & Resources
+
+### Spell Slot Tracking
+Characters with spellcasting have their spell slots tracked automatically:
+- **Full casters** (Bard, Cleric, Druid, Sorcerer, Wizard): slots derived from SRD tables
+- **Half casters** (Paladin, Ranger): slots start at level 2, half progression
+- **Warlock**: Pact Magic slots (all at same level, recharge on short rest)
+- Slots can also be explicitly specified in a `## Spell Slots` section on the character sheet
+
+The DM signals spell usage with `[[SPELL:level TARGET:casterName]]`. The engine deducts a slot and warns if none are available.
+
+### Feature Charges
+Limited-use features are auto-parsed from feature text:
+- `"Second Wind (1d10+3 HP, bonus action, 1/short rest)"` → 1 charge, short rest reset
+- `"Bardic Inspiration (d6, 3/long rest)"` → 3 charges, long rest reset
+
+The DM signals feature usage with `[[USE:featureName TARGET:name]]`.
+
+### Concentration
+When a character casts a concentration spell, the DM outputs `[[CONCENTRATE:spellName TARGET:casterName]]`. The engine:
+- Breaks any existing concentration automatically
+- Tracks the active concentration spell
+- Auto-rolls CON saves when the concentrating character takes damage (DC = max(10, damage/2))
+- Breaks concentration on a failed save
+
+### Conditions
+The DM can add/remove conditions with `[[CONDITION:ADD conditionName TARGET:name]]` and `[[CONDITION:REMOVE conditionName TARGET:name]]`. Conditions are tracked on combatants.
+
+### Saving Throw Modifiers
+The DM's Character Reference now includes pre-calculated saving throw modifiers for all six abilities, with proficient saves marked with `*`. This prevents manual math errors.
+
+### What's Shown in `/character`
+- **Combat field**: AC, HP, Speed, Initiative, XP progress
+- **Resources field**: Spell slots remaining, feature charges remaining
+
+## Rest System
+
+### Short Rest (`/rest short`)
+- Resets features with "short rest" recharge (Action Surge, Second Wind, Warlock Pact Magic slots)
+- Does NOT restore HP (Hit Dice healing not yet tracked)
+- Cannot be used during combat
+
+### Long Rest (`/rest long`)
+- Restores HP to maximum
+- Resets ALL spell slots to max
+- Resets ALL feature charges (both short and long rest features)
+- Cannot be used during combat
+
+## Level-Up (`/level-up`)
+
+When a character has enough XP to level up:
+1. `/level-up` — uses fixed average HP gain (default)
+2. `/level-up hp:Roll` — rolls the hit die for HP
+
+The command:
+- Increments level
+- Adds HP (hit die roll or fixed average + CON modifier)
+- Updates proficiency bonus if the new level changes it
+- Updates spell slots for casters
+- Flags Ability Score Improvement levels (4, 8, 12, 16, 19)
+- Does NOT auto-add class features (check SRD or ask the DM with `/ask`)
+
+## Death Saves
+
+When a combatant drops to 0 HP and their combat turn arrives:
+- The engine auto-rolls a d20 death save
+- Natural 20: revive with 1 HP
+- Natural 1: two failures
+- 10+: success, <10: failure
+- 3 successes: stabilized (skipped in turn order)
+- 3 failures: dead (removed from combat)
+- Any healing from 0 HP clears death save counters
+
+Death saves are fully automated — the DM doesn't need to narrate them.
+
 ## What's Not Implemented (Yet)
-- Spell slots and spell management
+- Hit Dice healing during short rests
 - Inventory management (adding/removing items during play)
-- Experience points and leveling
 - Multi-guild support
 - NPC stat blocks (enemies are narrated by the DM, not mechanically tracked)
 - Map or visual positioning

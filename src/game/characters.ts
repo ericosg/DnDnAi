@@ -1,5 +1,6 @@
 import { generateBackstory } from "../ai/agent.js";
 import type { AgentPersonality, CharacterSheet } from "../state/types.js";
+import { deriveSpellSlots, parseFeatureCharge, parseSpellSlotLine } from "./resources.js";
 
 /** Parse an integer safely, returning the fallback on NaN. */
 function safeInt(value: string | null, fallback: number): number {
@@ -58,9 +59,36 @@ export function parseCharacterSheet(markdown: string): CharacterSheet {
     flaws: extractField(lines, "flaws") || undefined,
   };
 
+  // Parse XP if present
+  const xpValue = extractField(lines, "experience points", "xp");
+  if (xpValue) {
+    const xp = parseInt(xpValue, 10);
+    if (!Number.isNaN(xp)) sheet.experiencePoints = xp;
+  }
+
+  // Parse feature charges from feature text
+  const charges: CharacterSheet["featureCharges"] = [];
+  for (const feature of sheet.features) {
+    const charge = parseFeatureCharge(feature);
+    if (charge) charges.push({ ...charge, current: charge.max });
+  }
+  if (charges.length) sheet.featureCharges = charges;
+
+  // Parse spell slots from explicit section or derive from class
+  const explicitSlots = parseSpellSlotSection(lines);
+  if (explicitSlots.length) {
+    sheet.spellSlots = explicitSlots.map((s) => ({ ...s, current: s.max }));
+  }
+
   // Parse spells if present
   const spells = extractList(lines, "spells", "cantrips", "spell list");
   if (spells.length) sheet.spells = spells;
+
+  // Derive spell slots from class/level if not explicitly set and character has spells
+  if (!sheet.spellSlots && sheet.spells?.length) {
+    const derived = deriveSpellSlots(sheet.class, sheet.level);
+    if (derived.length) sheet.spellSlots = derived;
+  }
 
   // Calculate initiative from dex if not specified
   if (sheet.initiative === 0) {
@@ -137,7 +165,7 @@ function extractList(lines: string[], ...sectionNames: string[]): string[] {
         if (match) {
           const actualMatch = line.trim().match(new RegExp(`${name}[:\\s]+(.+)`, "i"));
           if (actualMatch?.[1]) {
-            return actualMatch[1].split(/,\s*/).map((s) => s.trim().replace(/\*\*/g, ""));
+            return actualMatch[1].split(/,\s*/).map((s) => s.replace(/\*\*/g, "").trim());
           }
         }
       }
@@ -145,6 +173,27 @@ function extractList(lines: string[], ...sectionNames: string[]): string[] {
   }
 
   return items;
+}
+
+function parseSpellSlotSection(lines: string[]): { level: number; max: number }[] {
+  const slots: { level: number; max: number }[] = [];
+  let inSection = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const lower = trimmed.toLowerCase();
+
+    if (lower.match(/^#{1,3}\s*spell\s+slots/i)) {
+      inSection = true;
+      continue;
+    }
+    if (inSection && /^#{1,3}\s/.test(trimmed)) break;
+    if (inSection) {
+      const parsed = parseSpellSlotLine(trimmed);
+      if (parsed) slots.push(parsed);
+    }
+  }
+  return slots;
 }
 
 function extractSection(lines: string[], ...sectionNames: string[]): string | null {

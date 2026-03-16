@@ -19,7 +19,11 @@ DnDnAi replaces the human DM with Claude AI while keeping human players at the t
 - **AI Dungeon Master** — Claude Opus narrates, adjudicates rules, and drives the story
 - **AI Party Members** — Claude Sonnet-powered NPCs with distinct personalities and voices
 - **Honest Dice** — real random rolls, never AI-simulated
-- **Combat System** — initiative, turn order, damage, healing, death saves
+- **Full Combat System** — initiative, turn order, damage, healing, conditions, concentration tracking, automated death saves
+- **Spell Slots & Resources** — auto-tracked and deducted; the DM can't accidentally let you cast beyond your limits
+- **XP & Leveling** — earn XP from combat and milestones, level up with `/level-up`
+- **Rest System** — `/rest short` and `/rest long` to recover spell slots, feature charges, and HP
+- **Condition Tracking** — prone, frightened, stunned, etc. with mechanical effects noted on rolls
 - **Webhook Identities** — each AI character appears as a separate Discord user with their own name and avatar
 - **Auto-Persistence** — game state saves after every turn; crash-safe, always resumable
 - **Narrative Compression** — AI summarizes the story every 10 turns to manage context length
@@ -73,13 +77,19 @@ Use the OAuth2 URL Generator in the Developer Portal with the `bot` and `applica
 | `/look [target]` | Ask the DM to describe the environment or something specific |
 | `/whisper @player <msg>` | Private in-character message |
 | `/recap` | DM summarizes the story so far |
-| `/ask <question>` | Ask the DM an out-of-character question about rules or the game |
+| `/ask <question>` | Ask the DM an out-of-character question about your current game |
+| `/help <question>` | Ask about D&D rules, bot commands, or how things work (reads docs + SRD) |
+| `/how-to-play` | Quick-start reference card for new players |
 | `/character [section]` | Show your character sheet (all, abilities, skills, features, spells, backstory) |
 | `/inventory` | Show your character's equipment |
+| `/rest <short\|long>` | Take a rest to recover spell slots, features, and HP |
+| `/level-up [hp:Roll\|Fixed]` | Level up when you have enough XP |
 | `/pass` | Skip your turn |
 | `/end` | End the campaign and save final state |
 
 ## Playing the Game
+
+**New player?** Read **[docs/how-to-play.md](docs/how-to-play.md)** — a 2-minute guide covering everything you need to start playing. No D&D experience required.
 
 ### In-Character Actions
 Prefix your message with `>` to act in character:
@@ -100,6 +110,34 @@ Plain messages (no `>` prefix) are treated as out-of-character and don't affect 
 6. Repeat
 
 In combat, turns follow initiative order. The game never auto-advances without human input — if it's your turn, the bot waits for you.
+
+### Combat
+
+When the DM starts combat, the engine rolls initiative and enforces turn order. On your turn:
+- Describe what you do: `> I attack the goblin with my shortsword`
+- The DM rolls dice, applies damage/healing, and narrates the result
+- Your spell slots and feature charges are tracked automatically — you'll see a warning if you try to use something you've already spent
+
+If you drop to 0 HP, the engine auto-rolls death saves at the start of your turn. You don't need to do anything — just hope for good rolls.
+
+### Between Fights
+
+- **`/rest short`** — recover short-rest features (Action Surge, Second Wind, Warlock slots)
+- **`/rest long`** — full recovery: HP to max, all spell slots and features reset
+- **`/level-up`** — when you have enough XP, level up your character (choose Roll or Fixed for HP)
+
+### Checking Your Character
+
+- **`/character`** — see your full sheet (ability scores, combat stats, XP progress, spell slots, feature charges)
+- **`/character spells`** — just your spells and remaining slots
+- **`/inventory`** — your equipment
+
+### Tips for New Players
+
+- **You can't break anything.** The engine enforces the rules — if you try to cast a spell without slots, it'll tell you.
+- **Just describe what you want to do.** You don't need to know the mechanics. Say `> I try to sneak past the guards` and the DM handles the rest.
+- **Use `/ask` freely.** Ask the DM anything: "What can I do here?", "How does sneak attack work?", "What happened to the merchant?" It doesn't use your turn.
+- **The DM AI reads your backstory.** The more personality you put in your character sheet, the more personal the story gets.
 
 ## Character Sheets
 

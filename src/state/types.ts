@@ -3,6 +3,9 @@ export interface CharacterSheet {
   race: string;
   class: string;
   level: number;
+  experiencePoints?: number;
+  spellSlots?: { level: number; max: number; current: number }[];
+  featureCharges?: { name: string; max: number; current: number; resetsOn: "short" | "long" }[];
   background: string;
   alignment: string;
   gender?: string;
@@ -56,6 +59,7 @@ export interface Combatant {
   hp: { max: number; current: number; temp: number };
   conditions: string[];
   deathSaves: { successes: number; failures: number };
+  concentration?: { spell: string };
 }
 
 export interface CombatState {

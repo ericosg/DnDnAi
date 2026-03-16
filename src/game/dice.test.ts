@@ -1,10 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import {
   formatDiceResult,
+  parseConcentrateDirective,
+  parseConditionDirective,
   parseDamageDirective,
   parseDiceDirective,
   parseDiceNotation,
   parseHealDirective,
+  parseSpellDirective,
+  parseUseDirective,
+  parseXPDirective,
   roll,
 } from "./dice.js";
 
@@ -205,6 +210,133 @@ describe("parseHealDirective", () => {
   test("returns empty array for no directives", () => {
     const results = parseHealDirective("Just some normal text");
     expect(results).toHaveLength(0);
+  });
+});
+
+describe("parseXPDirective", () => {
+  test("parses party XP directive", () => {
+    const text = "[[XP:300 TARGET:party REASON:defeated the goblins]]";
+    const results = parseXPDirective(text);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({
+      amount: 300,
+      target: "party",
+      reason: "defeated the goblins",
+    });
+  });
+
+  test("parses individual XP directive", () => {
+    const text = "[[XP:50 TARGET:Fūsetsu REASON:clever trap disarm]]";
+    const results = parseXPDirective(text);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({
+      amount: 50,
+      target: "Fūsetsu",
+      reason: "clever trap disarm",
+    });
+  });
+
+  test("parses multiple XP directives", () => {
+    const text =
+      "[[XP:300 TARGET:party REASON:combat victory]] and [[XP:50 TARGET:Grimbold REASON:heroic last stand]]";
+    const results = parseXPDirective(text);
+    expect(results).toHaveLength(2);
+  });
+
+  test("returns empty array for no directives", () => {
+    const results = parseXPDirective("Just some normal text with XP mentioned");
+    expect(results).toHaveLength(0);
+  });
+
+  test("parses relaxed spacing around colons", () => {
+    const text = "[[XP : 100 TARGET : party REASON : milestone]]";
+    const results = parseXPDirective(text);
+    expect(results).toHaveLength(1);
+    expect(results[0].amount).toBe(100);
+  });
+});
+
+describe("parseSpellDirective", () => {
+  test("parses spell slot directive", () => {
+    const text = "[[SPELL:1 TARGET:Hierophantis]]";
+    const results = parseSpellDirective(text);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({ level: 1, target: "Hierophantis" });
+  });
+
+  test("parses higher level spell", () => {
+    const text = "[[SPELL:3 TARGET:Nyx]]";
+    const results = parseSpellDirective(text);
+    expect(results[0]).toEqual({ level: 3, target: "Nyx" });
+  });
+
+  test("returns empty for no directives", () => {
+    expect(parseSpellDirective("normal text")).toHaveLength(0);
+  });
+});
+
+describe("parseUseDirective", () => {
+  test("parses feature use", () => {
+    const text = "[[USE:Second Wind TARGET:Grimbold]]";
+    const results = parseUseDirective(text);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({ featureName: "Second Wind", target: "Grimbold" });
+  });
+
+  test("parses multi-word feature", () => {
+    const text = "[[USE:Bardic Inspiration TARGET:Merric]]";
+    const results = parseUseDirective(text);
+    expect(results[0].featureName).toBe("Bardic Inspiration");
+  });
+
+  test("returns empty for no directives", () => {
+    expect(parseUseDirective("normal text")).toHaveLength(0);
+  });
+});
+
+describe("parseConcentrateDirective", () => {
+  test("parses concentration directive", () => {
+    const text = "[[CONCENTRATE:Bless TARGET:Hierophantis]]";
+    const results = parseConcentrateDirective(text);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({ spell: "Bless", target: "Hierophantis" });
+  });
+
+  test("parses multi-word spell", () => {
+    const text = "[[CONCENTRATE:Hold Person TARGET:Nyx]]";
+    const results = parseConcentrateDirective(text);
+    expect(results[0].spell).toBe("Hold Person");
+  });
+
+  test("returns empty for no directives", () => {
+    expect(parseConcentrateDirective("normal text")).toHaveLength(0);
+  });
+});
+
+describe("parseConditionDirective", () => {
+  test("parses ADD condition", () => {
+    const text = "[[CONDITION:ADD prone TARGET:Grimbold]]";
+    const results = parseConditionDirective(text);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({ action: "add", condition: "prone", target: "Grimbold" });
+  });
+
+  test("parses REMOVE condition", () => {
+    const text = "[[CONDITION:REMOVE prone TARGET:Grimbold]]";
+    const results = parseConditionDirective(text);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({ action: "remove", condition: "prone", target: "Grimbold" });
+  });
+
+  test("case insensitive action", () => {
+    const text = "[[CONDITION:add frightened TARGET:Fūsetsu]]";
+    const results = parseConditionDirective(text);
+    expect(results[0].action).toBe("add");
+    expect(results[0].condition).toBe("frightened");
+  });
+
+  test("returns empty for no directives", () => {
+    expect(parseConditionDirective("normal text")).toHaveLength(0);
   });
 });
 

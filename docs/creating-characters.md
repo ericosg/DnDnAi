@@ -62,6 +62,9 @@ The bot's parser is flexible — it handles `**Key:** Value`, `Key: Value`, and 
 - Shield (1st level)
 - Magic Missile (1st level)
 
+## Spell Slots
+- 1st level: 2
+
 ## Backstory
 A paragraph or two about who your character is, where they come from,
 and why they're adventuring. The AI DM reads this and weaves it into
@@ -89,6 +92,8 @@ the story, so the more you give it, the more personal the narrative gets.
 | **Skills** | Things you're trained in (Stealth, Perception, etc.) | None |
 | **Equipment** | What you're carrying | None |
 | **Features** | Class abilities, racial traits, feats | None |
+| **Spell Slots** | Slots per spell level (for casters) | Auto-derived from class/level |
+| **Experience Points** | XP earned so far | None (starts tracking when DM awards XP) |
 | **Backstory** | Your character's history and personality | None |
 
 ### Tips
@@ -99,6 +104,9 @@ the story, so the more you give it, the more personal the narrative gets.
 - **Don't stress about perfection.** Missing fields get sensible defaults. You can always `/end` and `/new-game` with an updated sheet.
 - **Never use `###` subheadings inside a section.** The parser exits a `## Section` when it encounters any heading (including `###`), so items after a `###` inside Skills, Equipment, Features, or Spells will be silently lost. Keep all list sections as flat bullet lists under `## Headings`.
 - **Spells go in their own section.** Use `## Spells` with one spell per bullet, not inside Features. Non-casters simply omit this section.
+- **Spell slots are auto-derived.** If you have spells, the bot figures out your spell slots from your class and level. You can override this with a `## Spell Slots` section listing `- 1st level: 2` etc.
+- **Feature charges are auto-parsed.** If your feature says "(1/short rest)" or "(3/long rest)", the bot tracks charges and resets them on rests.
+- **XP is optional at creation.** Add `**Experience Points:** 0` if you want to track XP from the start, or leave it out — the bot starts tracking when the DM first awards XP.
 
 ## New to D&D? Use AI to Help
 
@@ -110,6 +118,7 @@ If you've never built a D&D character before, you don't have to figure out abili
 > - `## Saving Throws` with one bullet per save
 > - `## Skills`, `## Equipment`, `## Features` with flat bullet lists (never `###` subheadings)
 > - `## Spells` with one spell per bullet, level noted inline like `- Fire Bolt (cantrip)` — omit this section for non-casters
+> - `## Spell Slots` with one bullet per level like `- 1st level: 2` — or omit to let the bot derive from class/level
 > - `## Backstory` with narrative text, then `**Personality:**`, `**Ideals:**`, `**Bonds:**`, `**Flaws:**` as bold-key-value pairs
 >
 > Make sure the stats follow D&D 5e rules (standard array or point buy).
@@ -145,3 +154,27 @@ Once your `.md` file is ready:
 4. When the game starts, type `> ` followed by your action to play in character (e.g., `> I search the room for traps`)
 5. Use `/ask` to ask the DM out-of-character questions about rules or the game
 6. Plain messages without the `>` prefix are out-of-character chat and don't affect the game
+
+### Useful Commands During Play
+
+| Command | When to Use |
+|---------|-------------|
+| `> action` | Act in character — this is how you play |
+| `/ask question` | Ask the DM anything without using your turn |
+| `/character` | Check your stats, HP, XP, spell slots, and feature charges |
+| `/character spells` | See just your spells and remaining slots |
+| `/roll 2d6+3` | Roll dice manually |
+| `/rest short` | Recover short-rest features between fights |
+| `/rest long` | Full recovery — HP, spell slots, all features |
+| `/level-up` | Level up when you have enough XP |
+| `/status` | See the whole party's HP and combat status |
+| `/pass` | Skip your turn in combat |
+
+### Things You Don't Need to Track
+
+The bot handles these automatically:
+- **Spell slots** — deducted when you cast, restored on rest
+- **Feature charges** — Action Surge, Bardic Inspiration, etc. tracked and reset
+- **Death saves** — auto-rolled when you're at 0 HP
+- **Concentration** — tracked; auto-broken if you take damage and fail the CON save
+- **Conditions** — prone, frightened, etc. tracked with mechanical effects

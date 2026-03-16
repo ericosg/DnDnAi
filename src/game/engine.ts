@@ -9,14 +9,30 @@ import { sendAsIdentity, startTyping } from "../discord/webhooks.js";
 import { log } from "../logger.js";
 import { appendHistory, loadHistory, saveGameState } from "../state/store.js";
 import type { DiceResult, GameState, TurnEntry } from "../state/types.js";
-import { advanceTurn, applyDamage, applyHealing, endCombat, startCombat } from "./combat.js";
+import {
+  advanceTurn,
+  applyDamage,
+  applyHealing,
+  endCombat,
+  rollDeathSave,
+  startCombat,
+} from "./combat.js";
+import { summarizeConditionEffects } from "./conditions.js";
 import {
   formatDiceResult,
+  parseConcentrateDirective,
+  parseConditionDirective,
   parseDamageDirective,
   parseDiceDirective,
   parseHealDirective,
+  parseSpellDirective,
+  parseUseDirective,
+  parseXPDirective,
   roll,
 } from "./dice.js";
+import { buildCombatHPSummary, detectDirectiveMisuse } from "./hp-reconciliation.js";
+import { checkLevelUp } from "./leveling.js";
+import { useFeatureCharge, useSpellSlot } from "./resources.js";
 
 // Per-game mutex: ensures only one processTurn runs at a time per game.
 // Concurrent calls are queued and execute sequentially.
@@ -112,6 +128,66 @@ async function processTurnInner(
   }
 }
 
+/**
+ * Check if the current combatant needs a death save. Auto-roll if at 0 HP.
+ * Posts result to channel and records in history. Returns true if a death save was rolled.
+ */
+async function handleDeathSaveIfNeeded(
+  gameState: GameState,
+  channel: TextChannel,
+): Promise<boolean> {
+  if (!gameState.combat.active) return false;
+  const combatant = gameState.combat.combatants[gameState.combat.turnIndex];
+  if (!combatant || combatant.hp.current > 0) return false;
+  if (combatant.conditions.includes("stable") || combatant.conditions.includes("dead")) {
+    return false;
+  }
+
+  const { roll: diceResult, result } = rollDeathSave(combatant);
+  log.info(`Death save: ${combatant.name} rolled ${diceResult.total} → ${result}`);
+
+  let message: string;
+  switch (result) {
+    case "revived":
+      message = `**${combatant.name}** rolls a death save: ${formatDiceResult(diceResult)} — **Natural 20! ${combatant.name} regains consciousness with 1 HP!**`;
+      break;
+    case "dead":
+      message = `**${combatant.name}** rolls a death save: ${formatDiceResult(diceResult)} — **${combatant.name} has died.** (${combatant.deathSaves.failures} failures)`;
+      combatant.conditions.push("dead");
+      break;
+    case "stabilized":
+      message = `**${combatant.name}** rolls a death save: ${formatDiceResult(diceResult)} — **Stabilized!** (${combatant.deathSaves.successes} successes)`;
+      break;
+    default: {
+      const counter =
+        result === "success" ? combatant.deathSaves.successes : combatant.deathSaves.failures;
+      const label = result === "success" ? "successes" : "failures";
+      message = `**${combatant.name}** rolls a death save: ${formatDiceResult(diceResult)} — ${result} (${counter} ${label})`;
+    }
+  }
+
+  await channel.send(message);
+
+  const entry: TurnEntry = {
+    id: 0,
+    timestamp: new Date().toISOString(),
+    playerId: "system",
+    playerName: "System",
+    type: "system",
+    content: message,
+    diceResults: [diceResult],
+  };
+  await appendHistory(gameState.id, entry);
+
+  // If dead or stable, advance past this combatant
+  if (result === "dead" || result === "stabilized") {
+    advanceTurn(gameState);
+    await saveGameState(gameState);
+  }
+
+  return true;
+}
+
 async function orchestratorLoop(gameState: GameState, channel: TextChannel): Promise<void> {
   const maxIterations = gameState.players.length * 2 + 2; // prevent infinite loops
   let iterations = 0;
@@ -121,6 +197,12 @@ async function orchestratorLoop(gameState: GameState, channel: TextChannel): Pro
     const history = await loadHistory(gameState.id);
     const lastEntry = history[history.length - 1];
     if (!lastEntry) break;
+
+    // Auto-roll death saves at the start of a combatant's turn
+    if (gameState.combat.active) {
+      const deathSaveRolled = await handleDeathSaveIfNeeded(gameState, channel);
+      if (deathSaveRolled) continue; // Re-evaluate after death save
+    }
 
     const responded = getResponded(gameState.id);
     log.debug(
@@ -328,9 +410,24 @@ async function handleDMTurn(
       );
 
       // Replace the directive in the DM text with the result
+      let rollText = formatDiceResult(result);
+
+      // Annotate with condition effects if the character has relevant conditions
+      if (gameState.combat.active) {
+        const combatant = gameState.combat.combatants.find(
+          (c) => c.name.toLowerCase() === directive.forName.toLowerCase(),
+        );
+        if (combatant && combatant.conditions.length > 0) {
+          const effects = summarizeConditionEffects(combatant.conditions);
+          if (effects.length > 0) {
+            rollText += ` *(${effects.join("; ")})*`;
+          }
+        }
+      }
+
       dmResponse = dmResponse.replace(
         `[[ROLL:${directive.notation} FOR:${directive.forName} REASON:${directive.reason}]]`,
-        formatDiceResult(result),
+        rollText,
       );
     }
 
@@ -381,6 +478,232 @@ async function handleDMTurn(
           `[[HEAL:${directive.notation} TARGET:${directive.targetName} REASON:${directive.reason}]]`,
           formatDiceResult(result),
         );
+      }
+    }
+
+    // Process spell slot directives
+    const spellDirectives = parseSpellDirective(dmResponse);
+    for (const directive of spellDirectives) {
+      const originalTag = `[[SPELL:${directive.level} TARGET:${directive.target}]]`;
+      const player = gameState.players.find(
+        (p) => p.characterSheet.name.toLowerCase() === directive.target.toLowerCase(),
+      );
+      if (player) {
+        const used = useSpellSlot(player.characterSheet, directive.level);
+        if (used) {
+          const remaining =
+            player.characterSheet.spellSlots?.find((s) => s.level === directive.level)?.current ??
+            0;
+          log.info(
+            `  Spell: ${directive.target} used a level ${directive.level} slot (${remaining} remaining)`,
+          );
+          dmResponse = dmResponse.replace(originalTag, "");
+        } else {
+          log.warn(`  Spell: ${directive.target} has no level ${directive.level} slots available!`);
+          dmResponse = dmResponse.replace(
+            originalTag,
+            `*[${directive.target} has no level ${directive.level} spell slots remaining!]*`,
+          );
+        }
+      } else {
+        log.warn(`  Spell: target "${directive.target}" not found`);
+        dmResponse = dmResponse.replace(originalTag, "");
+      }
+    }
+
+    // Process feature use directives
+    const useDirectives = parseUseDirective(dmResponse);
+    for (const directive of useDirectives) {
+      const originalTag = `[[USE:${directive.featureName} TARGET:${directive.target}]]`;
+      const player = gameState.players.find(
+        (p) => p.characterSheet.name.toLowerCase() === directive.target.toLowerCase(),
+      );
+      if (player) {
+        const used = useFeatureCharge(player.characterSheet, directive.featureName);
+        if (used) {
+          const charge = player.characterSheet.featureCharges?.find(
+            (c) => c.name.toLowerCase() === directive.featureName.toLowerCase(),
+          );
+          log.info(
+            `  Use: ${directive.target} used ${directive.featureName} (${charge?.current ?? 0} remaining)`,
+          );
+          dmResponse = dmResponse.replace(originalTag, "");
+        } else {
+          log.warn(`  Use: ${directive.target} has no ${directive.featureName} charges!`);
+          dmResponse = dmResponse.replace(
+            originalTag,
+            `*[${directive.target} has no ${directive.featureName} charges remaining!]*`,
+          );
+        }
+      } else {
+        log.warn(`  Use: target "${directive.target}" not found`);
+        dmResponse = dmResponse.replace(originalTag, "");
+      }
+    }
+
+    // Process concentration directives
+    const concentrateDirectives = parseConcentrateDirective(dmResponse);
+    for (const directive of concentrateDirectives) {
+      const originalTag = `[[CONCENTRATE:${directive.spell} TARGET:${directive.target}]]`;
+      const combatant = gameState.combat.combatants.find(
+        (c) => c.name.toLowerCase() === directive.target.toLowerCase(),
+      );
+      if (combatant) {
+        if (combatant.concentration) {
+          log.info(
+            `  Concentration: ${directive.target} breaks concentration on ${combatant.concentration.spell} to cast ${directive.spell}`,
+          );
+          dmResponse = dmResponse.replace(
+            originalTag,
+            `*[${directive.target} breaks concentration on ${combatant.concentration.spell}]*`,
+          );
+        } else {
+          dmResponse = dmResponse.replace(originalTag, "");
+        }
+        combatant.concentration = { spell: directive.spell };
+        log.info(`  Concentration: ${directive.target} now concentrating on ${directive.spell}`);
+      } else {
+        dmResponse = dmResponse.replace(originalTag, "");
+      }
+    }
+
+    // Process condition directives
+    const conditionDirectives = parseConditionDirective(dmResponse);
+    for (const directive of conditionDirectives) {
+      const originalTag = `[[CONDITION:${directive.action.toUpperCase()} ${directive.condition} TARGET:${directive.target}]]`;
+      const combatant = gameState.combat.combatants.find(
+        (c) => c.name.toLowerCase() === directive.target.toLowerCase(),
+      );
+      if (combatant) {
+        if (directive.action === "add") {
+          if (!combatant.conditions.includes(directive.condition)) {
+            combatant.conditions.push(directive.condition);
+            log.info(`  Condition: ${directive.target} gains ${directive.condition}`);
+          }
+        } else {
+          combatant.conditions = combatant.conditions.filter((c) => c !== directive.condition);
+          log.info(`  Condition: ${directive.target} loses ${directive.condition}`);
+        }
+        dmResponse = dmResponse.replace(originalTag, "");
+      } else {
+        log.warn(`  Condition: target "${directive.target}" not found`);
+        dmResponse = dmResponse.replace(originalTag, "");
+      }
+    }
+
+    // Check concentration on damage — auto-roll CON save
+    for (const directive of damageDirectives) {
+      const combatant = gameState.combat.combatants.find(
+        (c) => c.name.toLowerCase() === directive.targetName.toLowerCase(),
+      );
+      if (combatant?.concentration) {
+        const dc = Math.max(10, Math.floor(diceResults[diceResults.length - 1]?.total ?? 10) / 2);
+        const player = gameState.players.find((p) => p.id === combatant.playerId);
+        const conMod = player
+          ? Math.floor((player.characterSheet.abilityScores.constitution - 10) / 2)
+          : 0;
+        const conSave = roll(`d20+${conMod}`, `${combatant.name} concentration save`);
+        diceResults.push(conSave);
+        if (conSave.total >= dc) {
+          log.info(
+            `  Concentration: ${combatant.name} passes CON save (${conSave.total} vs DC ${dc}), maintains ${combatant.concentration.spell}`,
+          );
+          dmResponse += `\n*${combatant.name} maintains concentration on ${combatant.concentration.spell} (CON save: ${conSave.total} vs DC ${dc})*`;
+        } else {
+          log.info(
+            `  Concentration: ${combatant.name} fails CON save (${conSave.total} vs DC ${dc}), loses ${combatant.concentration.spell}`,
+          );
+          dmResponse += `\n*${combatant.name} loses concentration on ${combatant.concentration.spell}! (CON save: ${conSave.total} vs DC ${dc})*`;
+          combatant.concentration = undefined;
+        }
+      }
+    }
+
+    // Process XP directives
+    const xpDirectives = parseXPDirective(dmResponse);
+    for (const directive of xpDirectives) {
+      const originalTag = `[[XP:${directive.amount} TARGET:${directive.target} REASON:${directive.reason}]]`;
+      if (directive.target.toLowerCase() === "party") {
+        const playerCount = gameState.players.length;
+        const perPlayer = Math.floor(directive.amount / playerCount);
+        const levelUps: string[] = [];
+        for (const p of gameState.players) {
+          p.characterSheet.experiencePoints = (p.characterSheet.experiencePoints ?? 0) + perPlayer;
+          log.info(
+            `  XP: +${perPlayer} to ${p.characterSheet.name} (total: ${p.characterSheet.experiencePoints})`,
+          );
+          if (checkLevelUp(p.characterSheet.experiencePoints, p.characterSheet.level)) {
+            levelUps.push(p.characterSheet.name);
+          }
+        }
+        let replacement = `**+${perPlayer} XP each** (${directive.reason})`;
+        if (levelUps.length > 0) {
+          replacement += ` — ${levelUps.map((n) => `**${n}** is ready to level up!`).join(" ")}`;
+        }
+        dmResponse = dmResponse.replace(originalTag, replacement);
+      } else {
+        const player = gameState.players.find(
+          (p) => p.characterSheet.name.toLowerCase() === directive.target.toLowerCase(),
+        );
+        if (player) {
+          player.characterSheet.experiencePoints =
+            (player.characterSheet.experiencePoints ?? 0) + directive.amount;
+          log.info(
+            `  XP: +${directive.amount} to ${player.characterSheet.name} (total: ${player.characterSheet.experiencePoints})`,
+          );
+          let replacement = `**+${directive.amount} XP** to ${player.characterSheet.name} (${directive.reason})`;
+          if (checkLevelUp(player.characterSheet.experiencePoints, player.characterSheet.level)) {
+            replacement += ` — **${player.characterSheet.name}** is ready to level up!`;
+          }
+          dmResponse = dmResponse.replace(originalTag, replacement);
+        } else {
+          log.warn(`  XP: target "${directive.target}" not found`);
+          dmResponse = dmResponse.replace(
+            originalTag,
+            `**+${directive.amount} XP** (${directive.reason})`,
+          );
+        }
+      }
+    }
+
+    // Detect directive misuse (narrated damage/healing without matching directives)
+    const processedDamageTargets = damageDirectives.map((d) => d.targetName);
+    const processedHealTargets = healDirectives.map((d) => d.targetName);
+    const misuseWarnings = detectDirectiveMisuse(
+      dmResponse,
+      processedDamageTargets,
+      processedHealTargets,
+    );
+    for (const warning of misuseWarnings) {
+      log.warn(`Directive misuse: ${warning}`);
+    }
+
+    // HP reconciliation: append system entry so DM sees HP state next turn
+    if (gameState.combat.active) {
+      const hpSummary = buildCombatHPSummary(gameState);
+      if (hpSummary) {
+        const systemEntries: TurnEntry[] = [];
+        systemEntries.push({
+          id: history.length + 2,
+          timestamp: new Date().toISOString(),
+          playerId: "system",
+          playerName: "System",
+          type: "system",
+          content: hpSummary,
+        });
+        if (misuseWarnings.length > 0) {
+          systemEntries.push({
+            id: history.length + 3,
+            timestamp: new Date().toISOString(),
+            playerId: "system",
+            playerName: "System",
+            type: "system",
+            content: `Warning: ${misuseWarnings.join(" ")}`,
+          });
+        }
+        for (const sysEntry of systemEntries) {
+          await appendHistory(gameState.id, sysEntry);
+        }
       }
     }
 

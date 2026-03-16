@@ -156,6 +156,100 @@ export function formatDiceResult(result: DiceResult): string {
 }
 
 /**
+ * Parse DM spell slot directives like [[SPELL:1 TARGET:Hierophantis]]
+ * Level is an integer (spell level being cast).
+ */
+export function parseSpellDirective(text: string): { level: number; target: string }[] {
+  const regex = /\[\[SPELL\s*:\s*(\d+)\s+TARGET\s*:\s*(.+?)\s*\]\]/g;
+  const results: { level: number; target: string }[] = [];
+  let match: RegExpExecArray | null = null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: idiomatic regex exec loop
+  while ((match = regex.exec(text)) !== null) {
+    results.push({
+      level: parseInt(match[1].trim(), 10),
+      target: match[2].trim(),
+    });
+  }
+  return results;
+}
+
+/**
+ * Parse DM feature use directives like [[USE:Second Wind TARGET:Grimbold]]
+ */
+export function parseUseDirective(text: string): { featureName: string; target: string }[] {
+  const regex = /\[\[USE\s*:\s*(.+?)\s+TARGET\s*:\s*(.+?)\s*\]\]/g;
+  const results: { featureName: string; target: string }[] = [];
+  let match: RegExpExecArray | null = null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: idiomatic regex exec loop
+  while ((match = regex.exec(text)) !== null) {
+    results.push({
+      featureName: match[1].trim(),
+      target: match[2].trim(),
+    });
+  }
+  return results;
+}
+
+/**
+ * Parse DM concentration directives like [[CONCENTRATE:Bless TARGET:Hierophantis]]
+ */
+export function parseConcentrateDirective(text: string): { spell: string; target: string }[] {
+  const regex = /\[\[CONCENTRATE\s*:\s*(.+?)\s+TARGET\s*:\s*(.+?)\s*\]\]/g;
+  const results: { spell: string; target: string }[] = [];
+  let match: RegExpExecArray | null = null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: idiomatic regex exec loop
+  while ((match = regex.exec(text)) !== null) {
+    results.push({
+      spell: match[1].trim(),
+      target: match[2].trim(),
+    });
+  }
+  return results;
+}
+
+/**
+ * Parse DM condition directives like [[CONDITION:ADD prone TARGET:Grimbold]]
+ * or [[CONDITION:REMOVE prone TARGET:Grimbold]]
+ */
+export function parseConditionDirective(
+  text: string,
+): { action: "add" | "remove"; condition: string; target: string }[] {
+  const regex = /\[\[CONDITION\s*:\s*(ADD|REMOVE)\s+(.+?)\s+TARGET\s*:\s*(.+?)\s*\]\]/gi;
+  const results: { action: "add" | "remove"; condition: string; target: string }[] = [];
+  let match: RegExpExecArray | null = null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: idiomatic regex exec loop
+  while ((match = regex.exec(text)) !== null) {
+    results.push({
+      action: match[1].trim().toLowerCase() as "add" | "remove",
+      condition: match[2].trim().toLowerCase(),
+      target: match[3].trim(),
+    });
+  }
+  return results;
+}
+
+/**
+ * Parse DM XP directives like [[XP:300 TARGET:party REASON:defeated the goblins]]
+ * Amount is a flat integer (not dice). TARGET can be "party" or a character name.
+ */
+export function parseXPDirective(
+  text: string,
+): { amount: number; target: string; reason: string }[] {
+  const regex = /\[\[XP\s*:\s*(\d+)\s+TARGET\s*:\s*(.+?)\s+REASON\s*:\s*([^\]]+)\]\]/g;
+  const results: { amount: number; target: string; reason: string }[] = [];
+  let match: RegExpExecArray | null = null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: idiomatic regex exec loop
+  while ((match = regex.exec(text)) !== null) {
+    results.push({
+      amount: parseInt(match[1].trim(), 10),
+      target: match[2].trim(),
+      reason: match[3].trim(),
+    });
+  }
+  return results;
+}
+
+/**
  * Parse DM dice directives like [[ROLL:d20+5 FOR:Grimbold REASON:attack roll]]
  */
 export function parseDiceDirective(

@@ -4,19 +4,42 @@
  */
 
 import { HISTORY_WINDOW, NARRATIVE_STYLE, STYLE_INSTRUCTIONS } from "../config.js";
+import { getSavingThrowSummary } from "../game/ability-checks.js";
+import { xpForNextLevel } from "../game/leveling.js";
+import { getFeatureChargeSummary, getSpellSlotSummary } from "../game/resources.js";
 import type { GameState, TurnEntry } from "../state/types.js";
 
 export const DM_IDENTITY = `You are the Dungeon Master for a D&D 5e campaign running in Discord.
+
+## CRITICAL: Directive Selection Rules
+The game engine uses directives to update game state. Using the WRONG directive means HP/XP won't update, causing desyncs.
+
+**ROLL** = ability checks, saving throws, attack rolls ONLY. ROLL NEVER changes HP. It is for pass/fail and hit/miss determination.
+**DAMAGE** = ANY time a character loses HP. Always use [[DAMAGE:dice TARGET:name REASON:text]].
+**HEAL** = ANY time a character gains HP. Always use [[HEAL:dice TARGET:name REASON:text]].
+**XP** = Award experience points. Use [[XP:amount TARGET:party REASON:text]] or [[XP:amount TARGET:name REASON:text]].
+**SPELL** = When a character casts a leveled spell (not a cantrip). Use [[SPELL:level TARGET:casterName]]. The engine deducts a spell slot. If no slot is available, it warns you.
+**USE** = When a character uses a limited feature (Action Surge, Bardic Inspiration, etc.). Use [[USE:featureName TARGET:name]]. The engine deducts a charge.
+**CONCENTRATE** = When a character casts a concentration spell. Use [[CONCENTRATE:spellName TARGET:casterName]]. The engine tracks it — if they were already concentrating on something, the old spell breaks automatically. When a concentrating character takes damage, the engine auto-rolls a CON save.
+**CONDITION** = Add or remove conditions. Use [[CONDITION:ADD conditionName TARGET:name]] or [[CONDITION:REMOVE conditionName TARGET:name]]. The engine tracks conditions and notes mechanical effects (advantage/disadvantage) on subsequent rolls.
+
+### WRONG vs CORRECT examples:
+- WRONG: \`[[ROLL:2d6+3 FOR:Grimbold REASON:longsword damage]]\` ← ROLL does NOT apply damage!
+- CORRECT: \`[[DAMAGE:2d6+3 TARGET:Grimbold REASON:longsword hit]]\` ← DAMAGE updates HP
+- WRONG: \`[[ROLL:1d8+3 FOR:Nyx REASON:cure wounds healing]]\` ← ROLL does NOT heal!
+- CORRECT: \`[[HEAL:1d8+3 TARGET:Nyx REASON:cure wounds]]\` ← HEAL updates HP
+- WRONG: Narrating "The goblin claws Fūsetsu for 4 damage" without a DAMAGE directive ← HP unchanged!
+
+All directives are resolved INSTANTLY by the game engine before your message is posted. The result replaces the directive in your text. Players see the result inline. Do NOT say you are "waiting" for a roll.
 
 ## Core Rules
 - Narrate immersively in second/third person
 - Be fair but challenging — let players feel heroic
 - NEVER narrate, decide, or imply what a player character (human OR AI agent) does, says, thinks, feels, or attempts. You describe the world, NPCs, and consequences — players describe their own actions. If you need a player to act, ASK them what they do. Do not write "Fūsetsu moves toward the door" or "Grimbold raises his shield" — only the players controlling those characters can decide that. You may only narrate the OUTCOME of actions players have explicitly stated.
 - When an action requires a check or attack, output a dice directive: [[ROLL:d20+5 FOR:CharacterName REASON:Athletics check to climb the wall]]
-- IMPORTANT: Dice directives are resolved INSTANTLY by the game engine before your message is posted. The result replaces the directive in your text. Players see the roll result inline. Do NOT say you are "waiting" for a roll — by the time players read your message, the roll has already happened. Narrate the outcome of the roll in the same response.
 - When damage is dealt, output a damage directive: [[DAMAGE:2d6+3 TARGET:CharacterName REASON:longsword hit]]. The engine rolls the dice and applies the damage to the target's HP automatically. Use the correct damage dice for the attack/spell.
 - When healing occurs, output a heal directive: [[HEAL:1d8+3 TARGET:CharacterName REASON:cure wounds]]. The engine rolls the dice and applies the healing automatically.
-- DAMAGE and HEAL directives work the same as ROLL — resolved instantly, result replaces the directive inline. Always use these instead of just narrating damage/healing numbers, so the game state stays accurate.
+- To award XP after combat, milestones, or significant discoveries: [[XP:totalAmount TARGET:party REASON:defeated the goblins]] splits equally among all players, or [[XP:amount TARGET:CharacterName REASON:individual achievement]] for one character. Award encounter XP after combat ends (total encounter XP ÷ party size for party awards). Also award XP for milestones and significant discoveries.
 - Track narrative consistency — remember what you've established
 - Use D&D 5e rules but favor fun over strict RAW when it improves the story
 - IMPORTANT: The Character Reference section below contains each character's ACTUAL abilities, features, spells, and stats. ALWAYS check it before answering questions about what a character can do, referencing their abilities in narration, or adjudicating actions. Never assume a character has a feature, spell, or ability that is not listed in their character reference — if it's not listed, they don't have it.
@@ -119,14 +142,21 @@ function buildCharacterReference(cs: import("../state/types.js").CharacterSheet)
     `STR ${abs.strength}(${mod(abs.strength)}) DEX ${abs.dexterity}(${mod(abs.dexterity)}) CON ${abs.constitution}(${mod(abs.constitution)}) WIS ${abs.wisdom}(${mod(abs.wisdom)}) INT ${abs.intelligence}(${mod(abs.intelligence)}) CHA ${abs.charisma}(${mod(abs.charisma)})`,
   );
 
-  lines.push(
-    `HP: ${cs.hp.current}/${cs.hp.max} | AC: ${cs.armorClass} | Speed: ${cs.speed} ft | Prof: +${cs.proficiencyBonus}`,
-  );
+  let combatLine = `HP: ${cs.hp.current}/${cs.hp.max} | AC: ${cs.armorClass} | Speed: ${cs.speed} ft | Prof: +${cs.proficiencyBonus}`;
+  if (cs.experiencePoints != null) {
+    const nextLvl = xpForNextLevel(cs.level);
+    combatLine += ` | XP: ${cs.experiencePoints}/${nextLvl === Number.POSITIVE_INFINITY ? "MAX" : nextLvl}`;
+  }
+  lines.push(combatLine);
 
-  if (cs.savingThrows.length) lines.push(`Saves: ${cs.savingThrows.join(", ")}`);
+  lines.push(`Saves: ${getSavingThrowSummary(cs)}`);
   if (cs.skills.length) lines.push(`Skills: ${cs.skills.join(", ")}`);
   if (cs.features.length) lines.push(`Features: ${cs.features.join(", ")}`);
   if (cs.spells?.length) lines.push(`Spells: ${cs.spells.join(", ")}`);
+  const slotSummary = getSpellSlotSummary(cs);
+  if (slotSummary) lines.push(`Slots: ${slotSummary}`);
+  const chargeSummary = getFeatureChargeSummary(cs);
+  if (chargeSummary) lines.push(`Charges: ${chargeSummary}`);
   if (cs.equipment.length) lines.push(`Equipment: ${cs.equipment.join(", ")}`);
 
   return lines.join("\n");

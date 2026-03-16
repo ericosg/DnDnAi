@@ -239,6 +239,52 @@ describe("characterEmbed", () => {
     expect(abilityField?.value).toContain("**CHA**");
   });
 
+  test("shows XP in combat field when present", () => {
+    const player = makePlayer();
+    player.characterSheet.experiencePoints = 300;
+    const embed = characterEmbed(player);
+    const combatField = embed.data.fields?.find((f) => f.name === "Combat");
+    expect(combatField?.value).toContain("XP 300/2700 (level 3)");
+  });
+
+  test("shows Resources field when spell slots present", () => {
+    const player = makePlayer();
+    player.characterSheet.spellSlots = [
+      { level: 1, max: 4, current: 2 },
+      { level: 2, max: 2, current: 1 },
+    ];
+    const embed = characterEmbed(player);
+    const resourceField = embed.data.fields?.find((f) => f.name === "Resources");
+    expect(resourceField).toBeDefined();
+    expect(resourceField?.value).toContain("Spell Slots");
+    expect(resourceField?.value).toContain("1st: 2/4");
+    expect(resourceField?.value).toContain("2nd: 1/2");
+  });
+
+  test("shows Resources field when feature charges present", () => {
+    const player = makePlayer();
+    player.characterSheet.featureCharges = [
+      { name: "Action Surge", max: 1, current: 0, resetsOn: "short" },
+    ];
+    const embed = characterEmbed(player);
+    const resourceField = embed.data.fields?.find((f) => f.name === "Resources");
+    expect(resourceField).toBeDefined();
+    expect(resourceField?.value).toContain("Charges");
+    expect(resourceField?.value).toContain("Action Surge: 0/1");
+  });
+
+  test("no Resources field when no slots or charges", () => {
+    const embed = characterEmbed(makePlayer());
+    const resourceField = embed.data.fields?.find((f) => f.name === "Resources");
+    expect(resourceField).toBeUndefined();
+  });
+
+  test("XP not shown in combat field when absent", () => {
+    const embed = characterEmbed(makePlayer());
+    const combatField = embed.data.fields?.find((f) => f.name === "Combat");
+    expect(combatField?.value).not.toContain("XP");
+  });
+
   test("current HP differs from max when damaged", () => {
     const player = makePlayer();
     player.characterSheet.hp.current = 10;

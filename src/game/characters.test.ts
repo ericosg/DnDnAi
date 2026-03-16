@@ -215,6 +215,75 @@ describe("parseCharacterSheet", () => {
     expect(sheet.features.length).toBe(2);
   });
 
+  test("parses experience points field", () => {
+    const sheet = parseCharacterSheet(`**Name:** XP Test
+**Experience Points:** 450`);
+    expect(sheet.experiencePoints).toBe(450);
+  });
+
+  test("parses XP shorthand field", () => {
+    const sheet = parseCharacterSheet(`**Name:** XP Test
+**XP:** 900`);
+    expect(sheet.experiencePoints).toBe(900);
+  });
+
+  test("XP is undefined when not specified", () => {
+    const sheet = parseCharacterSheet("**Name:** No XP");
+    expect(sheet.experiencePoints).toBeUndefined();
+  });
+
+  test("parses feature charges from feature text", () => {
+    const sheet = parseCharacterSheet(`**Name:** Charge Test
+
+## Features
+- Second Wind (1d10+3 HP, bonus action, 1/short rest)
+- Action Surge (1 additional action, 1/short rest)
+- Darkvision (60 ft)`);
+
+    expect(sheet.featureCharges).toBeDefined();
+    expect(sheet.featureCharges?.length).toBe(2);
+    expect(sheet.featureCharges?.[0].name).toBe("Second Wind");
+    expect(sheet.featureCharges?.[0].max).toBe(1);
+    expect(sheet.featureCharges?.[0].resetsOn).toBe("short");
+    expect(sheet.featureCharges?.[1].name).toBe("Action Surge");
+  });
+
+  test("derives spell slots for caster with spells", () => {
+    const sheet = parseCharacterSheet(`**Name:** Caster Test
+**Class:** Cleric
+**Level:** 3
+
+## Spells
+- Sacred Flame (cantrip)
+- Cure Wounds (1st level)`);
+
+    expect(sheet.spellSlots).toBeDefined();
+    expect(sheet.spellSlots?.length).toBeGreaterThan(0);
+    // Level 3 Cleric: 4 first-level, 2 second-level
+    expect(sheet.spellSlots?.[0]).toEqual({ level: 1, max: 4, current: 4 });
+    expect(sheet.spellSlots?.[1]).toEqual({ level: 2, max: 2, current: 2 });
+  });
+
+  test("no spell slots for non-casters", () => {
+    const sheet = parseCharacterSheet(GRIMBOLD_SHEET);
+    expect(sheet.spellSlots).toBeUndefined();
+  });
+
+  test("parses explicit ## Spell Slots section", () => {
+    const sheet = parseCharacterSheet(`**Name:** Slot Test
+**Class:** Wizard
+**Level:** 1
+
+## Spell Slots
+- 1st level: 3
+
+## Spells
+- Fire Bolt (cantrip)`);
+
+    expect(sheet.spellSlots).toBeDefined();
+    expect(sheet.spellSlots?.[0]).toEqual({ level: 1, max: 3, current: 3 });
+  });
+
   test("parses saving throws from ## section with full names", () => {
     const sheet = parseCharacterSheet(`**Name:** Save Test
 
@@ -227,5 +296,12 @@ describe("parseCharacterSheet", () => {
 
     expect(sheet.savingThrows).toEqual(["Dexterity", "Intelligence"]);
     expect(sheet.skills).toEqual(["Stealth"]);
+  });
+
+  test("parses inline comma-separated saving throws without leading spaces", () => {
+    const sheet = parseCharacterSheet(`**Name:** Inline Save Test
+**Saving Throws:** WIS, CHA`);
+
+    expect(sheet.savingThrows).toEqual(["WIS", "CHA"]);
   });
 });

@@ -123,4 +123,44 @@ export const commands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
         .setRequired(true),
     )
     .toJSON(),
+
+  new SlashCommandBuilder()
+    .setName("how-to-play")
+    .setDescription("Quick reference for how to play DnDnAi")
+    .toJSON(),
+
+  new SlashCommandBuilder()
+    .setName("help")
+    .setDescription("Ask a question about D&D rules, DnDnAi commands, or how things work")
+    .addStringOption((opt) =>
+      opt
+        .setName("question")
+        .setDescription("Your question (D&D rules, bot commands, how-to, etc.)")
+        .setRequired(true),
+    )
+    .toJSON(),
+
+  new SlashCommandBuilder()
+    .setName("rest")
+    .setDescription("Take a short or long rest to recover resources")
+    .addStringOption((opt) =>
+      opt
+        .setName("type")
+        .setDescription("Rest type")
+        .setRequired(true)
+        .addChoices({ name: "Short Rest", value: "short" }, { name: "Long Rest", value: "long" }),
+    )
+    .toJSON(),
+
+  new SlashCommandBuilder()
+    .setName("level-up")
+    .setDescription("Level up your character (requires enough XP)")
+    .addStringOption((opt) =>
+      opt
+        .setName("hp")
+        .setDescription("HP method: roll the hit die or take the fixed average")
+        .setRequired(false)
+        .addChoices({ name: "Roll", value: "roll" }, { name: "Fixed (average)", value: "fixed" }),
+    )
+    .toJSON(),
 ];

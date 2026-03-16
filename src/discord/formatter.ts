@@ -1,5 +1,7 @@
 import { EmbedBuilder } from "discord.js";
 import { formatDiceResult } from "../game/dice.js";
+import { xpForNextLevel } from "../game/leveling.js";
+import { getFeatureChargeSummary, getSpellSlotSummary } from "../game/resources.js";
 import type { CombatState, DiceResult, GameState, Player } from "../state/types.js";
 
 const DM_SEPARATOR = "───────────────────────────────";
@@ -91,9 +93,14 @@ export function characterEmbed(player: Player, section?: CharacterSection): Embe
     embed.addFields({ name: "Ability Scores", value: abilities });
 
     if (!section) {
+      let combatValue = `AC ${cs.armorClass} | HP ${cs.hp.current}/${cs.hp.max} | Speed ${cs.speed} ft | Initiative ${abilityMod(cs.abilityScores.dexterity)}`;
+      if (cs.experiencePoints != null) {
+        const nextLvl = xpForNextLevel(cs.level);
+        combatValue += ` | XP ${cs.experiencePoints}/${nextLvl === Number.POSITIVE_INFINITY ? "MAX" : nextLvl} (level ${cs.level})`;
+      }
       embed.addFields({
         name: "Combat",
-        value: `AC ${cs.armorClass} | HP ${cs.hp.current}/${cs.hp.max} | Speed ${cs.speed} ft | Initiative ${abilityMod(cs.abilityScores.dexterity)}`,
+        value: combatValue,
       });
       embed.addFields({
         name: "Saving Throws",
@@ -103,9 +110,14 @@ export function characterEmbed(player: Player, section?: CharacterSection): Embe
   }
 
   if (section === "abilities") {
+    let abilityCombatValue = `AC ${cs.armorClass} | HP ${cs.hp.current}/${cs.hp.max} | Speed ${cs.speed} ft | Initiative ${abilityMod(cs.abilityScores.dexterity)}`;
+    if (cs.experiencePoints != null) {
+      const nextLvl = xpForNextLevel(cs.level);
+      abilityCombatValue += ` | XP ${cs.experiencePoints}/${nextLvl === Number.POSITIVE_INFINITY ? "MAX" : nextLvl} (level ${cs.level})`;
+    }
     embed.addFields({
       name: "Combat",
-      value: `AC ${cs.armorClass} | HP ${cs.hp.current}/${cs.hp.max} | Speed ${cs.speed} ft | Initiative ${abilityMod(cs.abilityScores.dexterity)}`,
+      value: abilityCombatValue,
     });
     embed.addFields({
       name: "Saving Throws",
@@ -133,6 +145,18 @@ export function characterEmbed(player: Player, section?: CharacterSection): Embe
       name: "Spells",
       value: spells?.length ? spells.map((s) => `• ${s}`).join("\n") : "No spellcasting",
     });
+  }
+
+  // Resources section — spell slots and feature charges
+  if (!section || section === "spells") {
+    const slotStr = getSpellSlotSummary(cs);
+    const chargeStr = getFeatureChargeSummary(cs);
+    if (slotStr || chargeStr) {
+      const parts: string[] = [];
+      if (slotStr) parts.push(`**Spell Slots:** ${slotStr}`);
+      if (chargeStr) parts.push(`**Charges:** ${chargeStr}`);
+      embed.addFields({ name: "Resources", value: parts.join("\n") });
+    }
   }
 
   if (!section || section === "backstory") {

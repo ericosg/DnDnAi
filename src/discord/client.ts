@@ -10,11 +10,22 @@ import {
   type TextChannel,
 } from "discord.js";
 import { loadAgentPersonality } from "../ai/agent.js";
+import { chatAgentic } from "../ai/claude.js";
 import { dmAsk, dmLook, dmNarrate, dmRecap } from "../ai/dm.js";
-import { config, VERSION } from "../config.js";
+import { buildHelpPrompt, HELP_ALLOWED_TOOLS } from "../ai/help-prompt.js";
+import { config, models, VERSION } from "../config.js";
 import { buildAgentCharacter, parseCharacterSheet } from "../game/characters.js";
-import { roll } from "../game/dice.js";
+import { roll as rollDice } from "../game/dice.js";
 import { processTurn, resumeOrchestrator } from "../game/engine.js";
+import {
+  checkLevelUp,
+  fixedHPGain,
+  hitDieSize,
+  isASILevel,
+  proficiencyBonus,
+} from "../game/leveling.js";
+import { deriveSpellSlots } from "../game/resources.js";
+import { longRest, shortRest } from "../game/rest.js";
 import { log } from "../logger.js";
 import {
   createGameState,
@@ -381,7 +392,7 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       const notation = interaction.options.getString("notation", true);
       const label = interaction.options.getString("label") ?? undefined;
       try {
-        const result = roll(notation, label);
+        const result = rollDice(notation, label);
         await interaction.reply(
           `**${interaction.user.displayName}** rolls ${diceResultText(result)}`,
         );
@@ -588,6 +599,194 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       if (freshState && freshState.status === "active") {
         resumeOrchestrator(freshState, channel);
       }
+      break;
+    }
+
+    case "how-to-play": {
+      const embed = systemEmbed(
+        "How to Play DnDnAi",
+        [
+          "**Getting Started**",
+          "1. `/join` — upload a character sheet (`.md` file)",
+          "2. `/start` — the AI DM narrates an opening scene",
+          "3. `> your action` — act in character",
+          "",
+          "**Playing**",
+          "- `> I search the room for traps` — act in character",
+          "- Plain messages (no `>`) are out-of-character chat",
+          "- `/pass` — skip your turn",
+          "- `/ask question` — ask the DM anything (doesn't use your turn)",
+          "- `/help question` — ask about D&D rules or bot commands",
+          "",
+          "**Combat**",
+          "- Turns follow initiative order — the bot waits for you",
+          "- Spell slots, feature charges, and conditions are tracked automatically",
+          "- Death saves auto-roll when you're at 0 HP",
+          "",
+          "**Between Fights**",
+          "- `/rest short` — recover short-rest features",
+          "- `/rest long` — full recovery (HP, slots, features)",
+          "- `/level-up` — level up when you have enough XP",
+          "",
+          "**Checking Your Character**",
+          "- `/character` — stats, HP, XP, spell slots, charges",
+          "- `/character spells` — spells + remaining slots",
+          "- `/inventory` — equipment",
+          "- `/status` — whole party HP",
+          "",
+          "**You can't break anything.** Just describe what you want to do — the engine handles the rest.",
+        ].join("\n"),
+      );
+      await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+      break;
+    }
+
+    case "help": {
+      await interaction.deferReply();
+      const question = interaction.options.getString("question", true);
+      const { system, messages } = buildHelpPrompt(question);
+      const answer = await chatAgentic(
+        models.orchestrator,
+        system,
+        messages,
+        HELP_ALLOWED_TOOLS,
+        "help",
+      );
+
+      await interaction.editReply({
+        embeds: [
+          systemEmbed(
+            "Help",
+            `> ${question}\n\n${answer}\n\n-# Use \`/ask\` for questions about your current game`,
+          ),
+        ],
+      });
+      break;
+    }
+
+    case "rest": {
+      const gameState = await findGameByChannel(channel.id);
+      if (!gameState || gameState.status !== "active") {
+        await interaction.reply({ content: "No active game.", flags: MessageFlags.Ephemeral });
+        return;
+      }
+      if (gameState.combat.active) {
+        await interaction.reply({
+          content: "You can't rest during combat!",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      const restType = interaction.options.getString("type", true) as "short" | "long";
+      const summary = restType === "short" ? shortRest(gameState) : longRest(gameState);
+      await saveGameState(gameState);
+
+      const title = restType === "short" ? "Short Rest" : "Long Rest";
+      const desc =
+        summary.length > 0
+          ? summary.join("\n")
+          : "Everyone is already at full capacity. Nothing to restore.";
+      await interaction.reply({
+        embeds: [systemEmbed(title, desc)],
+      });
+      break;
+    }
+
+    case "level-up": {
+      const gameState = await findGameByChannel(channel.id);
+      if (!gameState) {
+        await interaction.reply({
+          content: "No game in this channel.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      const player = gameState.players.find((p) => p.id === interaction.user.id);
+      if (!player) {
+        await interaction.reply({
+          content: "You're not in this game.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      const cs = player.characterSheet;
+      const xp = cs.experiencePoints ?? 0;
+      if (!checkLevelUp(xp, cs.level)) {
+        const needed = (await import("../game/leveling.js")).xpToNextLevel(xp, cs.level);
+        await interaction.reply({
+          content: `You need ${needed} more XP to reach level ${cs.level + 1}.`,
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      if (cs.level >= 20) {
+        await interaction.reply({
+          content: "You're already at max level!",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+
+      const oldLevel = cs.level;
+      const newLevel = oldLevel + 1;
+      const hpMethod = interaction.options.getString("hp") ?? "fixed";
+      const conMod = Math.floor((cs.abilityScores.constitution - 10) / 2);
+
+      // HP increase
+      let hpGain: number;
+      if (hpMethod === "roll") {
+        const die = hitDieSize(cs.class);
+        const hpRoll = rollDice(`1d${die}`, "level-up HP");
+        hpGain = Math.max(1, hpRoll.total + conMod); // minimum 1 HP
+      } else {
+        hpGain = fixedHPGain(cs.class) + conMod;
+      }
+
+      // Apply level-up
+      cs.level = newLevel;
+      cs.hp.max += hpGain;
+      cs.hp.current += hpGain;
+      cs.proficiencyBonus = proficiencyBonus(newLevel);
+
+      // Update spell slots if caster
+      const newSlots = deriveSpellSlots(cs.class, newLevel);
+      if (newSlots.length > 0) {
+        cs.spellSlots = newSlots;
+      }
+
+      await saveCharacter(gameState.id, cs);
+      await saveGameState(gameState);
+
+      const parts: string[] = [];
+      parts.push(`**Level ${oldLevel} → ${newLevel}**`);
+      parts.push(`HP: +${hpGain} (${hpMethod === "roll" ? "rolled" : "fixed"}) → ${cs.hp.max} max`);
+      if (proficiencyBonus(newLevel) !== proficiencyBonus(oldLevel)) {
+        parts.push(
+          `Proficiency bonus: +${proficiencyBonus(oldLevel)} → +${proficiencyBonus(newLevel)}`,
+        );
+      }
+      if (newSlots.length > 0) {
+        const slotStr = newSlots
+          .map(
+            (s) =>
+              `${s.level === 1 ? "1st" : s.level === 2 ? "2nd" : s.level === 3 ? "3rd" : `${s.level}th`}: ${s.max}`,
+          )
+          .join(", ");
+        parts.push(`Spell slots updated: ${slotStr}`);
+      }
+      if (isASILevel(newLevel)) {
+        parts.push(
+          "**Ability Score Improvement available!** Update your character sheet with +2 to one score or +1 to two scores (max 20).",
+        );
+      }
+      parts.push(
+        "\nCheck your class features in the SRD for new abilities at this level. Use `/ask` to ask the DM what you gained.",
+      );
+
+      await interaction.reply({
+        embeds: [systemEmbed(`${cs.name} Levels Up!`, parts.join("\n"))],
+      });
       break;
     }
 
