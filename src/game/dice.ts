@@ -34,9 +34,22 @@ function rollDie(sides: number): number {
 }
 
 export function roll(notation: string, label?: string): DiceResult {
+  // Handle flat numbers (e.g. "1", "5", "-2") — no dice, just a constant
+  const cleaned = notation.replace(/\s/g, "");
+  if (/^[+-]?\d+$/.test(cleaned) && !/d/i.test(cleaned)) {
+    const value = parseInt(cleaned, 10);
+    return {
+      notation,
+      rolls: [],
+      modifier: value,
+      total: value,
+      kept: undefined,
+      label,
+    };
+  }
+
   // Check for compound expressions like "1d6+3+1d6" or "2d6+1d8+5"
   // Split into terms, preserving +/- signs
-  const cleaned = notation.replace(/\s/g, "");
   const terms = cleaned.match(/[+-]?[^+-]+/g) ?? [cleaned];
 
   // If it's a simple expression, use the fast path

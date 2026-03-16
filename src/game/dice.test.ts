@@ -118,6 +118,36 @@ describe("roll", () => {
       expect(result.total).toBeLessThanOrEqual(9);
     }
   });
+
+  test("flat number: positive integer", () => {
+    const result = roll("1", "necrotic resonance");
+    expect(result.rolls).toEqual([]);
+    expect(result.modifier).toBe(1);
+    expect(result.total).toBe(1);
+    expect(result.notation).toBe("1");
+    expect(result.label).toBe("necrotic resonance");
+  });
+
+  test("flat number: larger value", () => {
+    const result = roll("5");
+    expect(result.rolls).toEqual([]);
+    expect(result.modifier).toBe(5);
+    expect(result.total).toBe(5);
+  });
+
+  test("flat number: negative value", () => {
+    const result = roll("-2");
+    expect(result.rolls).toEqual([]);
+    expect(result.modifier).toBe(-2);
+    expect(result.total).toBe(-2);
+  });
+
+  test("flat number: zero", () => {
+    const result = roll("0");
+    expect(result.rolls).toEqual([]);
+    expect(result.modifier).toBe(0);
+    expect(result.total).toBe(0);
+  });
 });
 
 describe("parseDiceDirective", () => {
