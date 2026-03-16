@@ -110,7 +110,7 @@ export function createBot(): Client {
       content,
     };
 
-    await processTurn(gameState, entry, channel);
+    await processTurn(gameState.id, entry, channel);
   });
 
   return client;
@@ -161,7 +161,7 @@ async function autoResume(client: Client): Promise<void> {
       );
 
       // Kick off the orchestrator to resume pending AI turns
-      resumeOrchestrator(gameState, textChannel);
+      resumeOrchestrator(gameState.id, textChannel);
     } catch (err) {
       log.error(`Failed to resume game ${gameState.id}:`, err);
     }
@@ -565,7 +565,7 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
         content: "*holds action and observes*",
       };
 
-      await processTurn(gameState, entry, channel);
+      await processTurn(gameState.id, entry, channel);
       break;
     }
 
@@ -595,9 +595,8 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       // Resume orchestrator after /ask — if the game is stuck (e.g., an agent
       // should have been prompted but wasn't), this unsticks it. The DM's answer
       // is informational; the orchestrator checks what actually needs to happen.
-      const freshState = await findGameByChannel(channel.id);
-      if (freshState && freshState.status === "active") {
-        resumeOrchestrator(freshState, channel);
+      if (gameState.status === "active") {
+        resumeOrchestrator(gameState.id, channel);
       }
       break;
     }

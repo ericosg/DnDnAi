@@ -7,7 +7,7 @@ import { AGENT_DELAY_MS, COMPRESS_EVERY, HISTORY_WINDOW } from "../config.js";
 import { formatDMNarration } from "../discord/formatter.js";
 import { sendAsIdentity, startTyping } from "../discord/webhooks.js";
 import { log } from "../logger.js";
-import { appendHistory, loadHistory, saveGameState } from "../state/store.js";
+import { appendHistory, loadGameState, loadHistory, saveGameState } from "../state/store.js";
 import type { DiceResult, GameState, TurnEntry } from "../state/types.js";
 import {
   advanceTurn,
@@ -72,8 +72,10 @@ export function markResponded(gameId: string, playerId: string): void {
  * Resume the orchestrator loop for an active game after bot restart.
  * Checks if AI agents need to act and prompts them if so.
  */
-export function resumeOrchestrator(gameState: GameState, channel: TextChannel): Promise<void> {
-  return withGameLock(gameState.id, async () => {
+export function resumeOrchestrator(gameId: string, channel: TextChannel): Promise<void> {
+  return withGameLock(gameId, async () => {
+    const gameState = await loadGameState(gameId);
+    if (!gameState || gameState.status !== "active") return;
     log.info(`Resume: running orchestrator for game ${gameState.id}`);
     await orchestratorLoop(gameState, channel);
     await saveGameState(gameState);
@@ -87,12 +89,12 @@ export function resumeOrchestrator(gameState: GameState, channel: TextChannel): 
  * Uses a per-game mutex to prevent concurrent orchestrator loops
  * from causing duplicate agent/DM responses.
  */
-export function processTurn(
-  gameState: GameState,
-  entry: TurnEntry,
-  channel: TextChannel,
-): Promise<void> {
-  return withGameLock(gameState.id, () => processTurnInner(gameState, entry, channel));
+export function processTurn(gameId: string, entry: TurnEntry, channel: TextChannel): Promise<void> {
+  return withGameLock(gameId, async () => {
+    const gameState = await loadGameState(gameId);
+    if (!gameState || gameState.status !== "active") return;
+    await processTurnInner(gameState, entry, channel);
+  });
 }
 
 async function processTurnInner(
@@ -448,10 +450,21 @@ async function handleDMTurn(
           `${formatDiceResult(result)} → **${result.total} damage** to ${directive.targetName} (HP: ${hpAfter}/${hpMax})`,
         );
       } else {
-        log.warn(`  Damage: target "${directive.targetName}" not found`);
+        const isPlayerTarget = gameState.players.some(
+          (p) => p.characterSheet.name.toLowerCase() === directive.targetName.toLowerCase(),
+        );
+        if (isPlayerTarget) {
+          log.warn(
+            `  Damage: target "${directive.targetName}" not found in combatants (but is a player — possible bug)`,
+          );
+        } else {
+          log.info(
+            `  Damage: ${result.total} to ${directive.targetName} (narrative HP only — not a PC)`,
+          );
+        }
         dmResponse = dmResponse.replace(
           `[[DAMAGE:${directive.notation} TARGET:${directive.targetName} REASON:${directive.reason}]]`,
-          formatDiceResult(result),
+          `${formatDiceResult(result)} → **${result.total} damage** to ${directive.targetName}`,
         );
       }
     }
@@ -473,10 +486,21 @@ async function handleDMTurn(
           `${formatDiceResult(result)} → **${result.total} healed** on ${directive.targetName} (HP: ${hpAfter}/${hpMax})`,
         );
       } else {
-        log.warn(`  Heal: target "${directive.targetName}" not found`);
+        const isPlayerTarget = gameState.players.some(
+          (p) => p.characterSheet.name.toLowerCase() === directive.targetName.toLowerCase(),
+        );
+        if (isPlayerTarget) {
+          log.warn(
+            `  Heal: target "${directive.targetName}" not found in combatants (but is a player — possible bug)`,
+          );
+        } else {
+          log.info(
+            `  Heal: ${result.total} to ${directive.targetName} (narrative HP only — not a PC)`,
+          );
+        }
         dmResponse = dmResponse.replace(
           `[[HEAL:${directive.notation} TARGET:${directive.targetName} REASON:${directive.reason}]]`,
-          formatDiceResult(result),
+          `${formatDiceResult(result)} → **${result.total} healed** on ${directive.targetName}`,
         );
       }
     }

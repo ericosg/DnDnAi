@@ -4,6 +4,7 @@ import type { GameState, Player, TurnEntry } from "../state/types.js";
 // Track calls to mocked functions
 let appendedHistory: TurnEntry[] = [];
 let savedStates: GameState[] = [];
+let mockGameStateForLoad: GameState | null = null;
 
 mock.module("../config.js", () => ({
   config: { discordToken: "test", guildId: "test" },
@@ -31,6 +32,7 @@ mock.module("../state/store.js", () => ({
     appendedHistory.push(entry);
   },
   loadHistory: async (_id: string) => appendedHistory,
+  loadGameState: async (_id: string) => mockGameStateForLoad,
   saveHistory: async () => {},
   saveGameState: async (gs: GameState) => {
     savedStates.push(gs);
@@ -198,6 +200,7 @@ beforeEach(() => {
   sentMessages = [];
   typingStarted = 0;
   typingStopped = 0;
+  mockGameStateForLoad = null;
   dmNarrateResponse = "The party advances through the dungeon.";
   agentResponse = "> Grimbold grumbles and follows.";
   clearRound("test-game");
@@ -215,7 +218,8 @@ describe("engine — full round", () => {
       content: "I sneak forward and check for traps.",
     };
 
-    await processTurn(gs, entry, mockChannel as never);
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
 
     // Agent should have responded
     const agentEntries = appendedHistory.filter((e) => e.playerId === "agent:grimbold");
@@ -250,7 +254,8 @@ describe("engine — full round", () => {
     // Pre-mark agent as responded so we go straight to DM
     markResponded(gs.id, "agent:grimbold");
 
-    await processTurn(gs, entry, mockChannel as never);
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
 
     // DM entry should have dice results
     const dmEntry = appendedHistory.find((e) => e.playerId === "dm");
@@ -275,7 +280,8 @@ describe("engine — full round", () => {
     };
 
     markResponded(gs.id, "agent:grimbold");
-    await processTurn(gs, entry, mockChannel as never);
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
 
     // Combat should now be active
     expect(gs.combat.active).toBe(true);
@@ -298,7 +304,8 @@ describe("engine — full round", () => {
     markResponded(gs.id, "agent:grimbold");
 
     // Should not throw
-    await processTurn(gs, entry, mockChannel as never);
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
 
     // No DM entry should be recorded (guard caught it)
     const dmEntries = appendedHistory.filter((e) => e.playerId === "dm");
@@ -330,9 +337,10 @@ describe("engine — concurrency", () => {
     };
 
     // Fire both concurrently — without the mutex, this would cause double agent responses
+    mockGameStateForLoad = gs;
     await Promise.all([
-      processTurn(gs, entry1, mockChannel as never),
-      processTurn(gs, entry2, mockChannel as never),
+      processTurn(gs.id, entry1, mockChannel as never),
+      processTurn(gs.id, entry2, mockChannel as never),
     ]);
 
     // Agent should have responded exactly once
@@ -355,7 +363,8 @@ describe("engine — concurrency", () => {
       content: "I move forward.",
     };
 
-    await processTurn(gs, entry1, mockChannel as never);
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry1, mockChannel as never);
 
     const agentMessages = sentMessages.filter((m) => m.name === "Grimbold");
     expect(agentMessages).toHaveLength(1);
@@ -376,7 +385,8 @@ describe("engine — typing indicators", () => {
       content: "I move forward.",
     };
 
-    await processTurn(gs, entry, mockChannel as never);
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
 
     // Should have started typing for agent + DM
     expect(typingStarted).toBe(2);
@@ -393,7 +403,8 @@ describe("engine — typing indicators", () => {
       content: "I move forward.",
     };
 
-    await processTurn(gs, entry, mockChannel as never);
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
 
     // All typing indicators should be stopped
     expect(typingStopped).toBe(typingStarted);
@@ -411,7 +422,8 @@ describe("engine — typing indicators", () => {
     };
 
     markResponded(gs.id, "agent:grimbold");
-    await processTurn(gs, entry, mockChannel as never);
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
 
     // Only DM typing
     expect(typingStarted).toBe(1);
@@ -432,7 +444,8 @@ describe("engine — typing indicators", () => {
     };
 
     markResponded(gs.id, "agent:grimbold");
-    await processTurn(gs, entry, mockChannel as never);
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
 
     expect(typingStopped).toBe(typingStarted);
   });
@@ -451,7 +464,8 @@ describe("engine — typing indicators", () => {
     };
 
     markResponded(gs.id, "agent:grimbold");
-    await processTurn(gs, entry, mockChannel as never);
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
 
     expect(typingStarted).toBe(1);
     expect(typingStopped).toBe(1);
@@ -471,7 +485,8 @@ describe("engine — typing indicators", () => {
     };
 
     markResponded(gs.id, "agent:grimbold");
-    await processTurn(gs, entry, mockChannel as never);
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
 
     expect(typingStopped).toBe(typingStarted);
   });
@@ -493,7 +508,8 @@ describe("engine — typing indicators", () => {
       content: "I wait for my ally.",
     };
 
-    await processTurn(gs, entry, mockChannel as never);
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
 
     // Orchestrator should wait for human2 — no AI calls, no typing
     expect(typingStarted).toBe(0);
@@ -539,7 +555,8 @@ describe("engine — typing indicators", () => {
       content: "I attack.",
     };
 
-    await processTurn(gs, entry, mockChannel as never);
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
 
     // Damage was applied — HP should be reduced
     const grimbold = gs.combat.combatants.find((c) => c.name === "Grimbold Ironforge");
@@ -596,7 +613,8 @@ describe("engine — typing indicators", () => {
       content: "I cast cure wounds.",
     };
 
-    await processTurn(gs, entry, mockChannel as never);
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
 
     const fusetsu = gs.combat.combatants.find((c) => c.name === "Fusetsu");
     expect(fusetsu).toBeDefined();
@@ -640,7 +658,8 @@ describe("engine — typing indicators", () => {
       content: "I swing my sword.",
     };
 
-    await processTurn(gs, entry, mockChannel as never);
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
 
     // Agent should have been prompted and posted a message
     const agentMessage = sentMessages.find((m) => m.name === "Grimbold");
@@ -664,7 +683,8 @@ describe("engine — typing indicators", () => {
     });
     // roundResponses is empty (simulates restart) — agent hasn't responded
 
-    await resumeOrchestrator(gs, mockChannel as never);
+    mockGameStateForLoad = gs;
+    await resumeOrchestrator(gs.id, mockChannel as never);
 
     // Agent should have been prompted
     const agentMessages = sentMessages.filter((m) => m.name === "Grimbold");
@@ -706,7 +726,8 @@ describe("engine — typing indicators", () => {
       ],
     };
 
-    await resumeOrchestrator(gs, mockChannel as never);
+    mockGameStateForLoad = gs;
+    await resumeOrchestrator(gs.id, mockChannel as never);
 
     // Agent should have been prompted
     const agentMessages = sentMessages.filter((m) => m.name === "Grimbold");
@@ -752,7 +773,8 @@ describe("engine — typing indicators", () => {
       ],
     };
 
-    await resumeOrchestrator(gs, mockChannel as never);
+    mockGameStateForLoad = gs;
+    await resumeOrchestrator(gs.id, mockChannel as never);
 
     // No agent or DM messages — just waiting for human
     expect(sentMessages).toHaveLength(0);
@@ -782,7 +804,8 @@ describe("engine — typing indicators", () => {
       content: "I move forward.",
     };
 
-    await processTurn(gs, entry, mockChannel as never);
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
 
     // 2 agents + 1 DM = 3 typing indicators
     expect(typingStarted).toBe(3);
