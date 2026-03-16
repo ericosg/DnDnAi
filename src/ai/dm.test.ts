@@ -258,6 +258,8 @@ describe("buildDMPrompt", () => {
     expect(system).toContain("Fūsetsu: 20/24 HP");
     expect(system).toContain(">> Grimbold");
     expect(system).toContain("[prone]");
+    // Next up should wrap to Fūsetsu (first living combatant after Grimbold)
+    expect(system).toContain("Next up: Fūsetsu");
   });
 
   test("combat omitted when not active", () => {

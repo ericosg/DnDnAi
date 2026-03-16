@@ -5,6 +5,7 @@
 
 import { HISTORY_WINDOW, NARRATIVE_STYLE, STYLE_INSTRUCTIONS } from "../config.js";
 import { getSavingThrowSummary } from "../game/ability-checks.js";
+import { peekNextCombatant } from "../game/combat.js";
 import { xpForNextLevel } from "../game/leveling.js";
 import { getFeatureChargeSummary, getSpellSlotSummary } from "../game/resources.js";
 import type { GameState, TurnEntry } from "../state/types.js";
@@ -218,13 +219,18 @@ ${charFiles}
 
   // Layer 4: Combat state if active
   if (gameState.combat.active) {
+    const nextUp = peekNextCombatant(gameState.combat);
     const combatInfo = gameState.combat.combatants
       .map((c, i) => {
         const marker = i === gameState.combat.turnIndex ? ">> " : "   ";
         return `${marker}${c.name}: ${c.hp.current}/${c.hp.max} HP${c.conditions.length ? ` [${c.conditions.join(", ")}]` : ""}`;
       })
       .join("\n");
-    system += `\n\n## Combat — Round ${gameState.combat.round}\n${combatInfo}`;
+    let combatBlock = `\n\n## Combat — Round ${gameState.combat.round}\n${combatInfo}`;
+    if (nextUp) {
+      combatBlock += `\nNext up: ${nextUp.name}`;
+    }
+    system += combatBlock;
   }
 
   // Layer 5: Recent history (sliding window)

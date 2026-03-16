@@ -5,6 +5,7 @@ import {
   applyDamage,
   applyHealing,
   isCombatOver,
+  peekNextCombatant,
   rollDeathSave,
   startCombat,
 } from "./combat.js";
@@ -298,6 +299,147 @@ describe("startCombat", () => {
     expect(gs.combat.combatants[0].initiative).toBeGreaterThanOrEqual(
       gs.combat.combatants[1].initiative,
     );
+  });
+});
+
+describe("peekNextCombatant", () => {
+  test("returns next living combatant", () => {
+    const combat: GameState["combat"] = {
+      active: true,
+      round: 1,
+      turnIndex: 0,
+      combatants: [
+        makeCombatant({ name: "P1", initiative: 20 }),
+        makeCombatant({ name: "P2", initiative: 15 }),
+        makeCombatant({ name: "P3", initiative: 10 }),
+      ],
+    };
+
+    const next = peekNextCombatant(combat);
+    expect(next?.name).toBe("P2");
+  });
+
+  test("skips dead combatants", () => {
+    const combat: GameState["combat"] = {
+      active: true,
+      round: 1,
+      turnIndex: 0,
+      combatants: [
+        makeCombatant({ name: "P1", initiative: 20 }),
+        makeCombatant({ name: "P2", initiative: 15, hp: { max: 20, current: 0, temp: 0 } }),
+        makeCombatant({ name: "P3", initiative: 10 }),
+      ],
+    };
+
+    const next = peekNextCombatant(combat);
+    expect(next?.name).toBe("P3");
+  });
+
+  test("wraps around to start of array", () => {
+    const combat: GameState["combat"] = {
+      active: true,
+      round: 1,
+      turnIndex: 2,
+      combatants: [
+        makeCombatant({ name: "P1", initiative: 20 }),
+        makeCombatant({ name: "P2", initiative: 15 }),
+        makeCombatant({ name: "P3", initiative: 10 }),
+      ],
+    };
+
+    const next = peekNextCombatant(combat);
+    expect(next?.name).toBe("P1");
+  });
+
+  test("wraps and skips dead at start", () => {
+    const combat: GameState["combat"] = {
+      active: true,
+      round: 1,
+      turnIndex: 2,
+      combatants: [
+        makeCombatant({ name: "P1", initiative: 20, hp: { max: 20, current: 0, temp: 0 } }),
+        makeCombatant({ name: "P2", initiative: 15 }),
+        makeCombatant({ name: "P3", initiative: 10 }),
+      ],
+    };
+
+    const next = peekNextCombatant(combat);
+    expect(next?.name).toBe("P2");
+  });
+
+  test("returns current combatant when only one alive", () => {
+    const combat: GameState["combat"] = {
+      active: true,
+      round: 1,
+      turnIndex: 1,
+      combatants: [
+        makeCombatant({ name: "P1", initiative: 20, hp: { max: 20, current: 0, temp: 0 } }),
+        makeCombatant({ name: "P2", initiative: 15 }),
+        makeCombatant({ name: "P3", initiative: 10, hp: { max: 20, current: 0, temp: 0 } }),
+      ],
+    };
+
+    const next = peekNextCombatant(combat);
+    expect(next?.name).toBe("P2"); // wraps back to self
+  });
+
+  test("returns null when all dead", () => {
+    const combat: GameState["combat"] = {
+      active: true,
+      round: 1,
+      turnIndex: 0,
+      combatants: [
+        makeCombatant({ name: "P1", hp: { max: 20, current: 0, temp: 0 } }),
+        makeCombatant({ name: "P2", hp: { max: 20, current: 0, temp: 0 } }),
+      ],
+    };
+
+    expect(peekNextCombatant(combat)).toBeNull();
+  });
+
+  test("returns null when combat not active", () => {
+    const combat: GameState["combat"] = {
+      active: false,
+      round: 0,
+      turnIndex: 0,
+      combatants: [],
+    };
+
+    expect(peekNextCombatant(combat)).toBeNull();
+  });
+
+  test("includes stable combatants", () => {
+    const combat: GameState["combat"] = {
+      active: true,
+      round: 1,
+      turnIndex: 0,
+      combatants: [
+        makeCombatant({ name: "P1", initiative: 20 }),
+        makeCombatant({
+          name: "P2",
+          initiative: 15,
+          hp: { max: 20, current: 0, temp: 0 },
+          conditions: ["stable"],
+        }),
+        makeCombatant({ name: "P3", initiative: 10, hp: { max: 20, current: 0, temp: 0 } }),
+      ],
+    };
+
+    const next = peekNextCombatant(combat);
+    expect(next?.name).toBe("P2"); // stable counts as alive for turn purposes
+  });
+
+  test("does not mutate combat state", () => {
+    const combat: GameState["combat"] = {
+      active: true,
+      round: 1,
+      turnIndex: 0,
+      combatants: [makeCombatant({ name: "P1" }), makeCombatant({ name: "P2" })],
+    };
+
+    peekNextCombatant(combat);
+    expect(combat.turnIndex).toBe(0);
+    expect(combat.round).toBe(1);
   });
 });
 

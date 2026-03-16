@@ -80,6 +80,33 @@ export function advanceTurn(gameState: GameState): void {
   }
 }
 
+/**
+ * Peek at the next living combatant after the current turnIndex
+ * without mutating state. Returns null if no valid next combatant.
+ */
+export function peekNextCombatant(combat: GameState["combat"]): Combatant | null {
+  if (!combat.active || combat.combatants.length === 0) return null;
+
+  let idx = combat.turnIndex + 1;
+
+  // Skip dead in remainder of current round
+  while (idx < combat.combatants.length) {
+    const c = combat.combatants[idx];
+    if (c.hp.current > 0 || hasCondition(c, "stable")) return c;
+    idx++;
+  }
+
+  // Wrap to start of next round
+  idx = 0;
+  while (idx <= combat.turnIndex) {
+    const c = combat.combatants[idx];
+    if (c.hp.current > 0 || hasCondition(c, "stable")) return c;
+    idx++;
+  }
+
+  return null;
+}
+
 export function applyDamage(
   gameState: GameState,
   targetName: string,

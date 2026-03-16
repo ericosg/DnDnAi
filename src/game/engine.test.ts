@@ -574,6 +574,60 @@ describe("engine — typing indicators", () => {
     expect(dmMessage?.content).toContain("damage");
   });
 
+  test("damage to non-PC target formats correctly without crashing", async () => {
+    dmNarrateResponse =
+      "The arrow flies true! [[DAMAGE:2d6+3 TARGET:Shadowstone Broodmother REASON:longbow hit]]";
+
+    const gs = makeGameState();
+    gs.combat = {
+      active: true,
+      round: 1,
+      turnIndex: 0,
+      combatants: [
+        {
+          playerId: "human1",
+          name: "Fusetsu",
+          initiative: 15,
+          hp: { max: 24, current: 24, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+        {
+          playerId: "agent:grimbold",
+          name: "Grimbold Ironforge",
+          initiative: 10,
+          hp: { max: 31, current: 31, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+      ],
+    };
+
+    markResponded(gs.id, "agent:grimbold");
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I fire my longbow at the Broodmother.",
+    };
+
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
+
+    // No combatant HP should have changed (enemy not in combatants)
+    expect(gs.combat.combatants[0].hp.current).toBe(24);
+    expect(gs.combat.combatants[1].hp.current).toBe(31);
+
+    // DM narration should still format the damage output (not raw directive)
+    const dmMessage = sentMessages.find((m) => m.name === "Dungeon Master");
+    expect(dmMessage).toBeDefined();
+    expect(dmMessage?.content).not.toContain("[[DAMAGE:");
+    expect(dmMessage?.content).toContain("damage");
+    expect(dmMessage?.content).toContain("Shadowstone Broodmother");
+  });
+
   test("heal directive restores HP", async () => {
     dmNarrateResponse = "Healing light! [[HEAL:1d8+3 TARGET:Fusetsu REASON:cure wounds]]";
 
