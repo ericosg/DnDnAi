@@ -580,6 +580,14 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
         ),
       );
       await interaction.editReply("The DM has answered your question.");
+
+      // Resume orchestrator after /ask — if the game is stuck (e.g., an agent
+      // should have been prompted but wasn't), this unsticks it. The DM's answer
+      // is informational; the orchestrator checks what actually needs to happen.
+      const freshState = await findGameByChannel(channel.id);
+      if (freshState && freshState.status === "active") {
+        resumeOrchestrator(freshState, channel);
+      }
       break;
     }
 

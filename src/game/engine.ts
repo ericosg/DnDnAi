@@ -144,9 +144,10 @@ async function orchestratorLoop(gameState: GameState, channel: TextChannel): Pro
         clearRound(gameState.id);
         log.info("Round cleared — ready for next player input");
 
-        // If combat, advance turn and continue loop (next combatant may be an AI agent)
+        // If combat, advance turn and persist immediately (prevents state loss on kill)
         if (gameState.combat.active) {
           advanceTurn(gameState);
+          await saveGameState(gameState);
           log.info(
             `Combat: advanced to turn ${gameState.combat.turnIndex}, round ${gameState.combat.round}`,
           );
@@ -164,6 +165,7 @@ async function orchestratorLoop(gameState: GameState, channel: TextChannel): Pro
       case "advance_combat": {
         if (gameState.combat.active) {
           advanceTurn(gameState);
+          await saveGameState(gameState);
           log.info(
             `Combat: advanced to turn ${gameState.combat.turnIndex}, round ${gameState.combat.round}`,
           );
