@@ -96,9 +96,18 @@ Game lookup scans all game directories for matching channel ID.
 
 `game/characters.ts` parses markdown character sheets flexibly — handles `**Key:** Value`, `Key: Value`, `- Key: Value`, heading-based sections, and comma-separated fallback for lists. Missing fields get sensible defaults (10 for ability scores, etc.). The same parser handles human uploads and agent `characterSpec` fields.
 
+**Canonical format rules:**
+- `**Key:** Value` for all scalar fields (Name, Race, Class, Level, ability scores, AC, HP, etc.)
+- `## Heading` + flat bullet lists for all list sections (Skills, Equipment, Features, Spells, Saving Throws)
+- **Never `###` subheadings inside a parsed section** — the parser's `extractList()` exits a `##` section when it hits any heading (including `###`), silently losing items after it
+- Spells in a separate `## Spells` section (not inside Features), one spell per bullet, level noted inline: `- Fire Bolt (cantrip)`, `- Shield (1st level)`
+- Non-casters omit `## Spells`
+- Saving throws as `## Saving Throws` + bullets (not comma-separated inline)
+- Backstory with personality traits as `**Key:** Value` at the end
+
 ### Testing
 
-Tests across 11 files. Agent tests (`ai/agent.test.ts`) load every agent file from disk, verify frontmatter fields, and run each `characterSpec` through `parseCharacterSheet()` to validate stats, ability scores, equipment, and features parse correctly. Tests also verify all agents have unique names and unique race+class combinations. Formatter tests cover the `/character` embed builder (section filtering, ability modifiers, edge cases) and DM narration splitting. DM prompt tests (`ai/dm.test.ts`) verify prompt construction: party info, character reference (ability scores, features, spells, gender), file paths (SRD, dm-notes), combat state, history formatting, `/ask` verification instructions, and DM allowed tools. Other test files cover dice, combat, character parsing, orchestrator, engine, guardrails, webhooks, and Claude subprocess.
+338 tests across 11 files. Agent tests (`ai/agent.test.ts`) load every agent file from disk, verify frontmatter fields, and run each `characterSpec` through `parseCharacterSheet()` to validate stats, ability scores, equipment, features, and spells parse correctly. Caster agents are verified to have spells in a separate `## Spells` section (not embedded in Features). Tests also verify all agents have unique names and unique race+class combinations. Formatter tests cover the `/character` embed builder (section filtering, ability modifiers, edge cases) and DM narration splitting. DM prompt tests (`ai/dm.test.ts`) verify prompt construction: party info, character reference (ability scores, features, spells, gender), file paths (SRD, dm-notes), combat state, history formatting, `/ask` verification instructions, and DM allowed tools. Other test files cover dice, combat, character parsing, orchestrator, engine, guardrails, webhooks, and Claude subprocess.
 
 Note on Bun test isolation: `mock.module()` is global and pollutes across files. Tests that need mocked modules use pure-function extraction patterns (e.g., `guardrail-check.ts`, `claude-subprocess.ts`, `dm-prompt.ts`) or direct file I/O to avoid cross-file mock collisions.
 

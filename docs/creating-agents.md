@@ -96,6 +96,25 @@ characterSpec: |
 
 The parser is flexible — it handles `**Key:** Value`, `Key: Value`, `- Key: Value`, heading-based sections, and comma-separated lists.
 
+### Format Rules
+
+The character sheet parser (`game/characters.ts`) extracts list sections by looking for `## Heading` and collecting bullet items until the next heading. Important constraints:
+
+- **Never use `###` subheadings inside a parsed section.** The parser exits a `##` section when it hits any heading (`#`, `##`, or `###`), so items after a `###` inside Features, Spells, Equipment, or Skills will be silently lost.
+- **Spells must be in a separate `## Spells` section**, not embedded as bullet items inside `## Features`. Each spell gets its own bullet with the level noted inline: `- Fire Bolt (cantrip)`, `- Shield (1st level)`.
+- **Saving throws** should be a `## Saving Throws` section with one bullet per save, not a comma-separated inline field.
+- **Scalar fields** use `**Key:** Value` format (Name, Race, Class, Level, ability scores, AC, HP, etc.).
+- **Non-casters** simply omit the `## Spells` section.
+
+Example of the canonical spell format:
+
+```markdown
+## Spells
+- Fire Bolt (cantrip)
+- Shield (1st level)
+- Magic Missile (1st level)
+```
+
 ## Markdown Body
 
 Everything below the frontmatter `---` is the agent's personality definition. The AI reads this entire section to stay in character. Structure it however makes sense for the character:

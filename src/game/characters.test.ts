@@ -174,4 +174,58 @@ describe("parseCharacterSheet", () => {
 
     expect(sheet.gender).toBeUndefined();
   });
+
+  test("parses spells from separate ## Spells section", () => {
+    const sheet = parseCharacterSheet(`**Name:** Caster Test
+
+## Features
+- Spellcasting (INT-based, DC 13, +5 to hit)
+- Arcane Recovery
+
+## Spells
+- Fire Bolt (cantrip)
+- Mage Hand (cantrip)
+- Shield (1st level)
+- Magic Missile (1st level)`);
+
+    expect(sheet.spells).toBeDefined();
+    expect(sheet.spells?.length).toBe(4);
+    expect(sheet.spells).toContain("Fire Bolt (cantrip)");
+    expect(sheet.spells).toContain("Shield (1st level)");
+    // Spells should NOT leak into features
+    expect(sheet.features.length).toBe(2);
+  });
+
+  test("non-caster has no spells", () => {
+    const sheet = parseCharacterSheet(GRIMBOLD_SHEET);
+    expect(sheet.spells).toBeUndefined();
+  });
+
+  test("### subheading inside a section stops list collection", () => {
+    // This documents the known parser behavior: ### exits the ## section
+    const sheet = parseCharacterSheet(`**Name:** Bug Demo
+
+## Features
+- Feature One
+- Feature Two
+### Subheading
+- Feature Three`);
+
+    // Feature Three is lost because ### exits the section
+    expect(sheet.features.length).toBe(2);
+  });
+
+  test("parses saving throws from ## section with full names", () => {
+    const sheet = parseCharacterSheet(`**Name:** Save Test
+
+## Saving Throws
+- Dexterity
+- Intelligence
+
+## Skills
+- Stealth`);
+
+    expect(sheet.savingThrows).toEqual(["Dexterity", "Intelligence"]);
+    expect(sheet.skills).toEqual(["Stealth"]);
+  });
 });

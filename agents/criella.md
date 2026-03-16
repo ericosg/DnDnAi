@@ -64,8 +64,13 @@ characterSpec: |
   - Pact Magic (2 slots, 1st level, recharge on short rest)
   - Dark One's Blessing (gain temp HP on killing a hostile)
   - Eldritch Invocations: Agonizing Blast, Devil's Sight
-  - Cantrips: Eldritch Blast, Minor Illusion
-  - Spells Known: Hex, Burning Hands, Charm Person
+
+  ## Spells
+  - Eldritch Blast (cantrip)
+  - Minor Illusion (cantrip)
+  - Hex (1st level)
+  - Burning Hands (1st level)
+  - Charm Person (1st level)
 ---
 
 ## Personality

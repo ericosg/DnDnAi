@@ -69,9 +69,19 @@ characterSpec: |
   - Channel Divinity: Turn Undead (1/short rest)
   - Channel Divinity: Preserve Life (distribute up to 15 HP among creatures within 30ft)
   - Spellcasting (WIS, spell save DC 13, +5 to hit)
-  - Cantrips: Sacred Flame, Spare the Dying, Guidance
-  - Domain Spells (always prepared): Bless, Cure Wounds, Lesser Restoration, Spiritual Weapon
-  - Prepared Spells (6): Healing Word, Shield of Faith, Prayer of Healing, Aid
+
+  ## Spells
+  - Sacred Flame (cantrip)
+  - Spare the Dying (cantrip)
+  - Guidance (cantrip)
+  - Bless (1st level, domain)
+  - Cure Wounds (1st level, domain)
+  - Lesser Restoration (2nd level, domain)
+  - Spiritual Weapon (2nd level, domain)
+  - Healing Word (1st level, prepared)
+  - Shield of Faith (1st level, prepared)
+  - Prayer of Healing (2nd level, prepared)
+  - Aid (2nd level, prepared)
 ---
 
 ## Personality

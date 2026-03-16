@@ -138,6 +138,22 @@ describe("agent personality files", () => {
         expect(sheet.savingThrows.length).toBeGreaterThanOrEqual(2);
         expect(sheet.skills.length).toBeGreaterThanOrEqual(2);
       });
+
+      test("caster agents have spells in separate ## Spells section", async () => {
+        const nonCasters = ["grimbold", "vola", "damakos"];
+        if (nonCasters.includes(agentName)) return; // skip non-casters
+
+        const p = await loadAgent(agentName);
+        const sheet = parseCharacterSheet(p.characterSpec);
+        expect(sheet.spells).toBeDefined();
+        expect(sheet.spells?.length).toBeGreaterThanOrEqual(2);
+        // Spells should NOT be embedded in features as "Cantrips: ..." or "Spells Known: ..."
+        for (const f of sheet.features) {
+          expect(f).not.toMatch(
+            /^(Cantrips|Spells Known|Spellbook|Prepared \(|Spell Slots|Domain Spells|Oath Spells):/,
+          );
+        }
+      });
     });
   }
 });

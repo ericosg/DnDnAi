@@ -18,7 +18,9 @@
 **Speed:** 30
 **Proficiency Bonus:** +2
 
-**Saving Throws:** INT, WIS
+## Saving Throws
+- Intelligence
+- Wisdom
 
 ## Skills
 - Arcana
@@ -42,16 +44,13 @@
 - Spellcasting (INT-based, spell save DC 13, +5 to hit)
 
 ## Spells
-### Cantrips
-- Fire Bolt
-- Mage Hand
-- Prestidigitation
-
-### 1st Level (2 slots)
-- Shield
-- Magic Missile
-- Detect Magic
-- Mage Armor
+- Fire Bolt (cantrip)
+- Mage Hand (cantrip)
+- Prestidigitation (cantrip)
+- Shield (1st level)
+- Magic Missile (1st level)
+- Detect Magic (1st level)
+- Mage Armor (1st level)
 
 ## Backstory
 A bookish half-elf who spent years cataloguing artifacts in a university library until she found a journal that shouldn't exist — written in her own handwriting, describing events that haven't happened yet. She left the university to chase the trail, convinced the journal holds the key to preventing something terrible. She's clever and resourceful but has spent more time with books than people, and it shows.

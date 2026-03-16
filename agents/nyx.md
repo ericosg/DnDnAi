@@ -66,9 +66,17 @@ characterSpec: |
   - Arcane Recovery (recover 1 level of spell slots on short rest)
   - Evocation Savant (copy evocation spells at half cost/time)
   - Sculpt Spells (protect allies from evocation area effects)
-  - Cantrips: Fire Bolt, Minor Illusion, Prestidigitation
-  - Spellbook: Magic Missile, Shield, Sleep, Thunderwave, Find Familiar, Detect Magic
-  - Prepared (5): Magic Missile, Shield, Sleep, Thunderwave, Detect Magic
+
+  ## Spells
+  - Fire Bolt (cantrip)
+  - Minor Illusion (cantrip)
+  - Prestidigitation (cantrip)
+  - Magic Missile (1st level, prepared)
+  - Shield (1st level, prepared)
+  - Sleep (1st level, prepared)
+  - Thunderwave (1st level, prepared)
+  - Detect Magic (1st level, prepared)
+  - Find Familiar (1st level, in spellbook)
 ---
 
 ## Personality

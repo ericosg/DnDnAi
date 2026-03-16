@@ -70,8 +70,13 @@ characterSpec: |
   - Sacred Weapon (Channel Divinity: +CHA to attack rolls for 1 min)
   - Turn the Unholy (Channel Divinity)
   - Spellcasting (CHA, spell save DC 12, +4 to hit, 3 slots)
-  - Prepared Spells: Shield of Faith, Cure Wounds, Thunderous Smite
-  - Oath Spells: Protection from Evil and Good, Sanctuary
+
+  ## Spells
+  - Shield of Faith (1st level, prepared)
+  - Cure Wounds (1st level, prepared)
+  - Thunderous Smite (1st level, prepared)
+  - Protection from Evil and Good (1st level, oath)
+  - Sanctuary (1st level, oath)
 ---
 
 ## Personality

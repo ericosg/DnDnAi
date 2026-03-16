@@ -66,9 +66,15 @@ characterSpec: |
   - Wild Magic Surge (DM can have you roll on Wild Magic table after casting)
   - Tides of Chaos (gain advantage on one roll, then DM can trigger surge)
   - Font of Magic (2 sorcery points)
-  - Cantrips: Fire Bolt, Ray of Frost, Prestidigitation, Light
-  - Spells Known (3): Chaos Bolt, Shield, Magic Missile
-  - Spell Slots: 3 (1st level)
+
+  ## Spells
+  - Fire Bolt (cantrip)
+  - Ray of Frost (cantrip)
+  - Prestidigitation (cantrip)
+  - Light (cantrip)
+  - Chaos Bolt (1st level)
+  - Shield (1st level)
+  - Magic Missile (1st level)
 ---
 
 ## Personality

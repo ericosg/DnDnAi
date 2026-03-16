@@ -70,7 +70,10 @@ characterSpec: |
   - Natural Explorer: Forest (double proficiency on INT/WIS checks, difficult terrain doesn't slow group)
   - Fighting Style: Archery (+2 to ranged attack rolls)
   - Spellcasting (WIS, spell save DC 12, +4 to hit, 2 slots)
-  - Spells Known: Hunter's Mark, Cure Wounds
+
+  ## Spells
+  - Hunter's Mark (1st level)
+  - Cure Wounds (1st level)
 ---
 
 ## Personality

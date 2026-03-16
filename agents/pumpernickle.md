@@ -65,9 +65,14 @@ characterSpec: |
   - Spellcasting (CHA, spell save DC 13, +5 to hit)
 
   ## Spells
-  - Cantrips: Vicious Mockery, Minor Illusion
-  - 1st Level (4 slots): Dissonant Whispers, Charm Person, Disguise Self, Tasha's Hideous Laughter
-  - 2nd Level (2 slots): Shatter, Blindness/Deafness
+  - Vicious Mockery (cantrip)
+  - Minor Illusion (cantrip)
+  - Dissonant Whispers (1st level)
+  - Charm Person (1st level)
+  - Disguise Self (1st level)
+  - Tasha's Hideous Laughter (1st level)
+  - Shatter (2nd level)
+  - Blindness/Deafness (2nd level)
 ---
 
 Pumpernickle is a humanoid of pale slate — chalk in hand, daggers at his belt, gaida under his arm. Nobody remembers his first performance, least of all him. He arrived already performing and has never stopped.

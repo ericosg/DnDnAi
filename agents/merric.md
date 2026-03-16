@@ -65,8 +65,14 @@ characterSpec: |
   - Naturally Stealthy (hide behind Medium+ creatures)
   - Bardic Inspiration (d6, 3/long rest)
   - Spellcasting (Charisma, spell save DC 13, +5 to hit)
-  - Cantrips: Vicious Mockery, Mage Hand
-  - Spells Known (4, 2 slots): Healing Word, Faerie Fire, Thunderwave, Charm Person
+
+  ## Spells
+  - Vicious Mockery (cantrip)
+  - Mage Hand (cantrip)
+  - Healing Word (1st level)
+  - Faerie Fire (1st level)
+  - Thunderwave (1st level)
+  - Charm Person (1st level)
 ---
 
 ## Personality

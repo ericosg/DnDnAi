@@ -19,6 +19,7 @@ The bot's parser is flexible — it handles `**Key:** Value`, `Key: Value`, and 
 **Level:** 1
 **Background:** Sage
 **Alignment:** Neutral Good
+**Gender:** Female
 
 **Strength:** 8
 **Dexterity:** 14
@@ -27,13 +28,15 @@ The bot's parser is flexible — it handles `**Key:** Value`, `Key: Value`, and 
 **Wisdom:** 12
 **Charisma:** 8
 
+**Proficiency Bonus:** +2
 **Armor Class:** 12
 **HP:** 7
-**Initiative:** 2
+**Initiative:** +2
 **Speed:** 30
-**Proficiency Bonus:** +2
 
-**Saving Throws:** INT, WIS
+## Saving Throws
+- Intelligence
+- Wisdom
 
 ## Skills
 - Arcana
@@ -52,6 +55,12 @@ The bot's parser is flexible — it handles `**Key:** Value`, `Key: Value`, and 
 - Fey Ancestry
 - Arcane Recovery
 - Spellcasting (INT-based, spell save DC 13, +5 to hit)
+
+## Spells
+- Fire Bolt (cantrip)
+- Mage Hand (cantrip)
+- Shield (1st level)
+- Magic Missile (1st level)
 
 ## Backstory
 A paragraph or two about who your character is, where they come from,
@@ -88,14 +97,20 @@ the story, so the more you give it, the more personal the narrative gets.
 - **Initiative is important.** It determines turn order in combat. If you skip it, the bot calculates it from your DEX modifier, but feats like Alert add bonuses that won't be captured automatically.
 - **Backstory drives the narrative.** The AI DM reads your backstory, personality, ideals, bonds, and flaws. A character with a rich backstory gets a much more personalized game.
 - **Don't stress about perfection.** Missing fields get sensible defaults. You can always `/end` and `/new-game` with an updated sheet.
+- **Never use `###` subheadings inside a section.** The parser exits a `## Section` when it encounters any heading (including `###`), so items after a `###` inside Skills, Equipment, Features, or Spells will be silently lost. Keep all list sections as flat bullet lists under `## Headings`.
+- **Spells go in their own section.** Use `## Spells` with one spell per bullet, not inside Features. Non-casters simply omit this section.
 
 ## New to D&D? Use AI to Help
 
 If you've never built a D&D character before, you don't have to figure out ability scores, proficiencies, and equipment on your own. Use any AI assistant (Claude, ChatGPT, etc.) with a prompt like:
 
-> I want to play a D&D 5e character who is [describe your concept — e.g., "a charming rogue who talks their way out of trouble" or "a nature-loving healer" or "a big angry barbarian"]. Create a Level 1 character sheet for me in this markdown format:
+> I want to play a D&D 5e character who is [describe your concept — e.g., "a charming rogue who talks their way out of trouble" or "a nature-loving healer" or "a big angry barbarian"]. Create a Level 1 character sheet for me in this exact markdown format:
 >
-> `**Name:** ...`, `**Race:** ...`, `**Class:** ...`, then all six ability scores, AC, HP, Skills, Equipment, Features, and a Backstory with Personality/Ideals/Bonds/Flaws.
+> - `**Key:** Value` for all scalar fields (Name, Race, Class, Level, Background, Alignment, Gender, all six ability scores, Proficiency Bonus, AC, HP, Initiative, Speed)
+> - `## Saving Throws` with one bullet per save
+> - `## Skills`, `## Equipment`, `## Features` with flat bullet lists (never `###` subheadings)
+> - `## Spells` with one spell per bullet, level noted inline like `- Fire Bolt (cantrip)` — omit this section for non-casters
+> - `## Backstory` with narrative text, then `**Personality:**`, `**Ideals:**`, `**Bonds:**`, `**Flaws:**` as bold-key-value pairs
 >
 > Make sure the stats follow D&D 5e rules (standard array or point buy).
 
