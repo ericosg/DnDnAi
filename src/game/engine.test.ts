@@ -92,7 +92,7 @@ mock.module("../discord/webhooks.js", () => ({
 }));
 
 mock.module("../discord/formatter.js", () => ({
-  dmNarrationEmbeds: (text: string) => [{ description: text, color: 0x7b2d8b }],
+  formatDMNarration: (text: string) => `---\n${text}\n---`,
 }));
 
 mock.module("../ai/guardrail.js", () => ({
@@ -553,9 +553,8 @@ describe("engine — typing indicators", () => {
     // DM narration should contain the formatted result, not the raw directive
     const dmMessage = sentMessages.find((m) => m.name === "Dungeon Master");
     expect(dmMessage).toBeDefined();
-    const embed = dmMessage?.embeds?.[0] as { description: string };
-    expect(embed.description).not.toContain("[[DAMAGE:");
-    expect(embed.description).toContain("damage");
+    expect(dmMessage?.content).not.toContain("[[DAMAGE:");
+    expect(dmMessage?.content).toContain("damage");
   });
 
   test("heal directive restores HP", async () => {

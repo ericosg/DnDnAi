@@ -32,7 +32,7 @@ import {
   characterEmbed,
   combatStatusEmbed,
   diceResultText,
-  dmNarrationEmbeds,
+  formatDMNarration,
   inventoryEmbed,
   partyStatusEmbed,
   systemEmbed,
@@ -339,9 +339,7 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
 
       const narration = await dmNarrate(gameState, history, openingPrompt);
 
-      await sendAsIdentity(channel, "Dungeon Master", "", {
-        embeds: dmNarrationEmbeds(narration),
-      });
+      await sendAsIdentity(channel, "Dungeon Master", formatDMNarration(narration));
 
       const entry: TurnEntry = {
         id: 1,
@@ -407,9 +405,7 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       const history = await loadHistory(gameState.id);
       const description = await dmLook(gameState, history, target);
 
-      await sendAsIdentity(channel, "Dungeon Master", "", {
-        embeds: dmNarrationEmbeds(description),
-      });
+      await sendAsIdentity(channel, "Dungeon Master", formatDMNarration(description));
       await interaction.editReply("The DM surveys the scene...");
       break;
     }
@@ -476,9 +472,11 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       const history = await loadHistory(gameState.id);
       const recap = await dmRecap(gameState, history);
 
-      await sendAsIdentity(channel, "Dungeon Master", "", {
-        embeds: dmNarrationEmbeds(`**Previously, on our adventure...**\n\n${recap}`),
-      });
+      await sendAsIdentity(
+        channel,
+        "Dungeon Master",
+        formatDMNarration(`**Previously, on our adventure...**\n\n${recap}`),
+      );
       await interaction.editReply("The DM recounts the tale...");
       break;
     }
@@ -574,11 +572,13 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       const askerName = player?.characterSheet.name ?? interaction.user.displayName;
       const answer = await dmAsk(gameState, history, question, askerName);
 
-      await sendAsIdentity(channel, "Dungeon Master", "", {
-        embeds: dmNarrationEmbeds(
+      await sendAsIdentity(
+        channel,
+        "Dungeon Master",
+        formatDMNarration(
           `**OOC — ${interaction.user.displayName} asks:**\n> ${question}\n\n${answer}`,
         ),
-      });
+      );
       await interaction.editReply("The DM has answered your question.");
       break;
     }

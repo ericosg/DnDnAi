@@ -4,7 +4,7 @@ import { compressNarrative, dmNarrate } from "../ai/dm.js";
 import { checkAgentResponse, checkDMResponse } from "../ai/guardrail.js";
 import { getNextAction } from "../ai/orchestrator.js";
 import { AGENT_DELAY_MS, COMPRESS_EVERY, HISTORY_WINDOW } from "../config.js";
-import { dmNarrationEmbeds } from "../discord/formatter.js";
+import { formatDMNarration } from "../discord/formatter.js";
 import { sendAsIdentity, startTyping } from "../discord/webhooks.js";
 import { log } from "../logger.js";
 import { appendHistory, loadHistory, saveGameState } from "../state/store.js";
@@ -399,10 +399,8 @@ async function handleDMTurn(
       dmResponse += "\n\n*Combat has ended.*";
     }
 
-    // Post DM narration as embed via webhook
-    await sendAsIdentity(channel, "Dungeon Master", "", {
-      embeds: dmNarrationEmbeds(dmResponse),
-    });
+    // Post DM narration as plain text via webhook
+    await sendAsIdentity(channel, "Dungeon Master", formatDMNarration(dmResponse));
     log.info("DM turn: narration posted to Discord");
 
     // Record in history
