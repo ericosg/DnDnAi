@@ -311,6 +311,41 @@ describe("engine — full round", () => {
     const dmEntries = appendedHistory.filter((e) => e.playerId === "dm");
     expect(dmEntries).toHaveLength(0);
   });
+
+  test("DM failure preserves round so agents are not re-prompted on retry", async () => {
+    // DM returns an invalid damage directive that will throw during processing
+    dmNarrateResponse =
+      "The stone burns! [[DAMAGE:abc TARGET:Grimbold Ironforge REASON:necrotic pulse]]";
+
+    const gs = makeGameState();
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I check for traps.",
+    };
+
+    markResponded(gs.id, "agent:grimbold");
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
+
+    // DM failed — no DM message posted via webhook
+    const dmMessages = sentMessages.filter((m) => m.name === "Dungeon Master");
+    expect(dmMessages).toHaveLength(0);
+
+    // Reset sent messages to track the retry
+    sentMessages = [];
+
+    // Resume the orchestrator — it should go straight to DM, NOT re-prompt agents
+    // Fix DM response so retry succeeds
+    dmNarrateResponse = "The party advances through the dungeon.";
+    await resumeOrchestrator(gs.id, mockChannel as never);
+
+    const agentRetries = sentMessages.filter((m) => m.name === "Grimbold");
+    expect(agentRetries).toHaveLength(0);
+  });
 });
 
 describe("engine — concurrency", () => {

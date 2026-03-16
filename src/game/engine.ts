@@ -223,7 +223,13 @@ async function orchestratorLoop(gameState: GameState, channel: TextChannel): Pro
       }
 
       case "prompt_dm": {
-        await handleDMTurn(gameState, history, channel);
+        try {
+          await handleDMTurn(gameState, history, channel);
+        } catch {
+          // DM failed — do NOT clear round so actions are retried next loop
+          log.warn("DM turn failed — round preserved for retry");
+          return;
+        }
         // After DM resolves, clear round for next cycle
         clearRound(gameState.id);
         log.info("Round cleared — ready for next player input");
@@ -769,5 +775,6 @@ async function handleDMTurn(
     stopTyping();
     log.error("DM turn: failed to generate narration:", err);
     await channel.send("*The Dungeon Master pauses to gather their thoughts...*");
+    throw err;
   }
 }
