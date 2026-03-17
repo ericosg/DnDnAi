@@ -31,6 +31,25 @@ export async function getNextAction(
   lastEntry: TurnEntry,
   respondedThisRound: Set<string>,
 ): Promise<OrchestratorDecision> {
+  // Fast path: pending rolls — check if we're waiting on player dice
+  if (gameState.pendingRolls?.length) {
+    const unfulfilled = gameState.pendingRolls.find((r) => !r.result);
+    if (unfulfilled) {
+      return {
+        action: "wait_for_human",
+        targetPlayerId: unfulfilled.playerId,
+        reason: `Waiting for ${unfulfilled.playerName} to roll ${unfulfilled.notation} (${unfulfilled.reason})`,
+        isIC: true,
+      };
+    }
+    // All rolls fulfilled — DM should resolve
+    return {
+      action: "prompt_dm",
+      reason: "All pending rolls fulfilled — DM resolves outcomes",
+      isIC: true,
+    };
+  }
+
   // Fast path: combat mode — follow initiative order
   if (gameState.combat.active) {
     return getCombatNextAction(gameState, respondedThisRound);

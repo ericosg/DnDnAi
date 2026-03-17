@@ -4,6 +4,7 @@
  */
 
 import type { GameState } from "../state/types.js";
+import { getFeatureChargeSummary, getSpellSlotSummary } from "./resources.js";
 
 /**
  * Build a one-line HP summary for all combatants when combat is active.
@@ -100,4 +101,24 @@ export function detectDirectiveMisuse(
   }
 
   return warnings;
+}
+
+/**
+ * Build a summary of remaining spell slots and feature charges for all casters.
+ * Returns null if no one has slots or charges.
+ */
+export function buildResourceSummary(gameState: GameState): string | null {
+  const parts: string[] = [];
+  for (const p of gameState.players) {
+    const slots = getSpellSlotSummary(p.characterSheet);
+    const charges = getFeatureChargeSummary(p.characterSheet);
+    if (slots || charges) {
+      let line = `${p.characterSheet.name}:`;
+      if (slots) line += ` Slots: ${slots}`;
+      if (charges) line += `${slots ? " |" : ""} ${charges}`;
+      parts.push(line);
+    }
+  }
+  if (parts.length === 0) return null;
+  return `Resources after DM turn: ${parts.join("; ")}`;
 }

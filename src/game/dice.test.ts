@@ -7,7 +7,10 @@ import {
   parseDiceDirective,
   parseDiceNotation,
   parseHealDirective,
+  parseRequestRollDirective,
   parseSpellDirective,
+  parseUpdateConditionDirective,
+  parseUpdateHPDirective,
   parseUseDirective,
   parseXPDirective,
   roll,
@@ -367,6 +370,114 @@ describe("parseConditionDirective", () => {
 
   test("returns empty for no directives", () => {
     expect(parseConditionDirective("normal text")).toHaveLength(0);
+  });
+});
+
+describe("parseUpdateHPDirective", () => {
+  test("parses standard UPDATE_HP directive", () => {
+    const text = "[[UPDATE_HP:15 TARGET:Fusetsu]]";
+    const results = parseUpdateHPDirective(text);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({ current: 15, target: "Fusetsu" });
+  });
+
+  test("parses multi-word target names", () => {
+    const text = "[[UPDATE_HP:20 TARGET:Grimbold Ironforge]]";
+    const results = parseUpdateHPDirective(text);
+    expect(results).toHaveLength(1);
+    expect(results[0].target).toBe("Grimbold Ironforge");
+  });
+
+  test("parses multiple directives", () => {
+    const text = "[[UPDATE_HP:15 TARGET:Fusetsu]] and [[UPDATE_HP:20 TARGET:Grimbold]]";
+    const results = parseUpdateHPDirective(text);
+    expect(results).toHaveLength(2);
+  });
+
+  test("returns empty array for no directives", () => {
+    const results = parseUpdateHPDirective("Just some normal text");
+    expect(results).toHaveLength(0);
+  });
+
+  test("parses zero HP", () => {
+    const text = "[[UPDATE_HP:0 TARGET:Fusetsu]]";
+    const results = parseUpdateHPDirective(text);
+    expect(results[0].current).toBe(0);
+  });
+});
+
+describe("parseUpdateConditionDirective", () => {
+  test("parses SET with multiple conditions", () => {
+    const text = "[[UPDATE_CONDITION:SET prone,frightened TARGET:Grimbold]]";
+    const results = parseUpdateConditionDirective(text);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({
+      conditions: ["prone", "frightened"],
+      target: "Grimbold",
+    });
+  });
+
+  test("parses SET none to clear all conditions", () => {
+    const text = "[[UPDATE_CONDITION:SET none TARGET:Fusetsu]]";
+    const results = parseUpdateConditionDirective(text);
+    expect(results).toHaveLength(1);
+    expect(results[0].conditions).toEqual([]);
+  });
+
+  test("parses multi-word target names", () => {
+    const text = "[[UPDATE_CONDITION:SET prone TARGET:Grimbold Ironforge]]";
+    const results = parseUpdateConditionDirective(text);
+    expect(results[0].target).toBe("Grimbold Ironforge");
+  });
+
+  test("returns empty array for no directives", () => {
+    const results = parseUpdateConditionDirective("Just some normal text");
+    expect(results).toHaveLength(0);
+  });
+
+  test("case insensitive SET", () => {
+    const text = "[[UPDATE_CONDITION:set poisoned TARGET:Nyx]]";
+    const results = parseUpdateConditionDirective(text);
+    expect(results).toHaveLength(1);
+    expect(results[0].conditions).toEqual(["poisoned"]);
+  });
+});
+
+describe("parseRequestRollDirective", () => {
+  test("parses standard REQUEST_ROLL directive", () => {
+    const text = "[[REQUEST_ROLL:d20+5 FOR:Fusetsu REASON:Perception check]]";
+    const results = parseRequestRollDirective(text);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({
+      notation: "d20+5",
+      forName: "Fusetsu",
+      reason: "Perception check",
+    });
+  });
+
+  test("parses multi-word character names", () => {
+    const text = "[[REQUEST_ROLL:d20+3 FOR:Grimbold Ironforge REASON:Athletics check]]";
+    const results = parseRequestRollDirective(text);
+    expect(results).toHaveLength(1);
+    expect(results[0].forName).toBe("Grimbold Ironforge");
+  });
+
+  test("parses multiple directives", () => {
+    const text =
+      "[[REQUEST_ROLL:d20+5 FOR:Fusetsu REASON:attack]] and [[REQUEST_ROLL:d20+3 FOR:Grimbold REASON:attack]]";
+    const results = parseRequestRollDirective(text);
+    expect(results).toHaveLength(2);
+  });
+
+  test("returns empty array for no directives", () => {
+    const results = parseRequestRollDirective("Just some normal text");
+    expect(results).toHaveLength(0);
+  });
+
+  test("does not match regular ROLL directives", () => {
+    const text = "[[ROLL:d20+5 FOR:Fusetsu REASON:attack]]";
+    const results = parseRequestRollDirective(text);
+    expect(results).toHaveLength(0);
   });
 });
 

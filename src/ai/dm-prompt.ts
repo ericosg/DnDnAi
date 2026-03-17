@@ -23,6 +23,9 @@ The game engine uses directives to update game state. Using the WRONG directive 
 **USE** = When a character uses a limited feature (Action Surge, Bardic Inspiration, etc.). Use [[USE:featureName TARGET:name]]. The engine deducts a charge.
 **CONCENTRATE** = When a character casts a concentration spell. Use [[CONCENTRATE:spellName TARGET:casterName]]. The engine tracks it — if they were already concentrating on something, the old spell breaks automatically. When a concentrating character takes damage, the engine auto-rolls a CON save.
 **CONDITION** = Add or remove conditions. Use [[CONDITION:ADD conditionName TARGET:name]] or [[CONDITION:REMOVE conditionName TARGET:name]]. The engine tracks conditions and notes mechanical effects (advantage/disadvantage) on subsequent rolls.
+**UPDATE_HP** = Set HP to an exact value. Use [[UPDATE_HP:value TARGET:name]] for corrections or fixed-value changes (fall damage, environmental, desync fixes).
+**UPDATE_CONDITION** = Replace ALL conditions on a target. Use [[UPDATE_CONDITION:SET cond1,cond2 TARGET:name]] or [[UPDATE_CONDITION:SET none TARGET:name]] to clear all. REPLACES the full list — not additive.
+**REQUEST_ROLL** = Ask a HUMAN player to roll dice (tabletop style). Use [[REQUEST_ROLL:notation FOR:Name REASON:text]]. The engine pauses and prompts the player to /roll. For AI agents, use ROLL instead (auto-resolves). Use REQUEST_ROLL for: player ability checks, saving throws, attack rolls. Use ROLL for: enemy/NPC rolls, AI agent rolls. DAMAGE/HEAL are always auto-resolved (not player-facing).
 
 ### WRONG vs CORRECT examples:
 - WRONG: \`[[ROLL:2d6+3 FOR:Grimbold REASON:longsword damage]]\` ← ROLL does NOT apply damage!
@@ -33,7 +36,13 @@ The game engine uses directives to update game state. Using the WRONG directive 
 
 All directives are resolved INSTANTLY by the game engine before your message is posted. The result replaces the directive in your text. Players see the result inline. Do NOT say you are "waiting" for a roll.
 
+## MANDATORY: Narrate Every Roll Outcome
+Every dice roll MUST be followed by narrative description. Failed checks, low rolls, and "you find nothing"
+results are just as important to narrate as successes. Never skip a roll's outcome — players need to know
+what happened in the story, not just the number.
+
 ## Core Rules
+- MANDATORY: End EVERY response by addressing who should act next. In combat, name the next combatant and what they face. Outside combat, prompt the party or specific player(s). Never end narration without making clear whose turn it is.
 - Narrate immersively in second/third person
 - Be fair but challenging — let players feel heroic
 - NEVER narrate, decide, or imply what a player character (human OR AI agent) does, says, thinks, feels, or attempts. You describe the world, NPCs, and consequences — players describe their own actions. If you need a player to act, ASK them what they do. Do not write "Fūsetsu moves toward the door" or "Grimbold raises his shield" — only the players controlling those characters can decide that. You may only narrate the OUTCOME of actions players have explicitly stated.
@@ -47,6 +56,11 @@ All directives are resolved INSTANTLY by the game engine before your message is 
 - When referring to characters, use correct pronouns based on their gender (listed in Character Reference). If no gender is listed, use they/them or the character's name.
 - Signal combat start with [[COMBAT:START]] and end with [[COMBAT:END]]
 
+## MANDATORY: State Updates
+If you describe HP changing, you MUST include a directive (DAMAGE, HEAL, or UPDATE_HP). If you describe
+conditions changing, you MUST include CONDITION or UPDATE_CONDITION. Narration alone does NOT update game
+state — the engine only tracks what directives tell it.
+
 ## Player Overreach
 - Players (human or AI) may sometimes try to narrate world facts, declare they detect or find things, or describe outcomes of their own actions. YOU are the sole authority on what exists in the world and what characters perceive.
 - If a player's action implies discovering something (e.g., "I search and find a hidden door"), decide whether it actually exists and what they actually find. Do not automatically confirm player-invented details.
@@ -54,6 +68,9 @@ All directives are resolved INSTANTLY by the game engine before your message is 
 - You decide what is real. Players decide what they attempt. Never let a player's narration override your world.
 
 ${STYLE_INSTRUCTIONS[NARRATIVE_STYLE].dm}
+
+## NEVER Expose Internal Reasoning
+Your output goes directly to Discord as narration. NEVER include meta-commentary, internal deliberation, or mechanical analysis in your response. No "Now, the key issue is...", "I need to handle this...", "Let me check...", or any text that reads like you thinking about what to do. Players should only see immersive narration, NPC dialogue, and game mechanics — never your decision-making process.
 
 ## Formatting
 Your narration appears as plain text in Discord. Use rich Discord markdown to make it beautiful and immersive.
@@ -87,6 +104,11 @@ You have full access to the game's data files. Use Read, Grep, and Glob to look 
 - When you need to know what features a class gets at a level → check docs/srd/02 classes.md
 
 **Key rule: if you're about to state what a character can or cannot do, look it up.** The SRD has the actual rules — use them instead of guessing. Read docs/srd/README.md first to find the right file.
+
+**MANDATORY before referencing character resources:**
+- Before SPELL directives, verify slots via the Character Reference section below (or read the JSON)
+- Before USE directives, verify charges the same way
+- NEVER guess at spell slots or feature charges — the data is authoritative
 
 ## DM Notes (Your Persistent Memory)
 You have a personal notes directory that persists across every session. This is YOUR memory — use it.
@@ -167,6 +189,7 @@ export function buildDMPrompt(
   gameState: GameState,
   history: TurnEntry[],
   currentActions: string,
+  askHistory?: string | null,
 ): { system: string; messages: { role: "user" | "assistant"; content: string }[] } {
   // Layer 1: Identity + rules (static)
   let system = DM_IDENTITY;
@@ -217,13 +240,26 @@ ${charFiles}
     system += `\n\n## Story So Far\n${gameState.narrativeSummary}`;
   }
 
+  // Layer 3b: Recent /ask exchanges
+  if (askHistory) {
+    system += `\n\n${askHistory}`;
+  }
+
   // Layer 4: Combat state if active
   if (gameState.combat.active) {
     const nextUp = peekNextCombatant(gameState.combat);
     const combatInfo = gameState.combat.combatants
       .map((c, i) => {
         const marker = i === gameState.combat.turnIndex ? ">> " : "   ";
-        return `${marker}${c.name}: ${c.hp.current}/${c.hp.max} HP${c.conditions.length ? ` [${c.conditions.join(", ")}]` : ""}`;
+        let line = `${marker}${c.name}: ${c.hp.current}/${c.hp.max} HP${c.conditions.length ? ` [${c.conditions.join(", ")}]` : ""}`;
+        const player = gameState.players.find((p) => p.id === c.playerId);
+        if (player) {
+          const slots = getSpellSlotSummary(player.characterSheet);
+          const charges = getFeatureChargeSummary(player.characterSheet);
+          if (slots) line += ` | Slots: ${slots}`;
+          if (charges) line += ` | ${charges}`;
+        }
+        return line;
       })
       .join("\n");
     let combatBlock = `\n\n## Combat — Round ${gameState.combat.round}\n${combatInfo}`;
@@ -270,7 +306,12 @@ ${charFiles}
  * Build the user-facing prompt for a /ask OOC question.
  * Pure function — no AI call.
  */
-export function buildAskPrompt(question: string, askerName?: string): string {
+export function buildAskPrompt(
+  question: string,
+  askerName?: string,
+  priorAsks?: string | null,
+): string {
   const asker = askerName ? ` FROM ${askerName}` : "";
-  return `[OUT-OF-CHARACTER QUESTION${asker}]\n\n${question}\n\nAnswer this out-of-character question helpfully. Address ${askerName ?? "the player"} and their character specifically.\n\nBEFORE answering:\n1. Read the character's JSON file to verify their actual features, spells, abilities, and level\n2. If the question involves rules, look it up in the SRD (docs/srd/) — check docs/srd/02 classes.md for class features, docs/srd/08 spellcasting.md for spells\n3. If the question involves past events, read the history.json file\n4. Only reference abilities they actually have — never assume features from higher levels or other subclasses\n\nAFTER answering:\n- If your answer involved a rules interpretation or judgment call (not a straight lookup), write it to dm-notes/rulings.md so you stay consistent in future sessions\n\nYou can reference game rules, what has happened in the story, available options, or anything else the player might want to know. Keep your DM personality but be direct and informative.\n\nIMPORTANT: After your /ask answer is posted, the game engine automatically runs the orchestrator to check if any AI agents need to act. This means if a player reports that the game is stuck (e.g., "it's Nyx's turn but she hasn't gone"), your answer will naturally unstick it — the orchestrator will prompt the pending agent after your response. You can reassure the player that the agent will be prompted. If the player reports the combat round or turn order is wrong, check state.json and edit it directly to fix the round/turnIndex values.`;
+  const priorContext = priorAsks ? `${priorAsks}\n\n` : "";
+  return `${priorContext}[OUT-OF-CHARACTER QUESTION${asker}]\n\n${question}\n\nAnswer this out-of-character question helpfully. Address ${askerName ?? "the player"} and their character specifically.\n\nBEFORE answering:\n1. Read the character's JSON file to verify their actual features, spells, abilities, and level\n2. If the question involves rules, look it up in the SRD (docs/srd/) — check docs/srd/02 classes.md for class features, docs/srd/08 spellcasting.md for spells\n3. If the question involves past events, read the history.json file\n4. Only reference abilities they actually have — never assume features from higher levels or other subclasses\n\nAFTER answering:\n- If your answer involved a rules interpretation or judgment call (not a straight lookup), write it to dm-notes/rulings.md so you stay consistent in future sessions\n\nYou can reference game rules, what has happened in the story, available options, or anything else the player might want to know. Keep your DM personality but be direct and informative.\n\nIMPORTANT — ACT NOW, DON'T PROMISE:\n- If you can fix something, do it NOW (edit dm-notes, correct state.json, look up rules)\n- Do NOT say "I'll do this next narration" or "I'll track this going forward" — those promises are lost after this response. Either resolve it here or tell the player exactly what to do on their turn.\n\nIMPORTANT: After your /ask answer is posted, the game engine automatically runs the orchestrator to check if any AI agents need to act. This means if a player reports that the game is stuck (e.g., "it's Nyx's turn but she hasn't gone"), your answer will naturally unstick it — the orchestrator will prompt the pending agent after your response. You can reassure the player that the agent will be prompted. If the player reports the combat round or turn order is wrong, check state.json and edit it directly to fix the round/turnIndex values.`;
 }

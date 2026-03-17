@@ -216,6 +216,63 @@ export function endCombat(gameState: GameState): void {
   gameState.combat.combatants = [];
 }
 
+/**
+ * Set a character's HP to an exact value, clamped to [0, max].
+ * Works both in and out of combat — updates combatant (if in combat) and character sheet.
+ * Returns true if the target was found and updated.
+ */
+export function setHP(gameState: GameState, targetName: string, newHP: number): boolean {
+  const nameLower = targetName.toLowerCase();
+  let updated = false;
+
+  // Update combatant if in combat
+  const combatant = gameState.combat.combatants.find((c) => c.name.toLowerCase() === nameLower);
+  if (combatant) {
+    combatant.hp.current = Math.max(0, Math.min(combatant.hp.max, newHP));
+    // Clear death saves if healing from 0
+    if (combatant.hp.current > 0) {
+      combatant.deathSaves = { successes: 0, failures: 0 };
+      combatant.conditions = combatant.conditions.filter(
+        (c) => c !== "unconscious" && c !== "stable",
+      );
+    }
+    updated = true;
+  }
+
+  // Always update character sheet
+  const player = gameState.players.find((p) => p.characterSheet.name.toLowerCase() === nameLower);
+  if (player) {
+    const cs = player.characterSheet;
+    cs.hp.current = Math.max(0, Math.min(cs.hp.max, newHP));
+    // Sync combatant if it exists
+    if (combatant) {
+      combatant.hp.current = cs.hp.current;
+    }
+    updated = true;
+  }
+
+  return updated;
+}
+
+/**
+ * Replace ALL conditions on a combatant. Pass empty array to clear.
+ * Only works during combat (conditions are tracked on combatants).
+ * Returns true if the target was found and updated.
+ */
+export function setConditions(
+  gameState: GameState,
+  targetName: string,
+  conditions: string[],
+): boolean {
+  const combatant = gameState.combat.combatants.find(
+    (c) => c.name.toLowerCase() === targetName.toLowerCase(),
+  );
+  if (!combatant) return false;
+
+  combatant.conditions = conditions;
+  return true;
+}
+
 function hasCondition(combatant: Combatant, condition: string): boolean {
   return combatant.conditions.includes(condition);
 }

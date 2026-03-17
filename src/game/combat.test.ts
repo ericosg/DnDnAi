@@ -7,6 +7,8 @@ import {
   isCombatOver,
   peekNextCombatant,
   rollDeathSave,
+  setConditions,
+  setHP,
   startCombat,
 } from "./combat.js";
 
@@ -440,6 +442,130 @@ describe("peekNextCombatant", () => {
     peekNextCombatant(combat);
     expect(combat.turnIndex).toBe(0);
     expect(combat.round).toBe(1);
+  });
+});
+
+describe("setHP", () => {
+  test("sets combatant HP to exact value", () => {
+    const player = makePlayer();
+    const gs = makeGameState([player]);
+    makeActiveCombat(gs, [makeCombatant()]);
+
+    expect(setHP(gs, "TestChar", 15)).toBe(true);
+    expect(gs.combat.combatants[0].hp.current).toBe(15);
+  });
+
+  test("syncs player character sheet HP", () => {
+    const player = makePlayer();
+    const gs = makeGameState([player]);
+    makeActiveCombat(gs, [makeCombatant()]);
+
+    setHP(gs, "TestChar", 12);
+    expect(player.characterSheet.hp.current).toBe(12);
+  });
+
+  test("clamps to 0", () => {
+    const player = makePlayer();
+    const gs = makeGameState([player]);
+    makeActiveCombat(gs, [makeCombatant()]);
+
+    setHP(gs, "TestChar", -5);
+    expect(gs.combat.combatants[0].hp.current).toBe(0);
+  });
+
+  test("clamps to max HP", () => {
+    const player = makePlayer();
+    const gs = makeGameState([player]);
+    makeActiveCombat(gs, [makeCombatant()]);
+
+    setHP(gs, "TestChar", 999);
+    expect(gs.combat.combatants[0].hp.current).toBe(20);
+  });
+
+  test("returns false for unknown target", () => {
+    const gs = makeGameState([makePlayer()]);
+    makeActiveCombat(gs, [makeCombatant()]);
+
+    expect(setHP(gs, "Nobody", 10)).toBe(false);
+  });
+
+  test("clears death saves when healed from 0", () => {
+    const player = makePlayer();
+    const gs = makeGameState([player]);
+    const combatant = makeCombatant({
+      hp: { max: 20, current: 0, temp: 0 },
+      conditions: ["unconscious"],
+      deathSaves: { successes: 2, failures: 1 },
+    });
+    makeActiveCombat(gs, [combatant]);
+
+    setHP(gs, "TestChar", 5);
+    expect(combatant.deathSaves).toEqual({ successes: 0, failures: 0 });
+    expect(combatant.conditions).not.toContain("unconscious");
+  });
+
+  test("case-insensitive target matching", () => {
+    const player = makePlayer();
+    const gs = makeGameState([player]);
+    makeActiveCombat(gs, [makeCombatant()]);
+
+    expect(setHP(gs, "testchar", 10)).toBe(true);
+    expect(gs.combat.combatants[0].hp.current).toBe(10);
+  });
+
+  test("works outside combat (updates character sheet only)", () => {
+    const player = makePlayer();
+    const gs = makeGameState([player]);
+    // No combat active — combat.combatants is empty
+
+    expect(setHP(gs, "TestChar", 12)).toBe(true);
+    expect(player.characterSheet.hp.current).toBe(12);
+  });
+
+  test("clamps to character sheet max when outside combat", () => {
+    const player = makePlayer();
+    const gs = makeGameState([player]);
+
+    setHP(gs, "TestChar", 999);
+    expect(player.characterSheet.hp.current).toBe(20); // max is 20
+  });
+});
+
+describe("setConditions", () => {
+  test("replaces all conditions", () => {
+    const player = makePlayer();
+    const gs = makeGameState([player]);
+    const combatant = makeCombatant({ conditions: ["prone", "frightened"] });
+    makeActiveCombat(gs, [combatant]);
+
+    expect(setConditions(gs, "TestChar", ["poisoned"])).toBe(true);
+    expect(combatant.conditions).toEqual(["poisoned"]);
+  });
+
+  test("clears all conditions with empty array", () => {
+    const player = makePlayer();
+    const gs = makeGameState([player]);
+    const combatant = makeCombatant({ conditions: ["prone", "frightened"] });
+    makeActiveCombat(gs, [combatant]);
+
+    setConditions(gs, "TestChar", []);
+    expect(combatant.conditions).toEqual([]);
+  });
+
+  test("returns false for unknown target", () => {
+    const gs = makeGameState([makePlayer()]);
+    makeActiveCombat(gs, [makeCombatant()]);
+
+    expect(setConditions(gs, "Nobody", ["prone"])).toBe(false);
+  });
+
+  test("case-insensitive target matching", () => {
+    const player = makePlayer();
+    const gs = makeGameState([player]);
+    makeActiveCombat(gs, [makeCombatant()]);
+
+    expect(setConditions(gs, "testchar", ["blinded"])).toBe(true);
+    expect(gs.combat.combatants[0].conditions).toEqual(["blinded"]);
   });
 });
 

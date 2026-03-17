@@ -9,8 +9,9 @@ export async function dmNarrate(
   gameState: GameState,
   history: TurnEntry[],
   currentActions: string,
+  askHistory?: string | null,
 ): Promise<string> {
-  const { system, messages } = buildDMPrompt(gameState, history, currentActions);
+  const { system, messages } = buildDMPrompt(gameState, history, currentActions, askHistory);
   return chatAgentic(models.dm, system, messages, DM_ALLOWED_TOOLS, "DM");
 }
 
@@ -41,11 +42,13 @@ export async function dmAsk(
   history: TurnEntry[],
   question: string,
   askerName?: string,
+  askHistory?: string | null,
 ): Promise<string> {
   const { system, messages } = buildDMPrompt(
     gameState,
     history,
-    buildAskPrompt(question, askerName),
+    buildAskPrompt(question, askerName, askHistory),
+    askHistory,
   );
   return chatAgentic(models.dm, system, messages, DM_ALLOWED_TOOLS, "DM ask");
 }

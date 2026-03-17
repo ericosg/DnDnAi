@@ -1,6 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { GameState } from "../state/types.js";
-import { buildCombatHPSummary, detectDirectiveMisuse } from "./hp-reconciliation.js";
+import {
+  buildCombatHPSummary,
+  buildResourceSummary,
+  detectDirectiveMisuse,
+} from "./hp-reconciliation.js";
 
 function makeGameState(combatActive: boolean): GameState {
   return {
@@ -107,5 +111,103 @@ describe("detectDirectiveMisuse", () => {
     const narration = "`2d6+3` [4, 2] +3 = **9** → **9 damage** to Grimbold (HP: 22/31)";
     const warnings = detectDirectiveMisuse(narration, ["Grimbold"], []);
     expect(warnings).toHaveLength(0);
+  });
+});
+
+describe("buildResourceSummary", () => {
+  test("returns null when no players have resources", () => {
+    const gs = makeGameState(true);
+    // Default test players have no spellSlots or featureCharges
+    expect(buildResourceSummary(gs)).toBeNull();
+  });
+
+  test("includes spell slots for casters", () => {
+    const gs = makeGameState(true);
+    gs.players = [
+      {
+        id: "p1",
+        name: "Caster",
+        isAgent: false,
+        characterSheet: {
+          name: "Hierophantis",
+          race: "Half-Elf",
+          class: "Cleric",
+          level: 3,
+          background: "Acolyte",
+          alignment: "Good",
+          abilityScores: {
+            strength: 10,
+            dexterity: 10,
+            constitution: 10,
+            wisdom: 16,
+            intelligence: 10,
+            charisma: 10,
+          },
+          proficiencyBonus: 2,
+          savingThrows: [],
+          skills: [],
+          hp: { max: 20, current: 20, temp: 0 },
+          armorClass: 15,
+          initiative: 0,
+          speed: 30,
+          equipment: [],
+          features: [],
+          backstory: "",
+          spellSlots: [
+            { level: 1, max: 4, current: 2 },
+            { level: 2, max: 2, current: 1 },
+          ],
+        },
+        joinedAt: new Date().toISOString(),
+      },
+    ];
+    const result = buildResourceSummary(gs);
+    expect(result).not.toBeNull();
+    expect(result).toContain("Hierophantis");
+    expect(result).toContain("Slots:");
+    expect(result).toContain("1st: 2/4");
+    expect(result).toContain("2nd: 1/2");
+  });
+
+  test("includes feature charges", () => {
+    const gs = makeGameState(true);
+    gs.players = [
+      {
+        id: "p1",
+        name: "Fighter",
+        isAgent: false,
+        characterSheet: {
+          name: "Grimbold",
+          race: "Dwarf",
+          class: "Fighter",
+          level: 3,
+          background: "Soldier",
+          alignment: "Neutral",
+          abilityScores: {
+            strength: 16,
+            dexterity: 12,
+            constitution: 16,
+            wisdom: 10,
+            intelligence: 10,
+            charisma: 8,
+          },
+          proficiencyBonus: 2,
+          savingThrows: [],
+          skills: [],
+          hp: { max: 31, current: 31, temp: 0 },
+          armorClass: 18,
+          initiative: 1,
+          speed: 25,
+          equipment: [],
+          features: [],
+          backstory: "",
+          featureCharges: [{ name: "Action Surge", max: 1, current: 0, resetsOn: "short" }],
+        },
+        joinedAt: new Date().toISOString(),
+      },
+    ];
+    const result = buildResourceSummary(gs);
+    expect(result).not.toBeNull();
+    expect(result).toContain("Action Surge: 0/1");
   });
 });

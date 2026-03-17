@@ -14,6 +14,7 @@ import { chatAgentic } from "../ai/claude.js";
 import { dmAsk, dmLook, dmNarrate, dmRecap } from "../ai/dm.js";
 import { buildHelpPrompt, HELP_ALLOWED_TOOLS } from "../ai/help-prompt.js";
 import { config, models, VERSION } from "../config.js";
+import { addAskExchange, formatAskHistoryForPrompt } from "../game/ask-history.js";
 import { buildAgentCharacter, parseCharacterSheet } from "../game/characters.js";
 import { roll as rollDice } from "../game/dice.js";
 import { processTurn, resumeOrchestrator } from "../game/engine.js";
@@ -393,6 +394,33 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       const label = interaction.options.getString("label") ?? undefined;
       try {
         const result = rollDice(notation, label);
+
+        // Check for pending rolls matching this player
+        const gameState = await findGameByChannel(channel.id);
+        if (gameState?.pendingRolls?.length) {
+          const pendingIdx = gameState.pendingRolls.findIndex(
+            (r) => r.playerId === interaction.user.id && !r.result,
+          );
+          if (pendingIdx !== -1) {
+            const pending = gameState.pendingRolls[pendingIdx];
+            pending.result = result;
+            await saveGameState(gameState);
+
+            await interaction.reply(
+              `🎲 **${interaction.user.displayName}** rolls for **${pending.reason}**: ${diceResultText(result)}`,
+            );
+
+            // Check if all pending rolls are now fulfilled
+            const allFulfilled = gameState.pendingRolls.every((r) => r.result);
+            if (allFulfilled) {
+              log.info("All pending rolls fulfilled — resuming orchestrator");
+              resumeOrchestrator(gameState.id, channel);
+            }
+            break;
+          }
+        }
+
+        // Normal roll (no pending roll context)
         await interaction.reply(
           `**${interaction.user.displayName}** rolls ${diceResultText(result)}`,
         );
@@ -581,7 +609,16 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       const history = await loadHistory(gameState.id);
       const player = gameState.players.find((p) => p.id === interaction.user.id);
       const askerName = player?.characterSheet.name ?? interaction.user.displayName;
-      const answer = await dmAsk(gameState, history, question, askerName);
+      const askHistoryStr = formatAskHistoryForPrompt(gameState.id);
+      const answer = await dmAsk(gameState, history, question, askerName, askHistoryStr);
+
+      // Record the exchange in ask history (in-memory, for future DM context)
+      addAskExchange(gameState.id, {
+        question,
+        answer,
+        askerName,
+        timestamp: new Date().toISOString(),
+      });
 
       await sendAsIdentity(
         channel,
@@ -591,6 +628,17 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
         ),
       );
       await interaction.editReply("The DM has answered your question.");
+
+      // Record a system entry so the main DM context sees what was discussed
+      const { appendHistory } = await import("../state/store.js");
+      await appendHistory(gameState.id, {
+        id: 0,
+        timestamp: new Date().toISOString(),
+        playerId: "system",
+        playerName: "System",
+        type: "system",
+        content: `[/ask from ${askerName}]: ${question}\n[DM answered]: ${answer.slice(0, 500)}`,
+      });
 
       // Resume orchestrator after /ask — if the game is stuck (e.g., an agent
       // should have been prompted but wasn't), this unsticks it. The DM's answer

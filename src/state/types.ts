@@ -96,6 +96,15 @@ export interface AgentPersonality {
   avatarUrl?: string;
 }
 
+export interface PendingRoll {
+  id: string;
+  playerId: string;
+  playerName: string;
+  notation: string;
+  reason: string;
+  result?: DiceResult;
+}
+
 export interface GameState {
   id: string;
   channelId: string;
@@ -107,6 +116,7 @@ export interface GameState {
   turnCount: number;
   createdAt: string;
   lastActivity: string;
+  pendingRolls?: PendingRoll[];
 }
 
 export interface OrchestratorDecision {

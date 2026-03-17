@@ -166,6 +166,87 @@ describe("getNextAction — exploration mode", () => {
   });
 });
 
+describe("getNextAction — pending rolls", () => {
+  test("waits for human when unfulfilled pending roll exists", async () => {
+    const human = makePlayer();
+    const gs = makeGameState([human]);
+    gs.pendingRolls = [
+      {
+        id: "roll-1",
+        playerId: "human1",
+        playerName: "HumanChar",
+        notation: "d20+5",
+        reason: "Perception check",
+      },
+    ];
+    const entry = makeEntry();
+    const responded = new Set<string>();
+
+    const decision = await getNextAction(gs, [entry], entry, responded);
+    expect(decision.action).toBe("wait_for_human");
+    expect(decision.targetPlayerId).toBe("human1");
+    expect(decision.reason).toContain("Perception check");
+  });
+
+  test("prompts DM when all pending rolls fulfilled", async () => {
+    const human = makePlayer();
+    const gs = makeGameState([human]);
+    gs.pendingRolls = [
+      {
+        id: "roll-1",
+        playerId: "human1",
+        playerName: "HumanChar",
+        notation: "d20+5",
+        reason: "Perception check",
+        result: { notation: "d20+5", rolls: [14], modifier: 5, total: 19 },
+      },
+    ];
+    const entry = makeEntry();
+    const responded = new Set<string>();
+
+    const decision = await getNextAction(gs, [entry], entry, responded);
+    expect(decision.action).toBe("prompt_dm");
+    expect(decision.reason).toContain("fulfilled");
+  });
+
+  test("pending rolls take priority over combat logic", async () => {
+    const human = makePlayer();
+    const agent = makeAgent();
+    const gs = makeGameState([human, agent]);
+    gs.combat = {
+      active: true,
+      round: 1,
+      turnIndex: 0,
+      combatants: [
+        {
+          playerId: "human1",
+          name: "HumanChar",
+          initiative: 20,
+          hp: { max: 20, current: 20, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+      ],
+    };
+    gs.pendingRolls = [
+      {
+        id: "roll-1",
+        playerId: "human1",
+        playerName: "HumanChar",
+        notation: "d20+5",
+        reason: "attack roll",
+      },
+    ];
+    const entry = makeEntry();
+    const responded = new Set<string>();
+
+    const decision = await getNextAction(gs, [entry], entry, responded);
+    // Should wait for pending roll, not follow combat turn order
+    expect(decision.action).toBe("wait_for_human");
+    expect(decision.reason).toContain("attack roll");
+  });
+});
+
 describe("getNextAction — combat mode", () => {
   test("prompts agent on their combat turn", async () => {
     const human = makePlayer();

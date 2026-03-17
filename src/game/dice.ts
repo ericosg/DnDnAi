@@ -321,3 +321,65 @@ export function parseHealDirective(
   }
   return results;
 }
+
+/**
+ * Parse UPDATE_HP directives like [[UPDATE_HP:15 TARGET:Grimbold]]
+ * Sets HP to an exact value (for corrections, environmental damage, desync fixes).
+ */
+export function parseUpdateHPDirective(text: string): { current: number; target: string }[] {
+  const regex = /\[\[UPDATE_HP\s*:\s*(\d+)\s+TARGET\s*:\s*(.+?)\s*\]\]/g;
+  const results: { current: number; target: string }[] = [];
+  let match: RegExpExecArray | null = null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: idiomatic regex exec loop
+  while ((match = regex.exec(text)) !== null) {
+    results.push({
+      current: parseInt(match[1].trim(), 10),
+      target: match[2].trim(),
+    });
+  }
+  return results;
+}
+
+/**
+ * Parse UPDATE_CONDITION directives like [[UPDATE_CONDITION:SET prone,frightened TARGET:Grimbold]]
+ * or [[UPDATE_CONDITION:SET none TARGET:Grimbold]] to clear all conditions.
+ * REPLACES the full condition list — not additive.
+ */
+export function parseUpdateConditionDirective(
+  text: string,
+): { conditions: string[]; target: string }[] {
+  const regex = /\[\[UPDATE_CONDITION\s*:\s*SET\s+(.+?)\s+TARGET\s*:\s*(.+?)\s*\]\]/gi;
+  const results: { conditions: string[]; target: string }[] = [];
+  let match: RegExpExecArray | null = null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: idiomatic regex exec loop
+  while ((match = regex.exec(text)) !== null) {
+    const raw = match[1].trim().toLowerCase();
+    const conditions = raw === "none" ? [] : raw.split(",").map((c) => c.trim());
+    results.push({
+      conditions,
+      target: match[2].trim(),
+    });
+  }
+  return results;
+}
+
+/**
+ * Parse REQUEST_ROLL directives like [[REQUEST_ROLL:d20+5 FOR:Name REASON:Perception check]]
+ * Asks a human player to roll dice (tabletop style).
+ */
+export function parseRequestRollDirective(
+  text: string,
+): { notation: string; forName: string; reason: string }[] {
+  const regex = /\[\[REQUEST_ROLL\s*:\s*([^\s]+)\s+FOR\s*:\s*(.+?)\s+REASON\s*:\s*([^\]]+)\]\]/g;
+  const results: { notation: string; forName: string; reason: string }[] = [];
+  let match: RegExpExecArray | null = null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: idiomatic regex exec loop
+  while ((match = regex.exec(text)) !== null) {
+    results.push({
+      notation: match[1].trim(),
+      forName: match[2].trim(),
+      reason: match[3].trim(),
+    });
+  }
+  return results;
+}

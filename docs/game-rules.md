@@ -14,18 +14,29 @@ How DnDnAi implements D&D 5e rules and where it deviates for a Discord-based AI-
 | `2d20kl1` | Roll 2d20, keep lowest 1 (disadvantage) |
 
 ### How Dice Work in Play
-The DM AI **never generates random numbers**. The flow is:
+The DM AI **never generates random numbers**. There are two flows:
 
+#### Instant Rolls (DM narrates outcome immediately)
 1. DM determines a check is needed and outputs a directive:
    ```
    [[ROLL:d20+5 FOR:Grimbold REASON:Athletics check to climb the wall]]
    ```
-2. The engine parses this directive
-3. Real dice are rolled using `Math.random()`
-4. The directive text is replaced with formatted results
-5. The modified narration is posted to Discord
+2. The engine parses this directive, rolls real dice using `Math.random()`
+3. The directive text is replaced with formatted results
+4. The DM's narration (including the roll outcome) is posted to Discord
 
-Players can also roll manually with `/roll 2d6+3`.
+#### Tabletop Rolls (player rolls their own dice)
+1. DM outputs a request for the player to roll:
+   ```
+   [[REQUEST_ROLL:d20+5 FOR:Grimbold REASON:Athletics check to climb the wall]]
+   ```
+2. The engine creates a `PendingRoll` and shows a `/roll` prompt in the narration
+3. The player uses `/roll d20+5` to fulfill the pending roll
+4. Once all pending rolls are fulfilled, the DM narrates the outcomes in a resolution phase
+
+For AI agents, `REQUEST_ROLL` auto-resolves like a normal `ROLL`. `REQUEST_ROLL` is used for player ability checks, saving throws, and attack rolls. `ROLL` is used for NPC/enemy rolls and AI agent rolls.
+
+Players can also roll manually with `/roll 2d6+3` at any time without a pending roll.
 
 ### Advantage & Disadvantage
 Available programmatically (`rollAdvantage()`, `rollDisadvantage()`) but typically handled through the DM requesting appropriate notation (e.g., `2d20kh1+5` for advantage).
@@ -58,6 +69,9 @@ When a combatant drops to 0 HP:
 - 3 successes = stable
 - 3 failures = dead
 - Any healing from 0 HP clears death save counters
+
+### Auto Status Embed
+After any DM turn in combat that changes HP or conditions, the engine automatically posts a combat status embed showing updated initiative order, HP, and conditions for all combatants.
 
 ### Ending Combat
 The DM includes `[[COMBAT:END]]` when combat concludes. The engine clears the combat state.
@@ -109,6 +123,12 @@ Players can ask the DM out-of-character questions without affecting game state:
 - `/ask What happened to the merchant we met earlier?`
 
 The DM answers with full game context (party, history, narrative summary) but the question and answer are clearly marked as OOC. The response appears as a DM embed visible to everyone. No turn is consumed and the orchestrator is not triggered.
+
+**In-session memory**: `/ask` exchanges are stored in an in-memory FIFO buffer (5 entries per game). Consecutive `/ask` questions carry context from earlier asks, so the DM can reference prior Q&A. This memory clears on bot restart.
+
+**Act now, don't promise**: The DM is instructed to resolve issues immediately during `/ask` (editing notes, fixing state, looking up rules) rather than making promises for future turns. Promises made during `/ask` are lost after the response.
+
+**History recording**: Each `/ask` exchange is recorded as a system entry in the game history, so the DM sees what was discussed during future narration turns.
 
 Plain messages (without `>`) are ignored by the game engine entirely — use `/ask` when you actually want the DM to answer.
 
@@ -210,6 +230,14 @@ When a character casts a concentration spell, the DM outputs `[[CONCENTRATE:spel
 
 ### Conditions
 The DM can add/remove conditions with `[[CONDITION:ADD conditionName TARGET:name]]` and `[[CONDITION:REMOVE conditionName TARGET:name]]`. Conditions are tracked on combatants.
+
+To replace all conditions at once, the DM can use `[[UPDATE_CONDITION:SET cond1,cond2 TARGET:name]]` or `[[UPDATE_CONDITION:SET none TARGET:name]]` to clear all conditions.
+
+### HP Corrections
+The DM can set HP to an exact value with `[[UPDATE_HP:value TARGET:name]]` — useful for desync fixes, fall damage, or environmental effects that use fixed values instead of dice.
+
+### Resource Reconciliation
+When a character uses a spell slot or feature charge, the engine appends a system history entry summarizing remaining resources for all casters. This keeps the DM informed of resource state for future turns.
 
 ### Saving Throw Modifiers
 The DM's Character Reference now includes pre-calculated saving throw modifiers for all six abilities, with proficient saves marked with `*`. This prevents manual math errors.

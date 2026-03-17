@@ -901,3 +901,334 @@ describe("engine — typing indicators", () => {
     expect(typingStopped).toBe(3);
   });
 });
+
+describe("engine — next-player safety net", () => {
+  test("appends next combatant when DM omits it", async () => {
+    dmNarrateResponse = "The goblin snarls and retreats.";
+
+    const gs = makeGameState();
+    gs.combat = {
+      active: true,
+      round: 1,
+      turnIndex: 0,
+      combatants: [
+        {
+          playerId: "human1",
+          name: "Fusetsu",
+          initiative: 15,
+          hp: { max: 24, current: 24, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+        {
+          playerId: "agent:grimbold",
+          name: "Grimbold Ironforge",
+          initiative: 10,
+          hp: { max: 31, current: 31, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+      ],
+    };
+
+    markResponded(gs.id, "agent:grimbold");
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I attack.",
+    };
+
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
+
+    const dmMessage = sentMessages.find((m) => m.name === "Dungeon Master");
+    expect(dmMessage).toBeDefined();
+    expect(dmMessage?.content).toContain("Next up:");
+    expect(dmMessage?.content).toContain("Grimbold Ironforge");
+  });
+
+  test("does NOT append when DM already mentions next combatant", async () => {
+    dmNarrateResponse = "The goblin retreats. Grimbold Ironforge, you're up!";
+
+    const gs = makeGameState();
+    gs.combat = {
+      active: true,
+      round: 1,
+      turnIndex: 0,
+      combatants: [
+        {
+          playerId: "human1",
+          name: "Fusetsu",
+          initiative: 15,
+          hp: { max: 24, current: 24, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+        {
+          playerId: "agent:grimbold",
+          name: "Grimbold Ironforge",
+          initiative: 10,
+          hp: { max: 31, current: 31, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+      ],
+    };
+
+    markResponded(gs.id, "agent:grimbold");
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I attack.",
+    };
+
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
+
+    const dmMessage = sentMessages.find((m) => m.name === "Dungeon Master");
+    expect(dmMessage).toBeDefined();
+    // Should NOT have the engine-appended "Next up:" since DM already mentioned the name
+    const content = dmMessage?.content ?? "";
+    const nextUpCount = (content.match(/Next up:/g) || []).length;
+    expect(nextUpCount).toBe(0);
+  });
+
+  test("does NOT append in non-combat mode", async () => {
+    dmNarrateResponse = "The party rests by the fire.";
+
+    const gs = makeGameState();
+    // combat is inactive by default
+
+    markResponded(gs.id, "agent:grimbold");
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I rest.",
+    };
+
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
+
+    const dmMessage = sentMessages.find((m) => m.name === "Dungeon Master");
+    expect(dmMessage?.content).not.toContain("Next up:");
+  });
+});
+
+describe("engine — auto status embed", () => {
+  test("sends combat status embed after HP changes", async () => {
+    dmNarrateResponse =
+      "The goblin strikes! [[DAMAGE:1d6+2 TARGET:Grimbold Ironforge REASON:scimitar hit]]";
+
+    const gs = makeGameState();
+    gs.combat = {
+      active: true,
+      round: 1,
+      turnIndex: 0,
+      combatants: [
+        {
+          playerId: "human1",
+          name: "Fusetsu",
+          initiative: 15,
+          hp: { max: 24, current: 24, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+        {
+          playerId: "agent:grimbold",
+          name: "Grimbold Ironforge",
+          initiative: 10,
+          hp: { max: 31, current: 31, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+      ],
+    };
+
+    markResponded(gs.id, "agent:grimbold");
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I attack.",
+    };
+
+    // Track channel.send calls for embeds
+    let embedsSent = 0;
+    const channelWithEmbeds = {
+      send: async (msg: unknown) => {
+        if (typeof msg === "object" && msg !== null && "embeds" in msg) {
+          embedsSent++;
+        }
+      },
+    };
+
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, channelWithEmbeds as never);
+
+    // Should have sent at least one embed for the status
+    expect(embedsSent).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("engine — resource reconciliation", () => {
+  test("appends resource summary after spell use", async () => {
+    dmNarrateResponse =
+      "A healing spell! [[HEAL:1d8+3 TARGET:Fusetsu REASON:cure wounds]] [[SPELL:1 TARGET:Grimbold Ironforge]]";
+
+    const gs = makeGameState();
+    gs.players[1].characterSheet.spellSlots = [{ level: 1, max: 2, current: 2 }];
+    gs.combat = {
+      active: true,
+      round: 1,
+      turnIndex: 0,
+      combatants: [
+        {
+          playerId: "human1",
+          name: "Fusetsu",
+          initiative: 15,
+          hp: { max: 24, current: 10, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+        {
+          playerId: "agent:grimbold",
+          name: "Grimbold Ironforge",
+          initiative: 10,
+          hp: { max: 31, current: 31, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+      ],
+    };
+
+    markResponded(gs.id, "agent:grimbold");
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I cast cure wounds.",
+    };
+
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
+
+    // Check that a system entry with resource summary was appended
+    const resourceEntries = appendedHistory.filter(
+      (e) => e.type === "system" && e.content.includes("Resources"),
+    );
+    expect(resourceEntries.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("engine — pending rolls", () => {
+  test("REQUEST_ROLL creates pending rolls on game state", async () => {
+    dmNarrateResponse =
+      "Roll for perception! [[REQUEST_ROLL:d20+5 FOR:Fusetsu REASON:Perception check]]";
+
+    const gs = makeGameState();
+    gs.combat = {
+      active: true,
+      round: 1,
+      turnIndex: 0,
+      combatants: [
+        {
+          playerId: "human1",
+          name: "Fusetsu",
+          initiative: 15,
+          hp: { max: 24, current: 24, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+        {
+          playerId: "agent:grimbold",
+          name: "Grimbold Ironforge",
+          initiative: 10,
+          hp: { max: 31, current: 31, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+      ],
+    };
+
+    markResponded(gs.id, "agent:grimbold");
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I look around.",
+    };
+
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
+
+    // Should have pending rolls
+    expect(gs.pendingRolls).toBeDefined();
+    expect(gs.pendingRolls?.length).toBe(1);
+    expect(gs.pendingRolls?.[0].notation).toBe("d20+5");
+    expect(gs.pendingRolls?.[0].reason).toBe("Perception check");
+    expect(gs.pendingRolls?.[0].playerId).toBe("human1");
+  });
+
+  test("DM narration shows roll prompt for pending rolls", async () => {
+    dmNarrateResponse = "Make a check! [[REQUEST_ROLL:d20+5 FOR:Fusetsu REASON:Perception check]]";
+
+    const gs = makeGameState();
+    gs.combat = {
+      active: true,
+      round: 1,
+      turnIndex: 0,
+      combatants: [
+        {
+          playerId: "human1",
+          name: "Fusetsu",
+          initiative: 15,
+          hp: { max: 24, current: 24, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+        {
+          playerId: "agent:grimbold",
+          name: "Grimbold Ironforge",
+          initiative: 10,
+          hp: { max: 31, current: 31, temp: 0 },
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+      ],
+    };
+
+    markResponded(gs.id, "agent:grimbold");
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I check for traps.",
+    };
+
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
+
+    const dmMessage = sentMessages.find((m) => m.name === "Dungeon Master");
+    expect(dmMessage).toBeDefined();
+    // Should show /roll prompt, not raw directive
+    expect(dmMessage?.content).not.toContain("[[REQUEST_ROLL:");
+    expect(dmMessage?.content).toContain("/roll d20+5");
+  });
+});

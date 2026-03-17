@@ -84,11 +84,15 @@ The loop is bounded at `players.length + 2` iterations to prevent runaway cycles
 
 Round tracking is in-memory only (not persisted). It tracks which players have responded this cycle and clears after the DM resolves.
 
-**dice.ts** — Parses dice notation (`2d6+3`, `d20`, `4d6kh3`), rolls real random dice, formats results. Also parses DM dice directives (`[[ROLL:d20+5 FOR:Name REASON:text]]`) from AI output.
+**dice.ts** — Parses dice notation (`2d6+3`, `d20`, `4d6kh3`), rolls real random dice, formats results. Parses all DM directive types from AI output: `ROLL`, `DAMAGE`, `HEAL`, `SPELL`, `USE`, `CONCENTRATE`, `CONDITION`, `XP`, `UPDATE_HP`, `UPDATE_CONDITION`, and `REQUEST_ROLL`.
+
+**directives.ts** — Pure function `processDirectives()` that takes DM response text and game state, processes all directives in sequence, mutates game state, and returns a `DirectiveContext` with processed text and metadata (dice results, HP changes, pending rolls, misuse warnings, etc.). Extracted from `engine.ts` for testability.
+
+**ask-history.ts** — In-memory FIFO buffer (5 entries per game) of `/ask` Q&A exchanges. Provides context to the DM across consecutive `/ask` questions within a session. Clears on bot restart (intentional — these are ephemeral).
 
 **characters.ts** — Flexible markdown-to-JSON parser for character sheets. Handles multiple formatting conventions (bold keys, headings, list items, comma-separated values). Also builds character sheets for AI agents from their personality files + AI-generated backstories.
 
-**combat.ts** — State machine for D&D 5e combat. Handles initiative rolls and ordering, turn advancement (skipping dead/incapacitated), damage/healing with temp HP, death saves (including nat 1/20 special cases), and combat end detection.
+**combat.ts** — State machine for D&D 5e combat. Handles initiative rolls and ordering, turn advancement (skipping dead/incapacitated), damage/healing with temp HP, death saves (including nat 1/20 special cases), combat end detection, and direct HP/condition manipulation via `setHP()` and `setConditions()` for state corrections.
 
 ### AI Layer (`src/ai/`)
 
@@ -127,11 +131,12 @@ If a violation is detected, the offending AI re-generates with explicit feedback
 ### State Layer (`src/state/`)
 
 **types.ts** — All TypeScript interfaces. The key ones:
-- `GameState` — top-level game snapshot (players, combat, narrative summary, status)
+- `GameState` — top-level game snapshot (players, combat, narrative summary, status, optional `pendingRolls`)
 - `Player` — links a Discord user ID or `agent:<name>` to a `CharacterSheet`
 - `CharacterSheet` — full D&D 5e character data
 - `TurnEntry` — single history log entry with type discrimination (ic, ooc, dm-narration, roll, whisper)
 - `CombatState` / `Combatant` — combat tracking with initiative, conditions, death saves
+- `PendingRoll` — a dice roll requested by the DM that the player must fulfill with `/roll` (persisted to JSON so rolls survive restarts)
 - `AgentPersonality` — parsed agent personality file
 - `OrchestratorDecision` — what the orchestrator decided (action + target + reason)
 
@@ -165,10 +170,26 @@ The engine:
 3. Replaces the directive text with formatted results
 4. Posts the modified narration to Discord
 
+### Tabletop Dice (REQUEST_ROLL)
+For human player rolls, the DM can use `[[REQUEST_ROLL:d20+5 FOR:Name REASON:Perception check]]`:
+1. Engine creates a `PendingRoll` entry in `GameState.pendingRolls`
+2. Narration shows a `/roll` prompt instead of the raw directive
+3. Orchestrator waits for the player to `/roll`
+4. Player's `/roll` fulfills the pending roll and triggers the orchestrator
+5. When all pending rolls are fulfilled, the DM enters a resolution phase to narrate outcomes
+6. For AI agents, REQUEST_ROLL auto-resolves like a normal ROLL
+
+### State Correction Directives
+- `[[UPDATE_HP:value TARGET:Name]]` — sets HP to an exact value (desync fixes, environmental damage)
+- `[[UPDATE_CONDITION:SET cond1,cond2 TARGET:Name]]` — replaces all conditions; `SET none` clears all
+
 ### Combat Signals
 The DM signals combat transitions with:
 - `[[COMBAT:START]]` — engine rolls initiative for all players, creates combat state
 - `[[COMBAT:END]]` — engine clears combat state
+
+### Auto Status Embed
+After any DM turn in combat that changes HP or conditions, the engine automatically posts a `combatStatusEmbed` to the channel showing the updated combat state.
 
 ### Agent Pacing
 AI agents wait 2.5 seconds before posting to feel more natural in Discord. This delay is configurable via `AGENT_DELAY_MS` in config.
@@ -190,7 +211,8 @@ data/games/
 - Narrative summary compresses every 10 turns to manage context growth
 - All game data is gitignored
 - On restart, the bot resumes any game automatically — the next player action loads state from disk
-- The only thing lost on restart is the in-memory round tracker; the next action starts a fresh round with full history context
+- Pending rolls (`GameState.pendingRolls`) persist to JSON, so tabletop-style rolls survive restarts
+- The only things lost on restart are the in-memory round tracker and `/ask` exchange history; the next action starts a fresh round with full history context
 
 ## Context Management Strategy
 

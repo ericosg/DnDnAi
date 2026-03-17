@@ -163,7 +163,7 @@ Once your `.md` file is ready:
 | `/ask question` | Ask the DM anything without using your turn |
 | `/character` | Check your stats, HP, XP, spell slots, and feature charges |
 | `/character spells` | See just your spells and remaining slots |
-| `/roll 2d6+3` | Roll dice manually |
+| `/roll 2d6+3` | Roll dice — fulfills a pending roll prompt, or rolls manually |
 | `/rest short` | Recover short-rest features between fights |
 | `/rest long` | Full recovery — HP, spell slots, all features |
 | `/level-up` | Level up when you have enough XP |

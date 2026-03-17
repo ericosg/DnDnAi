@@ -483,4 +483,132 @@ describe("buildAskPrompt", () => {
     expect(prompt).toContain("rulings.md");
     expect(prompt).toContain("AFTER answering");
   });
+
+  test("includes ACT NOW instruction", () => {
+    const prompt = buildAskPrompt("Can you fix my HP?", "Fūsetsu");
+
+    expect(prompt).toContain("ACT NOW");
+    expect(prompt).toContain("do it NOW");
+    expect(prompt).toContain("those promises are lost");
+  });
+
+  test("includes priorAsks when provided", () => {
+    const prior = "## Recent /ask Exchanges\n- **Fūsetsu** asked: How many slots?";
+    const prompt = buildAskPrompt("Another question?", "Fūsetsu", prior);
+
+    expect(prompt).toContain("## Recent /ask Exchanges");
+    expect(prompt).toContain("How many slots?");
+    // priorAsks should appear before the question
+    const priorIdx = prompt.indexOf("Recent /ask");
+    const questionIdx = prompt.indexOf("Another question?");
+    expect(priorIdx).toBeLessThan(questionIdx);
+  });
+
+  test("omits priorAsks when null", () => {
+    const prompt = buildAskPrompt("Question?", "Fūsetsu", null);
+
+    expect(prompt).not.toContain("Recent /ask Exchanges");
+    expect(prompt).toContain("Question?");
+  });
+});
+
+describe("buildDMPrompt — new features", () => {
+  test("includes ask history when provided", () => {
+    const gs = makeGameState();
+    const askHistory = "## Recent /ask Exchanges\n- **Fūsetsu** asked: Can I sneak attack?";
+    const { system } = buildDMPrompt(gs, [], "test", askHistory);
+
+    expect(system).toContain("## Recent /ask Exchanges");
+    expect(system).toContain("Can I sneak attack?");
+  });
+
+  test("omits ask history when null", () => {
+    const gs = makeGameState();
+    const { system } = buildDMPrompt(gs, [], "test", null);
+
+    expect(system).not.toContain("Recent /ask Exchanges");
+  });
+
+  test("combat state includes spell slots per combatant", () => {
+    const gs = makeGameState({
+      combat: {
+        active: true,
+        round: 1,
+        turnIndex: 0,
+        combatants: [
+          {
+            playerId: "human1",
+            name: "Fūsetsu",
+            hp: { max: 24, current: 24, temp: 0 },
+            initiative: 18,
+            conditions: [],
+            deathSaves: { successes: 0, failures: 0 },
+          },
+        ],
+      },
+    });
+    gs.players[0].characterSheet.spellSlots = [{ level: 1, max: 2, current: 1 }];
+    const { system } = buildDMPrompt(gs, [], "test");
+
+    expect(system).toContain("Slots: 1st: 1/2");
+  });
+
+  test("combat state includes feature charges per combatant", () => {
+    const gs = makeGameState({
+      combat: {
+        active: true,
+        round: 1,
+        turnIndex: 0,
+        combatants: [
+          {
+            playerId: "agent:grimbold",
+            name: "Grimbold Ironforge",
+            hp: { max: 31, current: 31, temp: 0 },
+            initiative: 12,
+            conditions: [],
+            deathSaves: { successes: 0, failures: 0 },
+          },
+        ],
+      },
+    });
+    gs.players[1].characterSheet.featureCharges = [
+      { name: "Second Wind", max: 1, current: 1, resetsOn: "short" },
+    ];
+    const { system } = buildDMPrompt(gs, [], "test");
+
+    expect(system).toContain("Second Wind: 1/1");
+  });
+
+  test("DM_IDENTITY contains UPDATE_HP directive instructions", () => {
+    expect(DM_IDENTITY).toContain("UPDATE_HP");
+    expect(DM_IDENTITY).toContain("[[UPDATE_HP:");
+  });
+
+  test("DM_IDENTITY contains UPDATE_CONDITION directive instructions", () => {
+    expect(DM_IDENTITY).toContain("UPDATE_CONDITION");
+    expect(DM_IDENTITY).toContain("[[UPDATE_CONDITION:SET");
+  });
+
+  test("DM_IDENTITY contains REQUEST_ROLL directive instructions", () => {
+    expect(DM_IDENTITY).toContain("REQUEST_ROLL");
+    expect(DM_IDENTITY).toContain("[[REQUEST_ROLL:");
+  });
+
+  test("DM_IDENTITY contains MANDATORY: Narrate Every Roll Outcome", () => {
+    expect(DM_IDENTITY).toContain("MANDATORY: Narrate Every Roll Outcome");
+  });
+
+  test("DM_IDENTITY contains MANDATORY: State Updates", () => {
+    expect(DM_IDENTITY).toContain("MANDATORY: State Updates");
+    expect(DM_IDENTITY).toContain("Narration alone does NOT update game");
+  });
+
+  test("DM_IDENTITY contains next-player prompt rule", () => {
+    expect(DM_IDENTITY).toContain("End EVERY response by addressing who should act next");
+  });
+
+  test("DM_IDENTITY contains resource verification rules", () => {
+    expect(DM_IDENTITY).toContain("MANDATORY before referencing character resources");
+    expect(DM_IDENTITY).toContain("NEVER guess at spell slots");
+  });
 });

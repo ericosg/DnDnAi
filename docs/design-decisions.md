@@ -37,11 +37,14 @@ The DM AI never generates random numbers. Instead:
 2. The engine parses this, rolls real `Math.random()` dice
 3. Results are injected back into the narration before posting
 
+For tabletop feel, the DM can also write `[[REQUEST_ROLL:d20+5 FOR:Grimbold REASON:attack roll]]` to ask a human player to roll. The engine creates a pending roll, shows a `/roll` prompt, and waits for the player. This separates the roll request from execution — the player drives when their dice are rolled, like at a physical table. AI agents auto-resolve REQUEST_ROLL (they don't need the tabletop experience).
+
 This matters because:
 - AI language models are bad at randomness
 - Players trust real dice — perceived fairness is critical
 - Dice results drive mechanical outcomes (HP, damage, saves) that must be consistent
 - The DM can request any valid dice notation without needing to understand the roller
+- REQUEST_ROLL makes dice feel shared and interactive, not something the engine does behind the scenes
 
 ## Why Stateless AI Calls?
 

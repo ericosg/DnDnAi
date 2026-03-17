@@ -4,35 +4,15 @@ import { compressNarrative, dmNarrate } from "../ai/dm.js";
 import { checkAgentResponse, checkDMResponse } from "../ai/guardrail.js";
 import { getNextAction } from "../ai/orchestrator.js";
 import { AGENT_DELAY_MS, COMPRESS_EVERY, HISTORY_WINDOW } from "../config.js";
-import { formatDMNarration } from "../discord/formatter.js";
+import { combatStatusEmbed, formatDMNarration } from "../discord/formatter.js";
 import { sendAsIdentity, startTyping } from "../discord/webhooks.js";
 import { log } from "../logger.js";
 import { appendHistory, loadGameState, loadHistory, saveGameState } from "../state/store.js";
-import type { DiceResult, GameState, TurnEntry } from "../state/types.js";
-import {
-  advanceTurn,
-  applyDamage,
-  applyHealing,
-  endCombat,
-  rollDeathSave,
-  startCombat,
-} from "./combat.js";
-import { summarizeConditionEffects } from "./conditions.js";
-import {
-  formatDiceResult,
-  parseConcentrateDirective,
-  parseConditionDirective,
-  parseDamageDirective,
-  parseDiceDirective,
-  parseHealDirective,
-  parseSpellDirective,
-  parseUseDirective,
-  parseXPDirective,
-  roll,
-} from "./dice.js";
-import { buildCombatHPSummary, detectDirectiveMisuse } from "./hp-reconciliation.js";
-import { checkLevelUp } from "./leveling.js";
-import { useFeatureCharge, useSpellSlot } from "./resources.js";
+import type { GameState, PendingRoll, TurnEntry } from "../state/types.js";
+import { formatAskHistoryForPrompt } from "./ask-history.js";
+import { advanceTurn, peekNextCombatant, rollDeathSave } from "./combat.js";
+import { formatDiceResult } from "./dice.js";
+import { processDirectives } from "./directives.js";
 
 // Per-game mutex: ensures only one processTurn runs at a time per game.
 // Concurrent calls are queued and execute sequentially.
@@ -224,12 +204,24 @@ async function orchestratorLoop(gameState: GameState, channel: TextChannel): Pro
 
       case "prompt_dm": {
         try {
-          await handleDMTurn(gameState, history, channel);
+          // Check if this is a resolution phase (all pending rolls fulfilled)
+          if (gameState.pendingRolls?.every((r) => r.result)) {
+            await handleDMResolution(gameState, history, channel);
+          } else {
+            await handleDMTurn(gameState, history, channel);
+          }
         } catch {
           // DM failed — do NOT clear round so actions are retried next loop
           log.warn("DM turn failed — round preserved for retry");
           return;
         }
+
+        // If pending rolls were created, don't clear round — wait for player input
+        if (gameState.pendingRolls?.length) {
+          log.info("Pending rolls — waiting for player input before advancing");
+          return;
+        }
+
         // After DM resolves, clear round for next cycle
         clearRound(gameState.id);
         log.info("Round cleared — ready for next player input");
@@ -370,7 +362,8 @@ async function handleDMTurn(
     `DM prompt: resolving actions from ${responded.size} players (${recentActions.length} chars)`,
   );
   try {
-    let dmResponse = await dmNarrate(gameState, history, recentActions);
+    const askHistory = formatAskHistoryForPrompt(gameState.id);
+    let dmResponse = await dmNarrate(gameState, history, recentActions, askHistory);
     log.info(`DM turn: response ready (${dmResponse?.length ?? 0} chars)`);
 
     if (!dmResponse || !dmResponse.trim()) {
@@ -388,7 +381,7 @@ async function handleDMTurn(
       log.warn(`Guardrail violation: ${guardrail.violation}`);
       log.info("DM turn: re-generating with guardrail feedback...");
       const feedback = `${recentActions}\n\n[SYSTEM: Your previous response was rejected because it violated player agency. Violation: "${guardrail.violation}". Remember: NEVER narrate what player characters do, say, think, feel, or attempt. Only describe the world, NPCs, and outcomes of actions players have ALREADY stated. Re-write your response without controlling any player character.]`;
-      dmResponse = await dmNarrate(gameState, history, feedback);
+      dmResponse = await dmNarrate(gameState, history, feedback, askHistory);
       log.info(`DM turn: re-generated response ready (${dmResponse?.length ?? 0} chars)`);
 
       if (!dmResponse || !dmResponse.trim()) {
@@ -403,315 +396,13 @@ async function handleDMTurn(
 
     stopTyping();
 
-    // Process dice directives
-    const directives = parseDiceDirective(dmResponse);
-    const diceResults: DiceResult[] = [];
+    // Process all directives
+    const ctx = processDirectives(dmResponse, gameState);
+    dmResponse = ctx.processedText;
 
-    if (directives.length > 0) {
-      log.info(`DM turn: processing ${directives.length} dice directive(s)`);
-    }
-    for (const directive of directives) {
-      const result = roll(directive.notation, `${directive.forName}: ${directive.reason}`);
-      diceResults.push(result);
-      log.info(
-        `  Dice: ${directive.notation} for ${directive.forName} → ${result.total} (${directive.reason})`,
-      );
-
-      // Replace the directive in the DM text with the result
-      let rollText = formatDiceResult(result);
-
-      // Annotate with condition effects if the character has relevant conditions
-      if (gameState.combat.active) {
-        const combatant = gameState.combat.combatants.find(
-          (c) => c.name.toLowerCase() === directive.forName.toLowerCase(),
-        );
-        if (combatant && combatant.conditions.length > 0) {
-          const effects = summarizeConditionEffects(combatant.conditions);
-          if (effects.length > 0) {
-            rollText += ` *(${effects.join("; ")})*`;
-          }
-        }
-      }
-
-      dmResponse = dmResponse.replace(
-        `[[ROLL:${directive.notation} FOR:${directive.forName} REASON:${directive.reason}]]`,
-        rollText,
-      );
-    }
-
-    // Process damage directives
-    const damageDirectives = parseDamageDirective(dmResponse);
-    for (const directive of damageDirectives) {
-      const result = roll(directive.notation, `${directive.targetName}: ${directive.reason}`);
-      diceResults.push(result);
-      const dmgResult = applyDamage(gameState, directive.targetName, result.total);
-      if (dmgResult) {
-        const hpAfter = dmgResult.combatant.hp.current;
-        const hpMax = dmgResult.combatant.hp.max;
-        log.info(
-          `  Damage: ${result.total} to ${directive.targetName} (HP: ${hpAfter}/${hpMax}) — ${directive.reason}`,
-        );
-        dmResponse = dmResponse.replace(
-          `[[DAMAGE:${directive.notation} TARGET:${directive.targetName} REASON:${directive.reason}]]`,
-          `${formatDiceResult(result)} → **${result.total} damage** to ${directive.targetName} (HP: ${hpAfter}/${hpMax})`,
-        );
-      } else {
-        const isPlayerTarget = gameState.players.some(
-          (p) => p.characterSheet.name.toLowerCase() === directive.targetName.toLowerCase(),
-        );
-        if (isPlayerTarget) {
-          log.warn(
-            `  Damage: target "${directive.targetName}" not found in combatants (but is a player — possible bug)`,
-          );
-        } else {
-          log.info(
-            `  Damage: ${result.total} to ${directive.targetName} (narrative HP only — not a PC)`,
-          );
-        }
-        dmResponse = dmResponse.replace(
-          `[[DAMAGE:${directive.notation} TARGET:${directive.targetName} REASON:${directive.reason}]]`,
-          `${formatDiceResult(result)} → **${result.total} damage** to ${directive.targetName}`,
-        );
-      }
-    }
-
-    // Process heal directives
-    const healDirectives = parseHealDirective(dmResponse);
-    for (const directive of healDirectives) {
-      const result = roll(directive.notation, `${directive.targetName}: ${directive.reason}`);
-      diceResults.push(result);
-      const healed = applyHealing(gameState, directive.targetName, result.total);
-      if (healed) {
-        const hpAfter = healed.hp.current;
-        const hpMax = healed.hp.max;
-        log.info(
-          `  Heal: ${result.total} to ${directive.targetName} (HP: ${hpAfter}/${hpMax}) — ${directive.reason}`,
-        );
-        dmResponse = dmResponse.replace(
-          `[[HEAL:${directive.notation} TARGET:${directive.targetName} REASON:${directive.reason}]]`,
-          `${formatDiceResult(result)} → **${result.total} healed** on ${directive.targetName} (HP: ${hpAfter}/${hpMax})`,
-        );
-      } else {
-        const isPlayerTarget = gameState.players.some(
-          (p) => p.characterSheet.name.toLowerCase() === directive.targetName.toLowerCase(),
-        );
-        if (isPlayerTarget) {
-          log.warn(
-            `  Heal: target "${directive.targetName}" not found in combatants (but is a player — possible bug)`,
-          );
-        } else {
-          log.info(
-            `  Heal: ${result.total} to ${directive.targetName} (narrative HP only — not a PC)`,
-          );
-        }
-        dmResponse = dmResponse.replace(
-          `[[HEAL:${directive.notation} TARGET:${directive.targetName} REASON:${directive.reason}]]`,
-          `${formatDiceResult(result)} → **${result.total} healed** on ${directive.targetName}`,
-        );
-      }
-    }
-
-    // Process spell slot directives
-    const spellDirectives = parseSpellDirective(dmResponse);
-    for (const directive of spellDirectives) {
-      const originalTag = `[[SPELL:${directive.level} TARGET:${directive.target}]]`;
-      const player = gameState.players.find(
-        (p) => p.characterSheet.name.toLowerCase() === directive.target.toLowerCase(),
-      );
-      if (player) {
-        const used = useSpellSlot(player.characterSheet, directive.level);
-        if (used) {
-          const remaining =
-            player.characterSheet.spellSlots?.find((s) => s.level === directive.level)?.current ??
-            0;
-          log.info(
-            `  Spell: ${directive.target} used a level ${directive.level} slot (${remaining} remaining)`,
-          );
-          dmResponse = dmResponse.replace(originalTag, "");
-        } else {
-          log.warn(`  Spell: ${directive.target} has no level ${directive.level} slots available!`);
-          dmResponse = dmResponse.replace(
-            originalTag,
-            `*[${directive.target} has no level ${directive.level} spell slots remaining!]*`,
-          );
-        }
-      } else {
-        log.warn(`  Spell: target "${directive.target}" not found`);
-        dmResponse = dmResponse.replace(originalTag, "");
-      }
-    }
-
-    // Process feature use directives
-    const useDirectives = parseUseDirective(dmResponse);
-    for (const directive of useDirectives) {
-      const originalTag = `[[USE:${directive.featureName} TARGET:${directive.target}]]`;
-      const player = gameState.players.find(
-        (p) => p.characterSheet.name.toLowerCase() === directive.target.toLowerCase(),
-      );
-      if (player) {
-        const used = useFeatureCharge(player.characterSheet, directive.featureName);
-        if (used) {
-          const charge = player.characterSheet.featureCharges?.find(
-            (c) => c.name.toLowerCase() === directive.featureName.toLowerCase(),
-          );
-          log.info(
-            `  Use: ${directive.target} used ${directive.featureName} (${charge?.current ?? 0} remaining)`,
-          );
-          dmResponse = dmResponse.replace(originalTag, "");
-        } else {
-          log.warn(`  Use: ${directive.target} has no ${directive.featureName} charges!`);
-          dmResponse = dmResponse.replace(
-            originalTag,
-            `*[${directive.target} has no ${directive.featureName} charges remaining!]*`,
-          );
-        }
-      } else {
-        log.warn(`  Use: target "${directive.target}" not found`);
-        dmResponse = dmResponse.replace(originalTag, "");
-      }
-    }
-
-    // Process concentration directives
-    const concentrateDirectives = parseConcentrateDirective(dmResponse);
-    for (const directive of concentrateDirectives) {
-      const originalTag = `[[CONCENTRATE:${directive.spell} TARGET:${directive.target}]]`;
-      const combatant = gameState.combat.combatants.find(
-        (c) => c.name.toLowerCase() === directive.target.toLowerCase(),
-      );
-      if (combatant) {
-        if (combatant.concentration) {
-          log.info(
-            `  Concentration: ${directive.target} breaks concentration on ${combatant.concentration.spell} to cast ${directive.spell}`,
-          );
-          dmResponse = dmResponse.replace(
-            originalTag,
-            `*[${directive.target} breaks concentration on ${combatant.concentration.spell}]*`,
-          );
-        } else {
-          dmResponse = dmResponse.replace(originalTag, "");
-        }
-        combatant.concentration = { spell: directive.spell };
-        log.info(`  Concentration: ${directive.target} now concentrating on ${directive.spell}`);
-      } else {
-        dmResponse = dmResponse.replace(originalTag, "");
-      }
-    }
-
-    // Process condition directives
-    const conditionDirectives = parseConditionDirective(dmResponse);
-    for (const directive of conditionDirectives) {
-      const originalTag = `[[CONDITION:${directive.action.toUpperCase()} ${directive.condition} TARGET:${directive.target}]]`;
-      const combatant = gameState.combat.combatants.find(
-        (c) => c.name.toLowerCase() === directive.target.toLowerCase(),
-      );
-      if (combatant) {
-        if (directive.action === "add") {
-          if (!combatant.conditions.includes(directive.condition)) {
-            combatant.conditions.push(directive.condition);
-            log.info(`  Condition: ${directive.target} gains ${directive.condition}`);
-          }
-        } else {
-          combatant.conditions = combatant.conditions.filter((c) => c !== directive.condition);
-          log.info(`  Condition: ${directive.target} loses ${directive.condition}`);
-        }
-        dmResponse = dmResponse.replace(originalTag, "");
-      } else {
-        log.warn(`  Condition: target "${directive.target}" not found`);
-        dmResponse = dmResponse.replace(originalTag, "");
-      }
-    }
-
-    // Check concentration on damage — auto-roll CON save
-    for (const directive of damageDirectives) {
-      const combatant = gameState.combat.combatants.find(
-        (c) => c.name.toLowerCase() === directive.targetName.toLowerCase(),
-      );
-      if (combatant?.concentration) {
-        const dc = Math.max(10, Math.floor(diceResults[diceResults.length - 1]?.total ?? 10) / 2);
-        const player = gameState.players.find((p) => p.id === combatant.playerId);
-        const conMod = player
-          ? Math.floor((player.characterSheet.abilityScores.constitution - 10) / 2)
-          : 0;
-        const conSave = roll(`d20+${conMod}`, `${combatant.name} concentration save`);
-        diceResults.push(conSave);
-        if (conSave.total >= dc) {
-          log.info(
-            `  Concentration: ${combatant.name} passes CON save (${conSave.total} vs DC ${dc}), maintains ${combatant.concentration.spell}`,
-          );
-          dmResponse += `\n*${combatant.name} maintains concentration on ${combatant.concentration.spell} (CON save: ${conSave.total} vs DC ${dc})*`;
-        } else {
-          log.info(
-            `  Concentration: ${combatant.name} fails CON save (${conSave.total} vs DC ${dc}), loses ${combatant.concentration.spell}`,
-          );
-          dmResponse += `\n*${combatant.name} loses concentration on ${combatant.concentration.spell}! (CON save: ${conSave.total} vs DC ${dc})*`;
-          combatant.concentration = undefined;
-        }
-      }
-    }
-
-    // Process XP directives
-    const xpDirectives = parseXPDirective(dmResponse);
-    for (const directive of xpDirectives) {
-      const originalTag = `[[XP:${directive.amount} TARGET:${directive.target} REASON:${directive.reason}]]`;
-      if (directive.target.toLowerCase() === "party") {
-        const playerCount = gameState.players.length;
-        const perPlayer = Math.floor(directive.amount / playerCount);
-        const levelUps: string[] = [];
-        for (const p of gameState.players) {
-          p.characterSheet.experiencePoints = (p.characterSheet.experiencePoints ?? 0) + perPlayer;
-          log.info(
-            `  XP: +${perPlayer} to ${p.characterSheet.name} (total: ${p.characterSheet.experiencePoints})`,
-          );
-          if (checkLevelUp(p.characterSheet.experiencePoints, p.characterSheet.level)) {
-            levelUps.push(p.characterSheet.name);
-          }
-        }
-        let replacement = `**+${perPlayer} XP each** (${directive.reason})`;
-        if (levelUps.length > 0) {
-          replacement += ` — ${levelUps.map((n) => `**${n}** is ready to level up!`).join(" ")}`;
-        }
-        dmResponse = dmResponse.replace(originalTag, replacement);
-      } else {
-        const player = gameState.players.find(
-          (p) => p.characterSheet.name.toLowerCase() === directive.target.toLowerCase(),
-        );
-        if (player) {
-          player.characterSheet.experiencePoints =
-            (player.characterSheet.experiencePoints ?? 0) + directive.amount;
-          log.info(
-            `  XP: +${directive.amount} to ${player.characterSheet.name} (total: ${player.characterSheet.experiencePoints})`,
-          );
-          let replacement = `**+${directive.amount} XP** to ${player.characterSheet.name} (${directive.reason})`;
-          if (checkLevelUp(player.characterSheet.experiencePoints, player.characterSheet.level)) {
-            replacement += ` — **${player.characterSheet.name}** is ready to level up!`;
-          }
-          dmResponse = dmResponse.replace(originalTag, replacement);
-        } else {
-          log.warn(`  XP: target "${directive.target}" not found`);
-          dmResponse = dmResponse.replace(
-            originalTag,
-            `**+${directive.amount} XP** (${directive.reason})`,
-          );
-        }
-      }
-    }
-
-    // Detect directive misuse (narrated damage/healing without matching directives)
-    const processedDamageTargets = damageDirectives.map((d) => d.targetName);
-    const processedHealTargets = healDirectives.map((d) => d.targetName);
-    const misuseWarnings = detectDirectiveMisuse(
-      dmResponse,
-      processedDamageTargets,
-      processedHealTargets,
-    );
-    for (const warning of misuseWarnings) {
-      log.warn(`Directive misuse: ${warning}`);
-    }
-
-    // HP reconciliation: append system entry so DM sees HP state next turn
+    // HP reconciliation: append system entries so DM sees HP state next turn
     if (gameState.combat.active) {
-      const hpSummary = buildCombatHPSummary(gameState);
-      if (hpSummary) {
+      if (ctx.hpSummary) {
         const systemEntries: TurnEntry[] = [];
         systemEntries.push({
           id: history.length + 2,
@@ -719,16 +410,16 @@ async function handleDMTurn(
           playerId: "system",
           playerName: "System",
           type: "system",
-          content: hpSummary,
+          content: ctx.hpSummary,
         });
-        if (misuseWarnings.length > 0) {
+        if (ctx.misuseWarnings.length > 0) {
           systemEntries.push({
             id: history.length + 3,
             timestamp: new Date().toISOString(),
             playerId: "system",
             playerName: "System",
             type: "system",
-            content: `Warning: ${misuseWarnings.join(" ")}`,
+            content: `Warning: ${ctx.misuseWarnings.join(" ")}`,
           });
         }
         for (const sysEntry of systemEntries) {
@@ -737,26 +428,51 @@ async function handleDMTurn(
       }
     }
 
-    // Check for combat start/end signals
-    if (dmResponse.includes("[[COMBAT:START]]")) {
-      log.info("DM turn: COMBAT START signal detected");
-      dmResponse = dmResponse.replace("[[COMBAT:START]]", "");
-      const initResults = startCombat(gameState);
-      const initText = initResults.map(formatDiceResult).join("\n");
-      dmResponse += `\n\n**Initiative Order:**\n${initText}`;
-      log.info(`Combat started — ${initResults.length} combatants rolled initiative`);
+    // Resource reconciliation: record summary after spell/feature use
+    if (ctx.resourceSummary) {
+      await appendHistory(gameState.id, {
+        id: 0,
+        timestamp: new Date().toISOString(),
+        playerId: "system",
+        playerName: "System",
+        type: "system",
+        content: ctx.resourceSummary,
+      });
     }
 
-    if (dmResponse.includes("[[COMBAT:END]]")) {
-      log.info("DM turn: COMBAT END signal detected");
-      dmResponse = dmResponse.replace("[[COMBAT:END]]", "");
-      endCombat(gameState);
-      dmResponse += "\n\n*Combat has ended.*";
+    // Safety net: if combat is active, ensure DM mentions next combatant
+    if (gameState.combat.active && !ctx.combatEnded) {
+      const nextUp = peekNextCombatant(gameState.combat);
+      if (nextUp && !dmResponse.toLowerCase().includes(nextUp.name.toLowerCase())) {
+        dmResponse += `\n\n*Next up: **${nextUp.name}***`;
+      }
+    }
+
+    // Handle pending rolls (two-phase DM turn)
+    if (ctx.pendingRolls.length > 0) {
+      const pendingRolls: PendingRoll[] = ctx.pendingRolls.map((pr) => ({
+        id: pr.id,
+        playerId: pr.playerId,
+        playerName: pr.playerName,
+        notation: pr.notation,
+        reason: pr.reason,
+      }));
+      gameState.pendingRolls = pendingRolls;
+      log.info(
+        `DM turn: ${pendingRolls.length} pending roll(s) created — pausing for player input`,
+      );
     }
 
     // Post DM narration as plain text via webhook
     await sendAsIdentity(channel, "Dungeon Master", formatDMNarration(dmResponse));
     log.info("DM turn: narration posted to Discord");
+
+    // Auto status embed after combat HP/condition changes
+    if (gameState.combat.active && (ctx.hpChanged || ctx.conditionsChanged)) {
+      await channel.send({
+        embeds: [combatStatusEmbed(gameState.combat, gameState.players)],
+      });
+    }
 
     // Record in history
     const entry: TurnEntry = {
@@ -766,7 +482,7 @@ async function handleDMTurn(
       playerName: "Dungeon Master",
       type: "dm-narration",
       content: dmResponse,
-      diceResults: diceResults.length > 0 ? diceResults : undefined,
+      diceResults: ctx.diceResults.length > 0 ? ctx.diceResults : undefined,
     };
 
     await appendHistory(gameState.id, entry);
@@ -776,5 +492,112 @@ async function handleDMTurn(
     log.error("DM turn: failed to generate narration:", err);
     await channel.send("*The Dungeon Master pauses to gather their thoughts...*");
     throw err;
+  }
+}
+
+/**
+ * Resolution phase: called when all pending rolls have been fulfilled.
+ * Sends roll results to DM for narrative resolution.
+ */
+async function handleDMResolution(
+  gameState: GameState,
+  history: TurnEntry[],
+  channel: TextChannel,
+): Promise<void> {
+  const pending = gameState.pendingRolls ?? [];
+  if (pending.length === 0) return;
+
+  const rollSummary = pending
+    .filter((r) => r.result)
+    .map(
+      (r) =>
+        `${r.playerName} rolled ${r.notation} for ${r.reason}: **${r.result?.total}** [${r.result?.rolls.join(", ")}]`,
+    )
+    .join("\n");
+
+  const askHistory = formatAskHistoryForPrompt(gameState.id);
+
+  log.info("DM resolution: calling Claude with fulfilled roll results...");
+  const stopTyping = startTyping(channel);
+  try {
+    const resolutionPrompt = `The following dice rolls have been made by the players:\n\n${rollSummary}\n\nNarrate the outcomes of these rolls. Apply any consequences (damage, success/failure, etc.) using the appropriate directives.`;
+    let dmResponse = await dmNarrate(gameState, history, resolutionPrompt, askHistory);
+    log.info(`DM resolution: response ready (${dmResponse?.length ?? 0} chars)`);
+
+    if (!dmResponse || !dmResponse.trim()) {
+      log.warn("DM returned empty resolution response");
+      stopTyping();
+      return;
+    }
+
+    stopTyping();
+
+    // Process directives in resolution response
+    const ctx = processDirectives(dmResponse, gameState);
+    dmResponse = ctx.processedText;
+
+    // Safety net for next combatant
+    if (gameState.combat.active && !ctx.combatEnded) {
+      const nextUp = peekNextCombatant(gameState.combat);
+      if (nextUp && !dmResponse.toLowerCase().includes(nextUp.name.toLowerCase())) {
+        dmResponse += `\n\n*Next up: **${nextUp.name}***`;
+      }
+    }
+
+    // Post narration
+    await sendAsIdentity(channel, "Dungeon Master", formatDMNarration(dmResponse));
+
+    // Auto status embed
+    if (gameState.combat.active && (ctx.hpChanged || ctx.conditionsChanged)) {
+      await channel.send({
+        embeds: [combatStatusEmbed(gameState.combat, gameState.players)],
+      });
+    }
+
+    // HP reconciliation
+    if (gameState.combat.active && ctx.hpSummary) {
+      await appendHistory(gameState.id, {
+        id: 0,
+        timestamp: new Date().toISOString(),
+        playerId: "system",
+        playerName: "System",
+        type: "system",
+        content: ctx.hpSummary,
+      });
+    }
+
+    // Resource reconciliation
+    if (ctx.resourceSummary) {
+      await appendHistory(gameState.id, {
+        id: 0,
+        timestamp: new Date().toISOString(),
+        playerId: "system",
+        playerName: "System",
+        type: "system",
+        content: ctx.resourceSummary,
+      });
+    }
+
+    // Record in history
+    const entry: TurnEntry = {
+      id: history.length + 1,
+      timestamp: new Date().toISOString(),
+      playerId: "dm",
+      playerName: "Dungeon Master",
+      type: "dm-narration",
+      content: dmResponse,
+      diceResults: ctx.diceResults.length > 0 ? ctx.diceResults : undefined,
+    };
+    await appendHistory(gameState.id, entry);
+    gameState.turnCount++;
+  } catch (err) {
+    stopTyping();
+    log.error("DM resolution: failed:", err);
+    await channel.send("*The Dungeon Master pauses to gather their thoughts...*");
+    throw err;
+  } finally {
+    // Clear pending rolls
+    gameState.pendingRolls = undefined;
+    await saveGameState(gameState);
   }
 }
