@@ -2,6 +2,7 @@ import { log } from "../logger.js";
 import {
   buildSpawnArgs,
   buildSpawnEnv,
+  extractFailureDiagnostics,
   isRetryable,
   parseStreamJson,
   summarizeToolInput,
@@ -14,6 +15,36 @@ interface ChatMessage {
 
 const MAX_RETRIES = 3;
 const BASE_DELAY = 1000;
+const TIMEOUT_SIMPLE_MS = 2 * 60 * 1000; // 2 min
+const TIMEOUT_AGENTIC_MS = 5 * 60 * 1000; // 5 min
+
+interface WaitResult {
+  exitCode: number;
+  timedOut: boolean;
+}
+
+/** Race proc.exited against a timeout. On timeout, kills the process. */
+async function waitWithTimeout(
+  proc: { exited: Promise<number>; kill: (signal?: number) => void },
+  timeoutMs: number,
+): Promise<WaitResult> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const timeoutPromise = new Promise<WaitResult>((resolve) => {
+    timer = setTimeout(async () => {
+      proc.kill();
+      const exitCode = await proc.exited;
+      resolve({ exitCode: exitCode ?? -1, timedOut: true });
+    }, timeoutMs);
+  });
+
+  const exitPromise = proc.exited.then((code) => {
+    clearTimeout(timer);
+    return { exitCode: code, timedOut: false } as WaitResult;
+  });
+
+  return Promise.race([exitPromise, timeoutPromise]);
+}
 
 export async function chat(
   model: string,
@@ -37,14 +68,20 @@ export async function chat(
         env,
       });
 
-      const exitCode = await proc.exited;
+      const { exitCode, timedOut } = await waitWithTimeout(proc, TIMEOUT_SIMPLE_MS);
       const stdout = await new Response(proc.stdout).text();
       const stderr = await new Response(proc.stderr).text();
 
+      if (timedOut) {
+        const msg = `Claude CLI timeout after ${TIMEOUT_SIMPLE_MS / 1000}s`;
+        log.error(msg);
+        throw new RetryableError(msg);
+      }
+
       if (exitCode !== 0) {
-        const msg = stderr.trim() || `claude exited with code ${exitCode}`;
-        log.error(`Claude CLI failed (exit ${exitCode}): ${msg.slice(0, 200)}`);
-        if (isRetryable(msg)) {
+        const msg = extractFailureDiagnostics(stdout, stderr, exitCode, false);
+        log.error(`Claude CLI failed (exit ${exitCode}): ${msg.slice(0, 300)}`);
+        if (isRetryable(msg, exitCode)) {
           throw new RetryableError(msg);
         }
         throw new Error(`Claude CLI error: ${msg}`);
@@ -79,7 +116,7 @@ export async function chatAgentic(
   label: string,
 ): Promise<string> {
   const prompt = messages.map((m) => m.content).join("\n\n");
-  const args = buildSpawnArgs(model, system, prompt, allowedTools, "stream-json");
+  const args = buildSpawnArgs(model, system, prompt, allowedTools, "stream-json", 10);
   const env = buildSpawnEnv();
 
   log.debug(`Claude agentic call: model=${model} promptLen=${prompt.length}`);
@@ -94,14 +131,21 @@ export async function chatAgentic(
         env,
       });
 
-      const exitCode = await proc.exited;
+      const { exitCode, timedOut } = await waitWithTimeout(proc, TIMEOUT_AGENTIC_MS);
       const stdout = await new Response(proc.stdout).text();
       const stderr = await new Response(proc.stderr).text();
 
+      if (timedOut) {
+        const diag = extractFailureDiagnostics(stdout, stderr, exitCode, true);
+        const msg = `Claude CLI timeout after ${TIMEOUT_AGENTIC_MS / 1000}s | ${diag}`;
+        log.error(msg);
+        throw new RetryableError(msg);
+      }
+
       if (exitCode !== 0) {
-        const msg = stderr.trim() || `claude exited with code ${exitCode}`;
-        log.error(`Claude CLI failed (exit ${exitCode}): ${msg.slice(0, 200)}`);
-        if (isRetryable(msg)) {
+        const msg = extractFailureDiagnostics(stdout, stderr, exitCode, true);
+        log.error(`Claude CLI failed (exit ${exitCode}): ${msg.slice(0, 300)}`);
+        if (isRetryable(msg, exitCode)) {
           throw new RetryableError(msg);
         }
         throw new Error(`Claude CLI error: ${msg}`);

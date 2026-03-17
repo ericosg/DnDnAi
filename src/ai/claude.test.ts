@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildSpawnArgs,
   buildSpawnEnv,
+  extractFailureDiagnostics,
   isRetryable,
   parseStreamJson,
   summarizeToolInput,
@@ -108,6 +109,22 @@ describe("claude CLI subprocess", () => {
       expect(isRetryable("HTTP 500 internal error")).toBe(true);
     });
 
+    test("retries on timeout", () => {
+      expect(isRetryable("connection timeout")).toBe(true);
+    });
+
+    test("retries on exit code 1 with fallback message", () => {
+      expect(isRetryable("claude exited with code 1 (no output)", 1)).toBe(true);
+    });
+
+    test("does not retry exit code 1 with real stderr", () => {
+      expect(isRetryable("Invalid API key", 1)).toBe(false);
+    });
+
+    test("does not retry exit code 2 with fallback message", () => {
+      expect(isRetryable("claude exited with code 2", 2)).toBe(false);
+    });
+
     test("does not retry on invalid key", () => {
       expect(isRetryable("Invalid API key")).toBe(false);
     });
@@ -118,6 +135,11 @@ describe("claude CLI subprocess", () => {
 
     test("does not retry on generic error", () => {
       expect(isRetryable("something went wrong")).toBe(false);
+    });
+
+    test("existing patterns still work with exitCode param", () => {
+      expect(isRetryable("API is overloaded", 1)).toBe(true);
+      expect(isRetryable("rate limit exceeded", 0)).toBe(true);
     });
   });
 
@@ -167,6 +189,25 @@ describe("claude CLI subprocess", () => {
       const args = buildSpawnArgs("m", "s", "p", ["Read"]);
       const idx = args.indexOf("--allowedTools");
       expect(args[idx + 1]).toBe("Read");
+    });
+  });
+
+  describe("maxTurns parameter", () => {
+    test("appends --max-turns when provided", () => {
+      const args = buildSpawnArgs("m", "s", "p", [], "text", 10);
+      const idx = args.indexOf("--max-turns");
+      expect(idx).toBeGreaterThan(-1);
+      expect(args[idx + 1]).toBe("10");
+    });
+
+    test("omits --max-turns when not provided", () => {
+      const args = buildSpawnArgs("m", "s", "p");
+      expect(args).not.toContain("--max-turns");
+    });
+
+    test("omits --max-turns when zero", () => {
+      const args = buildSpawnArgs("m", "s", "p", [], "text", 0);
+      expect(args).not.toContain("--max-turns");
     });
   });
 
@@ -295,6 +336,56 @@ describe("claude CLI subprocess", () => {
       expect(parsed.toolUses[0].name).toBe("Glob");
       expect(parsed.toolUses[1].name).toBe("Read");
       expect(parsed.toolUses[2].name).toBe("Write");
+    });
+  });
+
+  describe("extractFailureDiagnostics", () => {
+    test("uses stderr as primary message", () => {
+      const result = extractFailureDiagnostics("", "API key invalid", 1, false);
+      expect(result).toBe("API key invalid");
+    });
+
+    test("extracts tool call summary from stream-json stdout", () => {
+      const stdout = [
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"world.md"}}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Glob","input":{"pattern":"dm-notes/*"}}]}}',
+      ].join("\n");
+      const result = extractFailureDiagnostics(stdout, "", 1, true);
+      expect(result).toContain("Tool calls before failure:");
+      expect(result).toContain("Read(world.md)");
+      expect(result).toContain("Glob(dm-notes/*)");
+    });
+
+    test("includes truncated text stdout excerpt", () => {
+      const stdout = "Some partial output from claude";
+      const result = extractFailureDiagnostics(stdout, "", 1, false);
+      expect(result).toContain("stdout excerpt:");
+      expect(result).toContain("Some partial output");
+    });
+
+    test("combines stderr and tool calls", () => {
+      const stdout =
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"test.md"}}]}}\n';
+      const result = extractFailureDiagnostics(stdout, "something broke", 1, true);
+      expect(result).toContain("something broke");
+      expect(result).toContain("Read(test.md)");
+    });
+
+    test("returns fallback when all output is empty", () => {
+      const result = extractFailureDiagnostics("", "", 1, false);
+      expect(result).toBe("claude exited with code 1 (no output)");
+    });
+
+    test("returns fallback for whitespace-only output", () => {
+      const result = extractFailureDiagnostics("  \n  ", "  \n  ", 137, true);
+      expect(result).toBe("claude exited with code 137 (no output)");
+    });
+
+    test("stream-json with text blocks but no tool calls returns fallback", () => {
+      const stdout =
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"partial response"}]}}\n';
+      const result = extractFailureDiagnostics(stdout, "", 1, true);
+      expect(result).toBe("claude exited with code 1 (no output)");
     });
   });
 });

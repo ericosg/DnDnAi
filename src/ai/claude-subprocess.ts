@@ -10,6 +10,7 @@ export function buildSpawnArgs(
   prompt: string,
   allowedTools?: string[],
   outputFormat: "text" | "stream-json" = "text",
+  maxTurns?: number,
 ): string[] {
   const args = [
     "claude",
@@ -31,6 +32,10 @@ export function buildSpawnArgs(
 
   if (allowedTools?.length) {
     args.push("--allowedTools", allowedTools.join(","));
+  }
+
+  if (maxTurns) {
+    args.push("--max-turns", String(maxTurns));
   }
 
   return args;
@@ -112,11 +117,72 @@ export function parseStreamJson(stdout: string): {
 }
 
 /** Returns true if a CLI error message indicates a retryable condition. */
-export function isRetryable(errorMsg: string): boolean {
-  return (
+export function isRetryable(errorMsg: string, exitCode?: number): boolean {
+  if (
     errorMsg.includes("overloaded") ||
     errorMsg.includes("rate") ||
     errorMsg.includes("529") ||
     errorMsg.includes("500")
-  );
+  ) {
+    return true;
+  }
+  if (errorMsg.includes("timeout")) {
+    return true;
+  }
+  // Exit code 1 with no meaningful stderr is likely a transient CLI crash
+  if (exitCode === 1 && errorMsg.includes("claude exited with code")) {
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Build a diagnostic message from a failed Claude CLI subprocess.
+ * Extracts as much useful info as possible from stdout/stderr.
+ */
+export function extractFailureDiagnostics(
+  stdout: string,
+  stderr: string,
+  exitCode: number,
+  isStreamJson: boolean,
+): string {
+  const parts: string[] = [];
+
+  if (stderr.trim()) {
+    parts.push(stderr.trim());
+  }
+
+  if (isStreamJson && stdout.trim()) {
+    // Try to extract tool call summary from stream-json output
+    const toolNames: string[] = [];
+    for (const line of stdout.split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        const event = JSON.parse(line);
+        if (event.type === "assistant" && event.message?.content) {
+          for (const block of event.message.content) {
+            if (block.type === "tool_use") {
+              const summary = summarizeToolInput(block.name, block.input ?? {});
+              toolNames.push(`${block.name}(${summary})`);
+            }
+          }
+        }
+      } catch {
+        // Skip malformed lines
+      }
+    }
+    if (toolNames.length > 0) {
+      parts.push(`Tool calls before failure: ${toolNames.join(", ")}`);
+    }
+  } else if (stdout.trim()) {
+    // Text mode — include truncated excerpt
+    const excerpt = stdout.trim().slice(0, 300);
+    parts.push(`stdout excerpt: ${excerpt}`);
+  }
+
+  if (parts.length === 0) {
+    return `claude exited with code ${exitCode} (no output)`;
+  }
+
+  return parts.join(" | ");
 }
