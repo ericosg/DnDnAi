@@ -174,22 +174,36 @@ export function processDirectives(text: string, gameState: GameState): Directive
         `${formatDiceResult(result)} → **${result.total} damage** to ${directive.targetName} (HP: ${hpAfter}/${hpMax})`,
       );
     } else {
-      const isPlayerTarget = gameState.players.some(
+      // Fallback: apply damage to character sheet directly (outside combat)
+      const player = gameState.players.find(
         (p) => p.characterSheet.name.toLowerCase() === directive.targetName.toLowerCase(),
       );
-      if (isPlayerTarget) {
-        log.warn(
-          `  Damage: target "${directive.targetName}" not found in combatants (but is a player — possible bug)`,
+      if (player) {
+        const cs = player.characterSheet;
+        const originalTemp = cs.hp.temp;
+        cs.hp.temp = Math.max(0, originalTemp - result.total);
+        const absorbed = originalTemp - cs.hp.temp;
+        const remaining = result.total - absorbed;
+        if (remaining > 0) {
+          cs.hp.current = Math.max(0, cs.hp.current - remaining);
+        }
+        hpChanged = true;
+        log.info(
+          `  Damage: ${result.total} to ${directive.targetName} (HP: ${cs.hp.current}/${cs.hp.max}) — ${directive.reason} [non-combat]`,
+        );
+        processedText = processedText.replace(
+          `[[DAMAGE:${directive.notation} TARGET:${directive.targetName} REASON:${directive.reason}]]`,
+          `${formatDiceResult(result)} → **${result.total} damage** to ${directive.targetName} (HP: ${cs.hp.current}/${cs.hp.max})`,
         );
       } else {
         log.info(
           `  Damage: ${result.total} to ${directive.targetName} (narrative HP only — not a PC)`,
         );
+        processedText = processedText.replace(
+          `[[DAMAGE:${directive.notation} TARGET:${directive.targetName} REASON:${directive.reason}]]`,
+          `${formatDiceResult(result)} → **${result.total} damage** to ${directive.targetName}`,
+        );
       }
-      processedText = processedText.replace(
-        `[[DAMAGE:${directive.notation} TARGET:${directive.targetName} REASON:${directive.reason}]]`,
-        `${formatDiceResult(result)} → **${result.total} damage** to ${directive.targetName}`,
-      );
     }
   }
 
@@ -212,22 +226,30 @@ export function processDirectives(text: string, gameState: GameState): Directive
         `${formatDiceResult(result)} → **${result.total} healed** on ${directive.targetName} (HP: ${hpAfter}/${hpMax})`,
       );
     } else {
-      const isPlayerTarget = gameState.players.some(
+      // Fallback: apply healing to character sheet directly (outside combat)
+      const player = gameState.players.find(
         (p) => p.characterSheet.name.toLowerCase() === directive.targetName.toLowerCase(),
       );
-      if (isPlayerTarget) {
-        log.warn(
-          `  Heal: target "${directive.targetName}" not found in combatants (but is a player — possible bug)`,
+      if (player) {
+        const cs = player.characterSheet;
+        cs.hp.current = Math.min(cs.hp.max, cs.hp.current + result.total);
+        hpChanged = true;
+        log.info(
+          `  Heal: ${result.total} to ${directive.targetName} (HP: ${cs.hp.current}/${cs.hp.max}) — ${directive.reason} [non-combat]`,
+        );
+        processedText = processedText.replace(
+          `[[HEAL:${directive.notation} TARGET:${directive.targetName} REASON:${directive.reason}]]`,
+          `${formatDiceResult(result)} → **${result.total} healed** on ${directive.targetName} (HP: ${cs.hp.current}/${cs.hp.max})`,
         );
       } else {
         log.info(
           `  Heal: ${result.total} to ${directive.targetName} (narrative HP only — not a PC)`,
         );
+        processedText = processedText.replace(
+          `[[HEAL:${directive.notation} TARGET:${directive.targetName} REASON:${directive.reason}]]`,
+          `${formatDiceResult(result)} → **${result.total} healed** on ${directive.targetName}`,
+        );
       }
-      processedText = processedText.replace(
-        `[[HEAL:${directive.notation} TARGET:${directive.targetName} REASON:${directive.reason}]]`,
-        `${formatDiceResult(result)} → **${result.total} healed** on ${directive.targetName}`,
-      );
     }
   }
 

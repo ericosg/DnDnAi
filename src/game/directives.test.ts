@@ -76,6 +76,21 @@ function makeAgent(): Player {
   };
 }
 
+function makeExplorationState(): GameState {
+  return {
+    id: "test-game",
+    channelId: "ch1",
+    guildId: "g1",
+    status: "active",
+    players: [makePlayer(), makeAgent()],
+    combat: { active: false, round: 0, turnIndex: 0, combatants: [] },
+    narrativeSummary: "",
+    turnCount: 0,
+    createdAt: new Date().toISOString(),
+    lastActivity: new Date().toISOString(),
+  };
+}
+
 function makeCombatState(): GameState {
   return {
     id: "test-game",
@@ -355,5 +370,178 @@ describe("directives — HP and resource summaries", () => {
     const ctx = processDirectives(text, gs);
     expect(ctx.resourceSummary).not.toBeNull();
     expect(ctx.resourceSummary).toContain("Resources");
+  });
+});
+
+// ===================================================================
+// Non-combat (exploration) tests — every directive that should work
+// outside combat needs to be verified here.
+// ===================================================================
+describe("directives — outside combat", () => {
+  test("DAMAGE updates character sheet HP when not in combat", () => {
+    const gs = makeExplorationState();
+    gs.players[0].characterSheet.hp.current = 20;
+    const text = "The trap springs! [[DAMAGE:1d6+2 TARGET:Fusetsu REASON:poison dart trap]]";
+    const ctx = processDirectives(text, gs);
+
+    expect(ctx.processedText).not.toContain("[[DAMAGE:");
+    expect(ctx.processedText).toContain("damage");
+    expect(ctx.processedText).toContain("Fusetsu");
+    expect(ctx.hpChanged).toBe(true);
+    // Character sheet HP should be reduced
+    expect(gs.players[0].characterSheet.hp.current).toBeLessThan(20);
+    // Should show HP in the output (not just "narrative damage")
+    expect(ctx.processedText).toContain("HP:");
+  });
+
+  test("DAMAGE outside combat respects temp HP", () => {
+    const gs = makeExplorationState();
+    gs.players[0].characterSheet.hp.temp = 10;
+    gs.players[0].characterSheet.hp.current = 20;
+    const text = "[[DAMAGE:5 TARGET:Fusetsu REASON:fall damage]]";
+    processDirectives(text, gs);
+
+    // 5 damage absorbed by 10 temp HP
+    expect(gs.players[0].characterSheet.hp.temp).toBe(5);
+    expect(gs.players[0].characterSheet.hp.current).toBe(20);
+  });
+
+  test("DAMAGE outside combat clamps HP to 0", () => {
+    const gs = makeExplorationState();
+    gs.players[0].characterSheet.hp.current = 5;
+    const text = "[[DAMAGE:100 TARGET:Fusetsu REASON:boulder]]";
+    processDirectives(text, gs);
+
+    expect(gs.players[0].characterSheet.hp.current).toBe(0);
+  });
+
+  test("DAMAGE to non-PC outside combat still formats correctly", () => {
+    const gs = makeExplorationState();
+    const text = "[[DAMAGE:2d6+3 TARGET:Goblin Scout REASON:longbow hit]]";
+    const ctx = processDirectives(text, gs);
+
+    expect(ctx.processedText).not.toContain("[[DAMAGE:");
+    expect(ctx.processedText).toContain("Goblin Scout");
+    expect(ctx.processedText).toContain("damage");
+    // Should NOT contain HP: since it's not a tracked character
+    expect(ctx.processedText).not.toContain("HP:");
+  });
+
+  test("HEAL updates character sheet HP when not in combat", () => {
+    const gs = makeExplorationState();
+    gs.players[0].characterSheet.hp.current = 10;
+    const text = "The potion glows. [[HEAL:2d4+2 TARGET:Fusetsu REASON:healing potion]]";
+    const ctx = processDirectives(text, gs);
+
+    expect(ctx.processedText).not.toContain("[[HEAL:");
+    expect(ctx.processedText).toContain("healed");
+    expect(ctx.hpChanged).toBe(true);
+    expect(gs.players[0].characterSheet.hp.current).toBeGreaterThan(10);
+    expect(ctx.processedText).toContain("HP:");
+  });
+
+  test("HEAL outside combat clamps to max HP", () => {
+    const gs = makeExplorationState();
+    gs.players[0].characterSheet.hp.current = 23;
+    gs.players[0].characterSheet.hp.max = 24;
+    const text = "[[HEAL:100 TARGET:Fusetsu REASON:divine blessing]]";
+    processDirectives(text, gs);
+
+    expect(gs.players[0].characterSheet.hp.current).toBe(24);
+  });
+
+  test("HEAL to non-PC outside combat still formats correctly", () => {
+    const gs = makeExplorationState();
+    const text = "[[HEAL:1d8+3 TARGET:Village Elder REASON:cure wounds]]";
+    const ctx = processDirectives(text, gs);
+
+    expect(ctx.processedText).not.toContain("[[HEAL:");
+    expect(ctx.processedText).toContain("Village Elder");
+  });
+
+  test("UPDATE_HP works outside combat", () => {
+    const gs = makeExplorationState();
+    const text = "[[UPDATE_HP:15 TARGET:Fusetsu]]";
+    const ctx = processDirectives(text, gs);
+
+    expect(ctx.processedText).not.toContain("[[UPDATE_HP:");
+    expect(ctx.hpChanged).toBe(true);
+    expect(gs.players[0].characterSheet.hp.current).toBe(15);
+  });
+
+  test("SPELL works outside combat (deducts slot)", () => {
+    const gs = makeExplorationState();
+    gs.players[1].characterSheet.spellSlots = [{ level: 1, max: 2, current: 2 }];
+    const text = "[[SPELL:1 TARGET:Grimbold Ironforge]]";
+    const ctx = processDirectives(text, gs);
+
+    expect(ctx.processedText).not.toContain("[[SPELL:");
+    expect(ctx.spellsUsed).toBe(true);
+    expect(gs.players[1].characterSheet.spellSlots?.[0].current).toBe(1);
+  });
+
+  test("USE works outside combat (deducts charge)", () => {
+    const gs = makeExplorationState();
+    const text = "[[USE:Second Wind TARGET:Grimbold Ironforge]]";
+    const ctx = processDirectives(text, gs);
+
+    expect(ctx.processedText).not.toContain("[[USE:");
+    expect(ctx.featuresUsed).toBe(true);
+  });
+
+  test("XP works outside combat", () => {
+    const gs = makeExplorationState();
+    const text = "[[XP:100 TARGET:party REASON:puzzle solved]]";
+    const ctx = processDirectives(text, gs);
+
+    expect(ctx.processedText).toContain("+50 XP each");
+    expect(gs.players[0].characterSheet.experiencePoints).toBe(50);
+  });
+
+  test("ROLL works outside combat (no condition annotation)", () => {
+    const gs = makeExplorationState();
+    const text = "[[ROLL:d20+5 FOR:Fusetsu REASON:perception check]]";
+    const ctx = processDirectives(text, gs);
+
+    expect(ctx.processedText).not.toContain("[[ROLL:");
+    expect(ctx.diceResults).toHaveLength(1);
+  });
+
+  test("REQUEST_ROLL works outside combat (creates pending roll)", () => {
+    const gs = makeExplorationState();
+    const text = "[[REQUEST_ROLL:d20+5 FOR:Fusetsu REASON:investigation check]]";
+    const ctx = processDirectives(text, gs);
+
+    expect(ctx.pendingRolls).toHaveLength(1);
+    expect(ctx.processedText).toContain("/roll d20+5");
+  });
+
+  test("COMBAT:START transitions from exploration to combat", () => {
+    const gs = makeExplorationState();
+    const text = "Ambush! [[COMBAT:START]]";
+    const ctx = processDirectives(text, gs);
+
+    expect(ctx.combatStarted).toBe(true);
+    expect(gs.combat.active).toBe(true);
+    expect(gs.combat.combatants.length).toBe(2);
+  });
+
+  test("CONDITION silently fails outside combat (no combatants)", () => {
+    const gs = makeExplorationState();
+    const text = "[[CONDITION:ADD poisoned TARGET:Fusetsu]]";
+    const ctx = processDirectives(text, gs);
+
+    // Should not crash, just log a warning and remove the tag
+    expect(ctx.processedText).not.toContain("[[CONDITION:");
+    expect(ctx.conditionsChanged).toBe(false);
+  });
+
+  test("UPDATE_CONDITION silently fails outside combat", () => {
+    const gs = makeExplorationState();
+    const text = "[[UPDATE_CONDITION:SET none TARGET:Fusetsu]]";
+    const ctx = processDirectives(text, gs);
+
+    expect(ctx.processedText).not.toContain("[[UPDATE_CONDITION:");
+    expect(ctx.conditionsChanged).toBe(false);
   });
 });
