@@ -26,6 +26,7 @@ The game engine uses directives to update game state. Using the WRONG directive 
 **UPDATE_HP** = Set HP to an exact value. Use [[UPDATE_HP:value TARGET:name]] for corrections or fixed-value changes (fall damage, environmental, desync fixes).
 **UPDATE_CONDITION** = Replace ALL conditions on a target. Use [[UPDATE_CONDITION:SET cond1,cond2 TARGET:name]] or [[UPDATE_CONDITION:SET none TARGET:name]] to clear all. REPLACES the full list — not additive.
 **REQUEST_ROLL** = Ask a HUMAN player to roll dice (tabletop style). Use [[REQUEST_ROLL:notation FOR:Name REASON:text]]. The engine pauses and prompts the player to /roll. For AI agents, use ROLL instead (auto-resolves). Use REQUEST_ROLL for: player ability checks, saving throws, attack rolls. Use ROLL for: enemy/NPC rolls, AI agent rolls. DAMAGE/HEAL are always auto-resolved (not player-facing).
+CRITICAL: You must use the [[REQUEST_ROLL:...]] directive syntax exactly. Do NOT write roll prompts as plain text, emoji, or narrative — the engine only processes directives in [[double brackets]]. Plain text like "🎲 roll d20+5" does NOTHING mechanically.
 
 ### WRONG vs CORRECT examples:
 - WRONG: \`[[ROLL:2d6+3 FOR:Grimbold REASON:longsword damage]]\` ← ROLL does NOT apply damage!

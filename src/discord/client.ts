@@ -17,6 +17,7 @@ import { config, models, VERSION } from "../config.js";
 import { addAskExchange, formatAskHistoryForPrompt } from "../game/ask-history.js";
 import { buildAgentCharacter, parseCharacterSheet } from "../game/characters.js";
 import { roll as rollDice } from "../game/dice.js";
+import { processDirectives } from "../game/directives.js";
 import { processTurn, resumeOrchestrator } from "../game/engine.js";
 import {
   checkLevelUp,
@@ -610,7 +611,27 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       const player = gameState.players.find((p) => p.id === interaction.user.id);
       const askerName = player?.characterSheet.name ?? interaction.user.displayName;
       const askHistoryStr = formatAskHistoryForPrompt(gameState.id);
-      const answer = await dmAsk(gameState, history, question, askerName, askHistoryStr);
+      const rawAnswer = await dmAsk(gameState, history, question, askerName, askHistoryStr);
+
+      // Process any directives in the DM's answer (ROLL, DAMAGE, HEAL, etc.)
+      const ctx = processDirectives(rawAnswer, gameState);
+      const answer = ctx.processedText;
+
+      // Store pending rolls if the DM requested player dice
+      if (ctx.pendingRolls.length > 0) {
+        gameState.pendingRolls = ctx.pendingRolls.map((pr) => ({
+          id: pr.id,
+          playerId: pr.playerId,
+          playerName: pr.playerName,
+          notation: pr.notation,
+          reason: pr.reason,
+        }));
+      }
+
+      // Save if any directives were processed (text will differ from original)
+      if (answer !== rawAnswer) {
+        await saveGameState(gameState);
+      }
 
       // Record the exchange in ask history (in-memory, for future DM context)
       addAskExchange(gameState.id, {

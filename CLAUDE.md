@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 bun run src/index.ts           # Start the bot
 bun --watch run src/index.ts   # Start with auto-reload (dev mode)
-bun test                       # Run unit tests (636 tests)
+bun test                       # Run unit tests (641 tests)
 bunx tsc --noEmit              # Type-check without emitting
 bunx biome check src/          # Lint and format check
 bun install                    # Install dependencies
@@ -63,7 +63,7 @@ All AI calls are stateless — context is rebuilt from game state + sliding hist
 - **Combat signals**: `[[COMBAT:START]]` and `[[COMBAT:END]]` in DM output trigger the combat state machine.
 - **Auto status embed**: After any DM turn in combat that changes HP or conditions, the engine auto-posts a `combatStatusEmbed` showing the updated combat state.
 - **Resource reconciliation**: After spell/feature use, the engine appends a system history entry summarizing remaining spell slots and feature charges for all casters.
-- **IC vs OOC**: `>` prefix = in-character (advances game state). No prefix = out-of-character (orchestrator skips). Players can use `/ask` for OOC questions to the DM. `/ask` carries in-memory history across multiple questions in the same session (FIFO buffer of 5 exchanges in `ask-history.ts`), and exchanges are recorded as system history entries so the DM sees them in future narration context. The DM is instructed to act immediately on `/ask` requests rather than making promises for later.
+- **IC vs OOC**: `>` prefix = in-character (advances game state). No prefix = out-of-character (orchestrator skips). Players can use `/ask` for OOC questions to the DM. `/ask` carries in-memory history across multiple questions in the same session (FIFO buffer of 5 exchanges in `ask-history.ts`), and exchanges are recorded as system history entries so the DM sees them in future narration context. The DM is instructed to act immediately on `/ask` requests rather than making promises for later. `/ask` responses are piped through `processDirectives()` so the DM can use ROLL, DAMAGE, HEAL, UPDATE_HP, REQUEST_ROLL, etc. in answers — state is saved if any directives were processed.
 - **Webhooks**: Each AI identity (agents + DM) gets a separate Discord webhook with custom name/avatar. DM narration uses rich plain text with visual separators (Discord markdown for formatting); system messages (combat status, dice, game events) use embeds. Agents use plain text.
 - **Agent personality files**: `agents/*.md` with gray-matter frontmatter + markdown body. The `characterSpec` field contains a character sheet in the same markdown format human players upload. 11 pre-built agents ship in `agents/` covering all 9 non-Fighter classes plus the original Fighter (Grimbold) and a second Bard (Pumpernickle). All are levels 1-3 with unique race+class combos.
 - **Player IDs**: Humans = Discord user ID. Agents = `agent:<name>`.
@@ -112,7 +112,7 @@ Game lookup scans all game directories for matching channel ID.
 
 ### Testing
 
-636 tests across 21 files. Agent tests (`ai/agent.test.ts`) load every agent file from disk, verify frontmatter fields, and run each `characterSpec` through `parseCharacterSheet()` to validate stats, ability scores, equipment, features, and spells parse correctly. Caster agents are verified to have spells in a separate `## Spells` section (not embedded in Features). Tests also verify all agents have unique names and unique race+class combinations. Formatter tests cover the `/character` embed builder (section filtering, ability modifiers, edge cases) and DM narration formatting. DM prompt tests (`ai/dm.test.ts`) verify prompt construction: party info, character reference (ability scores, features, spells, gender), file paths (SRD, dm-notes), combat state, history formatting, `/ask` verification instructions, and DM allowed tools. Other test files cover dice, combat, character parsing, orchestrator, engine, guardrails, webhooks, and Claude subprocess.
+641 tests across 21 files. Agent tests (`ai/agent.test.ts`) load every agent file from disk, verify frontmatter fields, and run each `characterSpec` through `parseCharacterSheet()` to validate stats, ability scores, equipment, features, and spells parse correctly. Caster agents are verified to have spells in a separate `## Spells` section (not embedded in Features). Tests also verify all agents have unique names and unique race+class combinations. Formatter tests cover the `/character` embed builder (section filtering, ability modifiers, edge cases) and DM narration formatting. DM prompt tests (`ai/dm.test.ts`) verify prompt construction: party info, character reference (ability scores, features, spells, gender), file paths (SRD, dm-notes), combat state, history formatting, `/ask` verification instructions, and DM allowed tools. Other test files cover dice, combat, character parsing, orchestrator, engine, guardrails, webhooks, and Claude subprocess.
 
 Note on Bun test isolation: `mock.module()` is global and pollutes across files. Tests that need mocked modules use pure-function extraction patterns (e.g., `guardrail-check.ts`, `claude-subprocess.ts`, `dm-prompt.ts`) or direct file I/O to avoid cross-file mock collisions.
 

@@ -44,9 +44,13 @@ mock.module("../state/store.js", () => ({
 
 let dmNarrateResponse = "The party advances through the dungeon.";
 let agentResponse = "> Grimbold grumbles and follows.";
+let dmNarrateCalls: { actions: string }[] = [];
 
 mock.module("../ai/dm.js", () => ({
-  dmNarrate: async () => dmNarrateResponse,
+  dmNarrate: async (_gs: unknown, _hist: unknown, actions: string) => {
+    dmNarrateCalls.push({ actions });
+    return dmNarrateResponse;
+  },
   compressNarrative: async () => "Compressed narrative.",
   dmRecap: async () => "Previously on...",
   dmLook: async () => "You see a dark room.",
@@ -97,8 +101,18 @@ mock.module("../discord/formatter.js", () => ({
   formatDMNarration: (text: string) => `---\n${text}\n---`,
 }));
 
+let dmGuardrailResponses: { pass: boolean; violation?: string }[] = [];
+let dmGuardrailCallIndex = 0;
+
 mock.module("../ai/guardrail.js", () => ({
-  checkDMResponse: async () => ({ pass: true }),
+  checkDMResponse: async () => {
+    if (dmGuardrailResponses.length > 0) {
+      const response = dmGuardrailResponses[dmGuardrailCallIndex] ?? { pass: true };
+      dmGuardrailCallIndex++;
+      return response;
+    }
+    return { pass: true };
+  },
   checkAgentResponse: async () => ({ pass: true }),
 }));
 
@@ -203,6 +217,9 @@ beforeEach(() => {
   mockGameStateForLoad = null;
   dmNarrateResponse = "The party advances through the dungeon.";
   agentResponse = "> Grimbold grumbles and follows.";
+  dmNarrateCalls = [];
+  dmGuardrailResponses = [];
+  dmGuardrailCallIndex = 0;
   clearRound("test-game");
 });
 
@@ -1230,5 +1247,40 @@ describe("engine — pending rolls", () => {
     // Should show /roll prompt, not raw directive
     expect(dmMessage?.content).not.toContain("[[REQUEST_ROLL:");
     expect(dmMessage?.content).toContain("/roll d20+5");
+  });
+});
+
+describe("engine — guardrail re-generation feedback", () => {
+  test("re-generation feedback instructs DM to preserve directives", async () => {
+    // First guardrail call fails, second passes
+    dmGuardrailResponses = [
+      { pass: false, violation: "DM narrated PC's jaw tightening" },
+      { pass: true },
+    ];
+
+    const gs = makeGameState();
+    markResponded(gs.id, "agent:grimbold");
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I attack.",
+    };
+
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
+
+    // dmNarrate should have been called twice (original + re-gen)
+    expect(dmNarrateCalls.length).toBeGreaterThanOrEqual(2);
+
+    // The second call's actions param should contain directive preservation instruction
+    const regenCall = dmNarrateCalls[1];
+    expect(regenCall.actions).toContain("[[REQUEST_ROLL:");
+    expect(regenCall.actions).toContain("[[ROLL:");
+    expect(regenCall.actions).toContain("[[DAMAGE:");
+    expect(regenCall.actions).toContain("[[HEAL:");
+    expect(regenCall.actions).toContain("Do not drop game mechanics");
   });
 });

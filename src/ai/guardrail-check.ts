@@ -20,6 +20,8 @@ NOT violations:
 - Describing how a PC looks to others or how NPCs perceive them
 - Addressing a PC directly ("Fūsetsu — what do you do?")
 - Referencing what a PC already did in past tense based on their stated action
+- Prompting a PC to roll dice ("Fūsetsu, roll d20+5 for Perception") — this is a game mechanic, not narrating the PC's actions
+- Using dice directives like [[REQUEST_ROLL:...]], [[ROLL:...]], [[DAMAGE:...]] — these are engine commands, not narration
 
 ## Important Context
 You will also receive what the players explicitly stated they are doing this turn. The DM IS allowed to narrate the execution and outcome of these stated actions. For example:

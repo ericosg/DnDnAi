@@ -345,6 +345,24 @@ describe("directives — REQUEST_ROLL", () => {
   });
 });
 
+describe("directives — plain text roll prompts create no pending rolls", () => {
+  test("emoji roll prompt without directive creates no pending rolls", () => {
+    const gs = makeCombatState();
+    const text = "🎲 Fusetsu, roll d20+2 for Perception!";
+    const ctx = processDirectives(text, gs);
+    expect(ctx.pendingRolls).toHaveLength(0);
+    expect(ctx.diceResults).toHaveLength(0);
+  });
+
+  test("plain text roll request without directive creates no pending rolls", () => {
+    const gs = makeCombatState();
+    const text = "Fusetsu, roll d20+5 for an Athletics check.";
+    const ctx = processDirectives(text, gs);
+    expect(ctx.pendingRolls).toHaveLength(0);
+    expect(ctx.diceResults).toHaveLength(0);
+  });
+});
+
 describe("directives — misuse detection", () => {
   test("detects narrated damage without directive", () => {
     const gs = makeCombatState();

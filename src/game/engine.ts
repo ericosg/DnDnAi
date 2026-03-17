@@ -380,7 +380,7 @@ async function handleDMTurn(
     if (!guardrail.pass) {
       log.warn(`Guardrail violation: ${guardrail.violation}`);
       log.info("DM turn: re-generating with guardrail feedback...");
-      const feedback = `${recentActions}\n\n[SYSTEM: Your previous response was rejected because it violated player agency. Violation: "${guardrail.violation}". Remember: NEVER narrate what player characters do, say, think, feel, or attempt. Only describe the world, NPCs, and outcomes of actions players have ALREADY stated. Re-write your response without controlling any player character.]`;
+      const feedback = `${recentActions}\n\n[SYSTEM: Your previous response was rejected because it violated player agency. Violation: "${guardrail.violation}". Remember: NEVER narrate what player characters do, say, think, feel, or attempt. Only describe the world, NPCs, and outcomes of actions players have ALREADY stated. Re-write your response without controlling any player character. IMPORTANT: You MUST still include all dice directives ([[REQUEST_ROLL:...]], [[ROLL:...]], [[DAMAGE:...]], [[HEAL:...]], etc.) for any checks, attacks, or mechanical actions. Do not drop game mechanics — only fix the narration.]`;
       dmResponse = await dmNarrate(gameState, history, feedback, askHistory);
       log.info(`DM turn: re-generated response ready (${dmResponse?.length ?? 0} chars)`);
 

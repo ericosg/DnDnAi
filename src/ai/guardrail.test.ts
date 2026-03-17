@@ -28,6 +28,18 @@ describe("guardrail", () => {
       expect(GUARDRAIL_SYSTEM).toContain("Addressing a PC directly");
     });
 
+    test("whitelists dice roll prompts as non-violations", () => {
+      expect(GUARDRAIL_SYSTEM).toContain("Prompting a PC to roll dice");
+      expect(GUARDRAIL_SYSTEM).toContain("game mechanic");
+    });
+
+    test("whitelists engine directives as non-violations", () => {
+      expect(GUARDRAIL_SYSTEM).toContain("[[REQUEST_ROLL:");
+      expect(GUARDRAIL_SYSTEM).toContain("[[ROLL:");
+      expect(GUARDRAIL_SYSTEM).toContain("[[DAMAGE:");
+      expect(GUARDRAIL_SYSTEM).toContain("engine commands");
+    });
+
     test("specifies JSON output format", () => {
       expect(GUARDRAIL_SYSTEM).toContain('"pass": true');
       expect(GUARDRAIL_SYSTEM).toContain('"pass": false');
