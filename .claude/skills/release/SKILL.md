@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Release Workflow
 
-Base directory for this skill: /Users/eric/sandbox/DnD/bot
+All commands below assume the working directory is the bot repo root.
 
 Complete the following steps in order. Stop and report if any step fails.
 

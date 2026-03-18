@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 bun run src/index.ts           # Start the bot
 bun --watch run src/index.ts   # Start with auto-reload (dev mode)
-bun test                       # Run unit tests (656 tests)
+bun test                       # Run unit tests (665 tests)
 bunx tsc --noEmit              # Type-check without emitting
 bunx biome check src/          # Lint and format check
 bun install                    # Install dependencies
@@ -43,12 +43,12 @@ TypeScript + Bun runtime, discord.js for Discord, Claude CLI for AI (uses Pro/Ma
 
 ### AI Model Assignment
 
-| Role | Model | Reason |
-|------|-------|--------|
-| DM | Opus | Narrative quality, rule adjudication |
-| Agents | Sonnet | Good roleplay, cost-effective (per-agent override via frontmatter) |
-| Orchestrator | Haiku | Fast flow control, mostly deterministic |
-| Guardrail | Haiku | Reviews DM output for player agency violations and agent output for world-fact invention |
+| Role | Model | Effort | Reason |
+|------|-------|--------|--------|
+| DM | Opus | default (high on guardrail retry) | Narrative quality, rule adjudication |
+| Agents | Sonnet | low (medium on guardrail retry) | Good roleplay, cost-effective (per-agent override via frontmatter) |
+| Orchestrator | Haiku | default | Fast flow control, mostly deterministic |
+| Guardrail | Haiku | default | Reviews DM output for player agency violations and agent output for world-fact invention |
 
 All AI calls are stateless — context is rebuilt from game state + sliding history window each call. The DM runs as an agentic Claude Code CLI process with read-only file access (Read, Glob, Grep tools) so it can verify character data, check full history, and consult rules docs before responding.
 
@@ -112,7 +112,7 @@ Game lookup scans all game directories for matching channel ID.
 
 ### Testing
 
-656 tests across 21 files. Agent tests (`ai/agent.test.ts`) load every agent file from disk, verify frontmatter fields, and run each `characterSpec` through `parseCharacterSheet()` to validate stats, ability scores, equipment, features, and spells parse correctly. Caster agents are verified to have spells in a separate `## Spells` section (not embedded in Features). Tests also verify all agents have unique names and unique race+class combinations. Formatter tests cover the `/character` embed builder (section filtering, ability modifiers, edge cases) and DM narration formatting. DM prompt tests (`ai/dm.test.ts`) verify prompt construction: party info, character reference (ability scores, features, spells, gender), file paths (SRD, dm-notes), combat state, history formatting, `/ask` verification instructions, and DM allowed tools. Other test files cover dice, combat, character parsing, orchestrator, engine, guardrails, webhooks, and Claude subprocess.
+665 tests across 21 files. Agent tests (`ai/agent.test.ts`) load every agent file from disk, verify frontmatter fields, and run each `characterSpec` through `parseCharacterSheet()` to validate stats, ability scores, equipment, features, and spells parse correctly. Caster agents are verified to have spells in a separate `## Spells` section (not embedded in Features). Tests also verify all agents have unique names and unique race+class combinations. Formatter tests cover the `/character` embed builder (section filtering, ability modifiers, edge cases) and DM narration formatting. DM prompt tests (`ai/dm.test.ts`) verify prompt construction: party info, character reference (ability scores, features, spells, gender), file paths (SRD, dm-notes), combat state, history formatting, `/ask` verification instructions, and DM allowed tools. Other test files cover dice, combat, character parsing, orchestrator, engine, guardrails, webhooks, and Claude subprocess.
 
 Note on Bun test isolation: `mock.module()` is global and pollutes across files. Tests that need mocked modules use pure-function extraction patterns (e.g., `guardrail-check.ts`, `claude-subprocess.ts`, `dm-prompt.ts`) or direct file I/O to avoid cross-file mock collisions.
 

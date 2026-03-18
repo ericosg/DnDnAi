@@ -68,9 +68,23 @@ Confirm all tests still pass after any fixes.
 
 ## 6. Update documentation
 
-- **CLAUDE.md**: Update if test file count changed, new architectural patterns were added, new commands were introduced, or key protocols changed. Keep descriptions concise.
-- **README.md**: Update if user-facing features changed (new commands, new agents, changed behavior). Do NOT update for internal refactors.
-- **docs/**: Update architecture.md or design-decisions.md only if there are significant structural changes.
+Search for documentation that mentions the changed concepts.
+
+### Bot repo files to check
+
+- **`CLAUDE.md`** — update if test file count changed, new architectural patterns were added, new commands were introduced, or key protocols changed. Keep descriptions concise.
+- **`README.md`** — update if user-facing features changed (new commands, new agents, changed behavior). Do NOT update for internal refactors.
+- **`docs/architecture.md`** — update if module responsibilities, AI call patterns, or system flow changed
+- **`docs/design-decisions.md`** — update if the *rationale* behind a design choice changed (not just the implementation)
+- **`docs/creating-agents.md`**, **`docs/creating-characters.md`**, **`docs/game-rules.md`**, **`docs/how-to-play.md`** — update only if player-facing behavior changed
+
+### How to update
+
+- Update tables, bullet points, and prose that reference changed behavior
+- Add new rows/columns to existing tables where a new concept was added (e.g., an Effort column in a model assignment table)
+- Keep the existing tone and formatting style of each document
+- Do NOT update docs that aren't affected by the changes
+- Only create a new doc if the change introduces an entirely new concept that doesn't fit in any existing doc (this is rare)
 
 Skip docs that don't need changes. Do not add documentation for its own sake.
 

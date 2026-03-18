@@ -96,7 +96,7 @@ Round tracking is in-memory only (not persisted). It tracks which players have r
 
 ### AI Layer (`src/ai/`)
 
-**claude.ts** — AI abstraction layer. All AI calls flow through `chat(model, system, messages)`. Uses the Claude CLI in non-interactive mode (`claude -p`), routing through the user's Pro/Max plan instead of requiring API credits. Retries on failure with exponential backoff (up to 3 attempts). Subprocess safety (env var overrides, permission flags) is handled by helpers in `claude-subprocess.ts`.
+**claude.ts** — AI abstraction layer. All AI calls flow through `chat(model, system, messages)` and `chatAgentic()` (for the DM). Uses the Claude CLI in non-interactive mode (`claude -p`), routing through the user's Pro/Max plan instead of requiring API credits. Retries on failure with exponential backoff (up to 3 attempts). Subprocess safety (env var overrides, permission flags) is handled by helpers in `claude-subprocess.ts`. Both functions accept an optional `effort` parameter (`low`/`medium`/`high`/`max`) passed as `--effort` to the CLI. Agents default to `low` effort; the DM uses the CLI default. On guardrail retry, effort escalates (agents: `medium`, DM: `high`).
 
 **orchestrator.ts** — Decides who acts next. Mostly deterministic (no AI call needed in most cases):
 - Exploration: agents first (in order), then wait for humans, then DM resolves

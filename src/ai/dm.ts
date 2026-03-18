@@ -10,9 +10,10 @@ export async function dmNarrate(
   history: TurnEntry[],
   currentActions: string,
   askHistory?: string | null,
+  effort?: "low" | "medium" | "high" | "max",
 ): Promise<string> {
   const { system, messages } = buildDMPrompt(gameState, history, currentActions, askHistory);
-  return chatAgentic(models.dm, system, messages, DM_ALLOWED_TOOLS, "DM");
+  return chatAgentic(models.dm, system, messages, DM_ALLOWED_TOOLS, "DM", effort);
 }
 
 export async function dmRecap(gameState: GameState, history: TurnEntry[]): Promise<string> {

@@ -304,12 +304,13 @@ async function handleAgentTurn(
     const agentCheck = await checkAgentResponse(response, player.name, dmContext);
     if (!agentCheck.pass) {
       log.warn(`Agent guardrail violation (${player.name}): ${agentCheck.violation}`);
-      log.info(`Agent ${player.name}: re-generating with guardrail feedback...`);
+      log.info(`Agent ${player.name}: re-generating with guardrail feedback (effort: medium)...`);
       response = await generateAgentAction(
         personality,
         gameState,
         recentHistory,
         `${currentSituation}\n\n[SYSTEM: Your previous response was rejected because you invented world details the DM hasn't described. Violation: "${agentCheck.violation}". You may ONLY reference things the DM has already narrated. Express intentions, speak in character, react emotionally — but do NOT describe what you perceive, detect, or discover. Only the DM decides what exists in the world.]`,
+        "medium",
       );
       log.info(`Agent ${player.name}: re-generated response ready (${response.length} chars)`);
     } else {
@@ -379,9 +380,9 @@ async function handleDMTurn(
     const guardrail = await checkDMResponse(dmResponse, pcNames, recentActions);
     if (!guardrail.pass) {
       log.warn(`Guardrail violation: ${guardrail.violation}`);
-      log.info("DM turn: re-generating with guardrail feedback...");
+      log.info("DM turn: re-generating with guardrail feedback (effort: high)...");
       const feedback = `${recentActions}\n\n[SYSTEM: Your previous response was rejected because it violated player agency. Violation: "${guardrail.violation}". Remember: NEVER narrate what player characters do, say, think, feel, or attempt. Only describe the world, NPCs, and outcomes of actions players have ALREADY stated. Re-write your response without controlling any player character. IMPORTANT: You MUST still include all dice directives ([[REQUEST_ROLL:...]], [[ROLL:...]], [[DAMAGE:...]], [[HEAL:...]], etc.) for any checks, attacks, or mechanical actions. Do not drop game mechanics — only fix the narration.]`;
-      dmResponse = await dmNarrate(gameState, history, feedback, askHistory);
+      dmResponse = await dmNarrate(gameState, history, feedback, askHistory, "high");
       log.info(`DM turn: re-generated response ready (${dmResponse?.length ?? 0} chars)`);
 
       if (!dmResponse || !dmResponse.trim()) {

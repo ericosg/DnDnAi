@@ -16,8 +16,8 @@ DnDnAi replaces the human DM with Claude AI while keeping human players at the t
 
 ## Features
 
-- **AI Dungeon Master** — Claude Opus narrates, adjudicates rules, and drives the story
-- **AI Party Members** — Claude Sonnet-powered NPCs with distinct personalities and voices
+- **AI Dungeon Master** — Claude Opus narrates, adjudicates rules, and drives the story (escalates effort on guardrail retry)
+- **AI Party Members** — Claude Sonnet-powered NPCs with distinct personalities and voices (low effort; escalates on guardrail retry)
 - **Honest Dice** — real random rolls, never AI-simulated
 - **Full Combat System** — initiative, turn order, damage, healing, conditions, concentration tracking, automated death saves
 - **Spell Slots & Resources** — auto-tracked and deducted; the DM can't accidentally let you cast beyond your limits
@@ -209,7 +209,7 @@ See [docs/architecture.md](docs/architecture.md) for full technical details.
 - **Runtime**: [Bun](https://bun.sh)
 - **Language**: TypeScript (strict mode)
 - **Discord**: [discord.js](https://discord.js.org) v14
-- **AI**: Claude CLI (non-interactive mode) — Opus (DM), Sonnet (agents), Haiku (orchestrator)
+- **AI**: Claude CLI (non-interactive mode) — Opus (DM), Sonnet (agents, low effort), Haiku (orchestrator); effort escalates on guardrail retry
 - **Config Parsing**: [gray-matter](https://github.com/jonschlinkert/gray-matter) for agent frontmatter
 - **Persistence**: Flat JSON files (no database)
 

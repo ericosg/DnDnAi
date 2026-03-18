@@ -211,6 +211,52 @@ describe("claude CLI subprocess", () => {
     });
   });
 
+  describe("effort parameter", () => {
+    test("omits --effort when not provided", () => {
+      const args = buildSpawnArgs("m", "s", "p");
+      expect(args).not.toContain("--effort");
+    });
+
+    test("omits --effort when undefined", () => {
+      const args = buildSpawnArgs("m", "s", "p", [], "text", undefined, undefined);
+      expect(args).not.toContain("--effort");
+    });
+
+    test("includes --effort low", () => {
+      const args = buildSpawnArgs("m", "s", "p", [], "text", undefined, "low");
+      const idx = args.indexOf("--effort");
+      expect(idx).toBeGreaterThan(-1);
+      expect(args[idx + 1]).toBe("low");
+    });
+
+    test("includes --effort medium", () => {
+      const args = buildSpawnArgs("m", "s", "p", [], "text", undefined, "medium");
+      const idx = args.indexOf("--effort");
+      expect(args[idx + 1]).toBe("medium");
+    });
+
+    test("includes --effort high", () => {
+      const args = buildSpawnArgs("m", "s", "p", [], "text", undefined, "high");
+      const idx = args.indexOf("--effort");
+      expect(args[idx + 1]).toBe("high");
+    });
+
+    test("includes --effort max", () => {
+      const args = buildSpawnArgs("m", "s", "p", [], "text", undefined, "max");
+      const idx = args.indexOf("--effort");
+      expect(args[idx + 1]).toBe("max");
+    });
+
+    test("effort works with stream-json and maxTurns", () => {
+      const args = buildSpawnArgs("m", "s", "p", ["Read"], "stream-json", 10, "high");
+      expect(args).toContain("--effort");
+      expect(args).toContain("--max-turns");
+      expect(args).toContain("--verbose");
+      const idx = args.indexOf("--effort");
+      expect(args[idx + 1]).toBe("high");
+    });
+  });
+
   describe("prompt construction (via buildSpawnArgs)", () => {
     test("single message becomes the prompt", () => {
       const args = buildSpawnArgs("m", "s", "Solo message.");

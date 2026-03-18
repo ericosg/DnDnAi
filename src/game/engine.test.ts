@@ -44,17 +44,25 @@ mock.module("../state/store.js", () => ({
 
 let dmNarrateResponse = "The party advances through the dungeon.";
 let agentResponse = "> Grimbold grumbles and follows.";
-let dmNarrateCalls: { actions: string }[] = [];
+let dmNarrateCalls: { actions: string; effort?: string }[] = [];
 
 mock.module("../ai/dm.js", () => ({
-  dmNarrate: async (_gs: unknown, _hist: unknown, actions: string) => {
-    dmNarrateCalls.push({ actions });
+  dmNarrate: async (
+    _gs: unknown,
+    _hist: unknown,
+    actions: string,
+    _askHistory?: unknown,
+    effort?: string,
+  ) => {
+    dmNarrateCalls.push({ actions, effort });
     return dmNarrateResponse;
   },
   compressNarrative: async () => "Compressed narrative.",
   dmRecap: async () => "Previously on...",
   dmLook: async () => "You see a dark room.",
 }));
+
+let agentActionCalls: { effort?: string }[] = [];
 
 mock.module("../ai/agent.js", () => ({
   loadAgentPersonality: async () => ({
@@ -71,7 +79,16 @@ mock.module("../ai/agent.js", () => ({
     rawContent: "## Personality\nGrumpy dwarf.",
     avatarUrl: null,
   }),
-  generateAgentAction: async () => agentResponse,
+  generateAgentAction: async (
+    _p: unknown,
+    _gs: unknown,
+    _hist: unknown,
+    _sit: unknown,
+    effort?: string,
+  ) => {
+    agentActionCalls.push({ effort });
+    return agentResponse;
+  },
   generateBackstory: async () => "A backstory.",
 }));
 
@@ -103,6 +120,8 @@ mock.module("../discord/formatter.js", () => ({
 
 let dmGuardrailResponses: { pass: boolean; violation?: string }[] = [];
 let dmGuardrailCallIndex = 0;
+let agentGuardrailResponses: { pass: boolean; violation?: string }[] = [];
+let agentGuardrailCallIndex = 0;
 
 mock.module("../ai/guardrail.js", () => ({
   checkDMResponse: async () => {
@@ -113,7 +132,14 @@ mock.module("../ai/guardrail.js", () => ({
     }
     return { pass: true };
   },
-  checkAgentResponse: async () => ({ pass: true }),
+  checkAgentResponse: async () => {
+    if (agentGuardrailResponses.length > 0) {
+      const response = agentGuardrailResponses[agentGuardrailCallIndex] ?? { pass: true };
+      agentGuardrailCallIndex++;
+      return response;
+    }
+    return { pass: true };
+  },
 }));
 
 const { processTurn, resumeOrchestrator, markResponded, clearRound } = await import("./engine.js");
@@ -218,8 +244,11 @@ beforeEach(() => {
   dmNarrateResponse = "The party advances through the dungeon.";
   agentResponse = "> Grimbold grumbles and follows.";
   dmNarrateCalls = [];
+  agentActionCalls = [];
   dmGuardrailResponses = [];
   dmGuardrailCallIndex = 0;
+  agentGuardrailResponses = [];
+  agentGuardrailCallIndex = 0;
   clearRound("test-game");
 });
 
@@ -1282,5 +1311,56 @@ describe("engine — guardrail re-generation feedback", () => {
     expect(regenCall.actions).toContain("[[DAMAGE:");
     expect(regenCall.actions).toContain("[[HEAL:");
     expect(regenCall.actions).toContain("Do not drop game mechanics");
+  });
+
+  test("DM re-generation escalates effort to high", async () => {
+    dmGuardrailResponses = [{ pass: false, violation: "DM narrated PC action" }, { pass: true }];
+
+    const gs = makeGameState();
+    markResponded(gs.id, "agent:grimbold");
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I attack.",
+    };
+
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
+
+    expect(dmNarrateCalls.length).toBeGreaterThanOrEqual(2);
+    // First call: no effort override
+    expect(dmNarrateCalls[0].effort).toBeUndefined();
+    // Re-gen call: effort escalated to high
+    expect(dmNarrateCalls[1].effort).toBe("high");
+  });
+
+  test("agent re-generation escalates effort to medium", async () => {
+    agentGuardrailResponses = [
+      { pass: false, violation: "Agent invented a hidden door" },
+      { pass: true },
+    ];
+
+    const gs = makeGameState();
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I look around.",
+    };
+
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
+
+    // Agent should have been called twice (original + re-gen)
+    expect(agentActionCalls.length).toBeGreaterThanOrEqual(2);
+    // First call: default low effort (undefined means the function default applies)
+    expect(agentActionCalls[0].effort).toBeUndefined();
+    // Re-gen call: effort escalated to medium
+    expect(agentActionCalls[1].effort).toBe("medium");
   });
 });

@@ -10,7 +10,7 @@ Official rules released by Wizards of the Coast under Creative Commons Attributi
 | `02 classes.md` | All 12 classes with level progression tables, features by level, subclass details, spell lists | 2579 |
 | `03 beyond1st.md` | Leveling up, multiclassing rules, proficiency bonus progression | 329 |
 | `04 equipment.md` | Weapons (properties, damage), armor (AC), adventuring gear, tools, mounts, trade goods, expenses | 755 |
-| `05 feats.md` | Feat rules (SRD only includes Grappler — see `../../../guides/reference/feats.md` for full list) | 15 |
+| `05 feats.md` | Feat rules (SRD only includes Grappler — see [ericosg/DnD reference/feats.md](https://github.com/ericosg/DnD/blob/main/reference/feats.md) for full list) | 15 |
 | `06 mechanics.md` | Ability scores, ability checks, saving throws, skills, advantage/disadvantage, proficiency, resting, movement, environment | 633 |
 | `07 combat.md` | Initiative, actions in combat, bonus actions, reactions, movement, attack rolls, damage, death saves, conditions in combat | 515 |
 | `08 spellcasting.md` | Spellcasting rules + all SRD spell descriptions (A-Z). Spell slots, components, concentration, ritual casting | 6847 |
@@ -32,10 +32,10 @@ Official rules released by Wizards of the Coast under Creative Commons Attributi
 - **For monster stats:** Search `11 monsters.md` for the creature name
 - **For ability checks / skills:** Read `06 mechanics.md`
 
-## Supplemental References (from guides repo)
+## Supplemental References
 
-These files in `../../../guides/reference/` have additional detail beyond the SRD:
-- `feats.md` — Complete feat catalog with class recommendations
-- `skills.md` — All 18 skills with practical examples
-- `equipment.md` — Expanded equipment with costs and notes
-- `backgrounds.md` — All backgrounds with skills and features
+The companion repository [ericosg/DnD](https://github.com/ericosg/DnD) has reference files with additional detail beyond the SRD:
+- [`feats.md`](https://github.com/ericosg/DnD/blob/main/reference/feats.md) — Complete feat catalog with class recommendations
+- [`skills.md`](https://github.com/ericosg/DnD/blob/main/reference/skills.md) — All 18 skills with practical examples
+- [`equipment.md`](https://github.com/ericosg/DnD/blob/main/reference/equipment.md) — Expanded equipment with costs and notes
+- [`backgrounds.md`](https://github.com/ericosg/DnD/blob/main/reference/backgrounds.md) — All backgrounds with skills and features

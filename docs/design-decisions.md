@@ -21,13 +21,16 @@ The bot isn't trying to replace a skilled human DM. It's trying to make D&D acce
 
 Each AI role has different requirements:
 
-| Role | Model | Why |
-|------|-------|-----|
-| Dungeon Master | Opus | Needs the best narrative quality, rule knowledge, and judgment. The DM is the bottleneck for game quality. |
-| AI Agents | Sonnet | Good roleplay and personality consistency, but doesn't need DM-level reasoning. Cost-effective for multiple agents. |
-| Orchestrator | Haiku | Flow control is largely deterministic. The AI fallback (IC/OOC classification) is a simple binary decision. Fast and cheap. |
+| Role | Model | Effort | Why |
+|------|-------|--------|-----|
+| Dungeon Master | Opus | default (high on guardrail retry) | Needs the best narrative quality, rule knowledge, and judgment. The DM is the bottleneck for game quality. |
+| AI Agents | Sonnet | low (medium on guardrail retry) | Good roleplay and personality consistency, but doesn't need DM-level reasoning. Cost-effective for multiple agents. |
+| Orchestrator | Haiku | default | Flow control is largely deterministic. The AI fallback (IC/OOC classification) is a simple binary decision. Fast and cheap. |
+| Guardrail | Haiku | default | Fast safety checks — player agency and world-fact enforcement don't need reduced effort. |
 
 Agents can override their model via the `model` field in their personality frontmatter — a complex character might use Opus, a simple one might use Haiku.
+
+Effort levels are passed via `--effort` to the Claude CLI. Agents run at `low` effort for speed/cost savings, but escalate to `medium` when re-generating after a guardrail failure — the extra reasoning helps avoid repeating the same violation. The DM runs at default effort normally, but escalates to `high` on guardrail retry for the same reason. Haiku calls (orchestrator, guardrails, narrative compression) stay at default effort since they're already fast and their tasks are simple enough that reducing effort risks degrading reliability.
 
 ## Why Honest Dice?
 

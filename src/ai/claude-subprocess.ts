@@ -11,6 +11,7 @@ export function buildSpawnArgs(
   allowedTools?: string[],
   outputFormat: "text" | "stream-json" = "text",
   maxTurns?: number,
+  effort?: "low" | "medium" | "high" | "max",
 ): string[] {
   const args = [
     "claude",
@@ -25,6 +26,10 @@ export function buildSpawnArgs(
     "--no-session-persistence",
     "--dangerously-skip-permissions",
   ];
+
+  if (effort) {
+    args.push("--effort", effort);
+  }
 
   if (outputFormat === "stream-json") {
     args.push("--verbose");
