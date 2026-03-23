@@ -205,7 +205,7 @@ async function orchestratorLoop(gameState: GameState, channel: TextChannel): Pro
       case "prompt_dm": {
         try {
           // Check if this is a resolution phase (all pending rolls fulfilled)
-          if (gameState.pendingRolls?.every((r) => r.result)) {
+          if (gameState.pendingRolls?.length && gameState.pendingRolls.every((r) => r.result)) {
             await handleDMResolution(gameState, history, channel);
           } else {
             await handleDMTurn(gameState, history, channel);
