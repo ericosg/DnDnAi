@@ -383,3 +383,46 @@ export function parseRequestRollDirective(
   }
   return results;
 }
+
+/**
+ * Parse INVENTORY directives like [[INVENTORY:ADD Potion of Healing TARGET:Fūsetsu]]
+ * or [[INVENTORY:REMOVE Shortbow TARGET:Grimbold]]
+ */
+export function parseInventoryDirective(
+  text: string,
+): { action: "add" | "remove"; itemName: string; target: string }[] {
+  const regex = /\[\[INVENTORY\s*:\s*(ADD|REMOVE)\s+(.+?)\s+TARGET\s*:\s*(.+?)\s*\]\]/gi;
+  const results: { action: "add" | "remove"; itemName: string; target: string }[] = [];
+  let match: RegExpExecArray | null = null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: idiomatic regex exec loop
+  while ((match = regex.exec(text)) !== null) {
+    results.push({
+      action: match[1].trim().toLowerCase() as "add" | "remove",
+      itemName: match[2].trim(),
+      target: match[3].trim(),
+    });
+  }
+  return results;
+}
+
+/**
+ * Parse GOLD directives like [[GOLD:+50 TARGET:Fūsetsu REASON:looted bandit camp]]
+ * or [[GOLD:-20 TARGET:party REASON:bought supplies]]
+ * Amount includes the sign (+/-).
+ */
+export function parseGoldDirective(
+  text: string,
+): { amount: number; target: string; reason: string }[] {
+  const regex = /\[\[GOLD\s*:\s*([+-]\d+)\s+TARGET\s*:\s*(.+?)\s+REASON\s*:\s*([^\]]+)\]\]/g;
+  const results: { amount: number; target: string; reason: string }[] = [];
+  let match: RegExpExecArray | null = null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: idiomatic regex exec loop
+  while ((match = regex.exec(text)) !== null) {
+    results.push({
+      amount: parseInt(match[1].trim(), 10),
+      target: match[2].trim(),
+      reason: match[3].trim(),
+    });
+  }
+  return results;
+}

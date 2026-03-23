@@ -62,7 +62,7 @@ In combat, turns follow initiative order (the DM rolls for everyone at the start
 | `/ask question` | Ask the DM anything (rules, options, lore) — doesn't use your turn |
 | `/character` | See your stats, HP, spell slots, feature charges, XP |
 | `/character spells` | Just your spells and remaining slots |
-| `/inventory` | Your equipment |
+| `/inventory` | Your equipment and gold |
 | `/roll 2d6+3` | Roll dice yourself |
 | `/status` | See the whole party's HP |
 | `/whisper @player msg` | Private message to another player (only they and the DM see it) |

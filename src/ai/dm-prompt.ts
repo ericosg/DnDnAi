@@ -27,6 +27,8 @@ The game engine uses directives to update game state. Using the WRONG directive 
 **UPDATE_CONDITION** = Replace ALL conditions on a target. Use [[UPDATE_CONDITION:SET cond1,cond2 TARGET:name]] or [[UPDATE_CONDITION:SET none TARGET:name]] to clear all. REPLACES the full list — not additive.
 **REQUEST_ROLL** = Ask a HUMAN player to roll dice (tabletop style). Use [[REQUEST_ROLL:notation FOR:Name REASON:text]]. The engine pauses and prompts the player to /roll. For AI agents, use ROLL instead (auto-resolves). Use REQUEST_ROLL for: player ability checks, saving throws, attack rolls. Use ROLL for: enemy/NPC rolls, AI agent rolls. DAMAGE/HEAL are always auto-resolved (not player-facing).
 CRITICAL: You must use the [[REQUEST_ROLL:...]] directive syntax exactly. Do NOT write roll prompts as plain text, emoji, or narrative — the engine only processes directives in [[double brackets]]. Plain text like "🎲 roll d20+5" does NOTHING mechanically.
+**INVENTORY** = When items are added to or removed from a character's inventory. Use [[INVENTORY:ADD itemName TARGET:name]] when a character picks up, loots, buys, receives, crafts, or is rewarded an item. Use [[INVENTORY:REMOVE itemName TARGET:name]] when a character uses a consumable (potion, scroll), drops, gives away, sells, breaks, or loses an item. For transfers between characters, use REMOVE on the giver and ADD on the receiver. Use the EXACT item name as it appears in the character's equipment list when removing.
+**GOLD** = When a character gains or spends money. Use [[GOLD:+amount TARGET:name REASON:text]] or [[GOLD:-amount TARGET:name REASON:text]]. Use [[GOLD:+amount TARGET:party REASON:text]] to split evenly among the party.
 
 ### WRONG vs CORRECT examples:
 - WRONG: \`[[ROLL:2d6+3 FOR:Grimbold REASON:longsword damage]]\` ← ROLL does NOT apply damage!
@@ -34,6 +36,9 @@ CRITICAL: You must use the [[REQUEST_ROLL:...]] directive syntax exactly. Do NOT
 - WRONG: \`[[ROLL:1d8+3 FOR:Nyx REASON:cure wounds healing]]\` ← ROLL does NOT heal!
 - CORRECT: \`[[HEAL:1d8+3 TARGET:Nyx REASON:cure wounds]]\` ← HEAL updates HP
 - WRONG: Narrating "The goblin claws Fūsetsu for 4 damage" without a DAMAGE directive ← HP unchanged!
+- WRONG: Narrating "You find a healing potion in the chest" without \`[[INVENTORY:ADD Potion of Healing TARGET:name]]\` ← inventory unchanged!
+- WRONG: Narrating "You drink the potion" without \`[[INVENTORY:REMOVE Potion of Healing TARGET:name]]\` ← item still in inventory!
+- WRONG: Narrating "The merchant takes your 10 gold" without \`[[GOLD:-10 TARGET:name REASON:text]]\` ← gold unchanged!
 
 All directives are resolved INSTANTLY by the game engine before your message is posted. The result replaces the directive in your text. Players see the result inline. Do NOT say you are "waiting" for a roll.
 
@@ -59,8 +64,10 @@ what happened in the story, not just the number.
 
 ## MANDATORY: State Updates
 If you describe HP changing, you MUST include a directive (DAMAGE, HEAL, or UPDATE_HP). If you describe
-conditions changing, you MUST include CONDITION or UPDATE_CONDITION. Narration alone does NOT update game
-state — the engine only tracks what directives tell it.
+conditions changing, you MUST include CONDITION or UPDATE_CONDITION. If you describe items being gained,
+lost, used, or traded, you MUST include INVENTORY directives. If you describe gold changing hands, you
+MUST include a GOLD directive. Narration alone does NOT update game state — the engine only tracks what
+directives tell it.
 
 ## Player Overreach
 - Players (human or AI) may sometimes try to narrate world facts, declare they detect or find things, or describe outcomes of their own actions. YOU are the sole authority on what exists in the world and what characters perceive.
@@ -182,6 +189,7 @@ function buildCharacterReference(cs: import("../state/types.js").CharacterSheet)
   const chargeSummary = getFeatureChargeSummary(cs);
   if (chargeSummary) lines.push(`Charges: ${chargeSummary}`);
   if (cs.equipment.length) lines.push(`Equipment: ${cs.equipment.join(", ")}`);
+  if (cs.gold != null) lines.push(`Gold: ${cs.gold} gp`);
 
   return lines.join("\n");
 }
@@ -263,11 +271,27 @@ ${charFiles}
         return line;
       })
       .join("\n");
-    let combatBlock = `\n\n## Combat — Round ${gameState.combat.round}\n${combatInfo}`;
+    const currentCombatant = gameState.combat.combatants[gameState.combat.turnIndex];
+    let combatBlock = `\n\n## Combat — Round ${gameState.combat.round}\n`;
+    if (currentCombatant) {
+      combatBlock += `**CURRENT TURN: ${currentCombatant.name}**\n`;
+    }
+    combatBlock += combatInfo;
     if (nextUp) {
       combatBlock += `\nNext up: ${nextUp.name}`;
     }
     system += combatBlock;
+  }
+
+  // Pending rolls (engine waiting for player input)
+  if (gameState.pendingRolls?.length) {
+    const unfulfilled = gameState.pendingRolls.filter((r) => !r.result);
+    if (unfulfilled.length > 0) {
+      const pendingInfo = unfulfilled
+        .map((r) => `- **${r.playerName}** needs to roll \`${r.notation}\` for ${r.reason}`)
+        .join("\n");
+      system += `\n\n## Waiting for Dice Rolls\nThe game engine is paused waiting for:\n${pendingInfo}\nThese players must use /roll before the game can continue.`;
+    }
   }
 
   // Layer 5: Recent history (sliding window)

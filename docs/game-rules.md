@@ -286,9 +286,23 @@ When a combatant drops to 0 HP and their combat turn arrives:
 
 Death saves are fully automated — the DM doesn't need to narrate them.
 
+## Inventory & Gold
+
+The DM tracks inventory changes and gold using directives. When characters gain, lose, use, or trade items, the engine updates their equipment list automatically.
+
+### Inventory Directives
+- `[[INVENTORY:ADD itemName TARGET:name]]` — character gains an item (loot, buy, receive, craft, reward)
+- `[[INVENTORY:REMOVE itemName TARGET:name]]` — character loses an item (use consumable, drop, give away, sell, break)
+- For transfers: REMOVE from giver + ADD to receiver
+
+### Gold Directives
+- `[[GOLD:+amount TARGET:name REASON:text]]` — character gains gold
+- `[[GOLD:-amount TARGET:name REASON:text]]` — character spends gold
+- `[[GOLD:+amount TARGET:party REASON:text]]` — split evenly among the party
+- Gold cannot go below 0
+
 ## What's Not Implemented (Yet)
 - Hit Dice healing during short rests
-- Inventory management (adding/removing items during play)
 - Multi-guild support
 - NPC stat blocks (enemies are narrated by the DM, not mechanically tracked)
 - Map or visual positioning

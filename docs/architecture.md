@@ -84,7 +84,7 @@ The loop is bounded at `players.length + 2` iterations to prevent runaway cycles
 
 Round tracking is in-memory only (not persisted). It tracks which players have responded this cycle and clears after the DM resolves.
 
-**dice.ts** — Parses dice notation (`2d6+3`, `d20`, `4d6kh3`), rolls real random dice, formats results. Parses all DM directive types from AI output: `ROLL`, `DAMAGE`, `HEAL`, `SPELL`, `USE`, `CONCENTRATE`, `CONDITION`, `XP`, `UPDATE_HP`, `UPDATE_CONDITION`, and `REQUEST_ROLL`.
+**dice.ts** — Parses dice notation (`2d6+3`, `d20`, `4d6kh3`), rolls real random dice, formats results. Parses all DM directive types from AI output: `ROLL`, `DAMAGE`, `HEAL`, `SPELL`, `USE`, `CONCENTRATE`, `CONDITION`, `XP`, `INVENTORY`, `GOLD`, `UPDATE_HP`, `UPDATE_CONDITION`, and `REQUEST_ROLL`.
 
 **directives.ts** — Pure function `processDirectives()` that takes DM response text and game state, processes all directives in sequence, mutates game state, and returns a `DirectiveContext` with processed text and metadata (dice results, HP changes, pending rolls, misuse warnings, etc.). Extracted from `engine.ts` for testability.
 

@@ -6,7 +6,9 @@ import {
   parseDamageDirective,
   parseDiceDirective,
   parseDiceNotation,
+  parseGoldDirective,
   parseHealDirective,
+  parseInventoryDirective,
   parseRequestRollDirective,
   parseSpellDirective,
   parseUpdateConditionDirective,
@@ -534,5 +536,83 @@ describe("formatDiceResult", () => {
       kept: [6, 4, 3],
     });
     expect(result).toContain("kept [6, 4, 3]");
+  });
+});
+
+describe("parseInventoryDirective", () => {
+  test("parses ADD directive", () => {
+    const results = parseInventoryDirective("[[INVENTORY:ADD Potion of Healing TARGET:Fusetsu]]");
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({ action: "add", itemName: "Potion of Healing", target: "Fusetsu" });
+  });
+
+  test("parses REMOVE directive", () => {
+    const results = parseInventoryDirective(
+      "[[INVENTORY:REMOVE Shortsword TARGET:Grimbold Ironforge]]",
+    );
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({
+      action: "remove",
+      itemName: "Shortsword",
+      target: "Grimbold Ironforge",
+    });
+  });
+
+  test("action is case-insensitive", () => {
+    const results = parseInventoryDirective("[[INVENTORY:add Rope TARGET:Nyx]]");
+    expect(results[0].action).toBe("add");
+  });
+
+  test("parses multiple directives in one string", () => {
+    const text =
+      "[[INVENTORY:REMOVE Old Sword TARGET:Fusetsu]] then [[INVENTORY:ADD Magic Sword TARGET:Fusetsu]]";
+    const results = parseInventoryDirective(text);
+    expect(results).toHaveLength(2);
+    expect(results[0].action).toBe("remove");
+    expect(results[1].action).toBe("add");
+  });
+
+  test("returns empty array for no directives", () => {
+    expect(parseInventoryDirective("no directives here")).toEqual([]);
+  });
+});
+
+describe("parseGoldDirective", () => {
+  test("parses positive gold", () => {
+    const results = parseGoldDirective("[[GOLD:+50 TARGET:Fusetsu REASON:looted chest]]");
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({ amount: 50, target: "Fusetsu", reason: "looted chest" });
+  });
+
+  test("parses negative gold", () => {
+    const results = parseGoldDirective("[[GOLD:-20 TARGET:Fusetsu REASON:bought rope]]");
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({ amount: -20, target: "Fusetsu", reason: "bought rope" });
+  });
+
+  test("parses party target", () => {
+    const results = parseGoldDirective("[[GOLD:+100 TARGET:party REASON:treasure split]]");
+    expect(results[0].target).toBe("party");
+  });
+
+  test("parses multi-word character names and reasons", () => {
+    const results = parseGoldDirective(
+      "[[GOLD:+10 TARGET:Grimbold Ironforge REASON:sold old armor at the market]]",
+    );
+    expect(results[0].target).toBe("Grimbold Ironforge");
+    expect(results[0].reason).toBe("sold old armor at the market");
+  });
+
+  test("parses multiple directives", () => {
+    const text =
+      "[[GOLD:+50 TARGET:Fusetsu REASON:reward]] and [[GOLD:-10 TARGET:Fusetsu REASON:tax]]";
+    const results = parseGoldDirective(text);
+    expect(results).toHaveLength(2);
+    expect(results[0].amount).toBe(50);
+    expect(results[1].amount).toBe(-10);
+  });
+
+  test("returns empty array for no directives", () => {
+    expect(parseGoldDirective("no gold here")).toEqual([]);
   });
 });

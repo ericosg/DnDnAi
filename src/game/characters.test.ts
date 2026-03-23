@@ -232,6 +232,16 @@ describe("parseCharacterSheet", () => {
     expect(sheet.experiencePoints).toBeUndefined();
   });
 
+  test("parses gold field", () => {
+    const sheet = parseCharacterSheet(`**Name:** Gold Test\n**Gold:** 150`);
+    expect(sheet.gold).toBe(150);
+  });
+
+  test("gold is undefined when not specified", () => {
+    const sheet = parseCharacterSheet("**Name:** No Gold");
+    expect(sheet.gold).toBeUndefined();
+  });
+
   test("parses feature charges from feature text", () => {
     const sheet = parseCharacterSheet(`**Name:** Charge Test
 

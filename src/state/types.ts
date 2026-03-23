@@ -4,6 +4,7 @@ export interface CharacterSheet {
   class: string;
   level: number;
   experiencePoints?: number;
+  gold?: number;
   spellSlots?: { level: number; max: number; current: number }[];
   featureCharges?: { name: string; max: number; current: number; resetsOn: "short" | "long" }[];
   background: string;

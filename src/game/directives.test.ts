@@ -563,3 +563,177 @@ describe("directives — outside combat", () => {
     expect(ctx.conditionsChanged).toBe(false);
   });
 });
+
+describe("directives — INVENTORY", () => {
+  test("ADD pushes item to equipment", () => {
+    const gs = makeExplorationState();
+    const text = "You find a potion! [[INVENTORY:ADD Potion of Healing TARGET:Fusetsu]]";
+    const ctx = processDirectives(text, gs);
+    expect(ctx.processedText).not.toContain("[[INVENTORY:");
+    expect(ctx.inventoryChanged).toBe(true);
+    expect(gs.players[0].characterSheet.equipment).toContain("Potion of Healing");
+  });
+
+  test("REMOVE removes item from equipment", () => {
+    const gs = makeExplorationState();
+    gs.players[0].characterSheet.equipment = ["Shortsword", "Potion of Healing", "Rope"];
+    const text = "You drink it. [[INVENTORY:REMOVE Potion of Healing TARGET:Fusetsu]]";
+    const ctx = processDirectives(text, gs);
+    expect(ctx.inventoryChanged).toBe(true);
+    expect(gs.players[0].characterSheet.equipment).toEqual(["Shortsword", "Rope"]);
+  });
+
+  test("REMOVE with case-insensitive match", () => {
+    const gs = makeExplorationState();
+    gs.players[0].characterSheet.equipment = ["Potion of Healing"];
+    const text = "[[INVENTORY:REMOVE potion of healing TARGET:Fusetsu]]";
+    processDirectives(text, gs);
+    expect(gs.players[0].characterSheet.equipment).toEqual([]);
+  });
+
+  test("REMOVE when item not found does not crash", () => {
+    const gs = makeExplorationState();
+    gs.players[0].characterSheet.equipment = ["Shortsword"];
+    const text = "[[INVENTORY:REMOVE Nonexistent Item TARGET:Fusetsu]]";
+    const ctx = processDirectives(text, gs);
+    expect(ctx.processedText).not.toContain("[[INVENTORY:");
+    expect(gs.players[0].characterSheet.equipment).toEqual(["Shortsword"]);
+    expect(ctx.inventoryChanged).toBe(false);
+  });
+
+  test("ADD replaces directive with empty string", () => {
+    const gs = makeExplorationState();
+    const text = "Found it! [[INVENTORY:ADD Longsword TARGET:Fusetsu]] Nice.";
+    const ctx = processDirectives(text, gs);
+    expect(ctx.processedText).toBe("Found it!  Nice.");
+  });
+
+  test("multiple INVENTORY directives in one message", () => {
+    const gs = makeExplorationState();
+    gs.players[0].characterSheet.equipment = ["Old Dagger"];
+    const text =
+      "[[INVENTORY:REMOVE Old Dagger TARGET:Fusetsu]][[INVENTORY:ADD Enchanted Dagger TARGET:Fusetsu]]";
+    const ctx = processDirectives(text, gs);
+    expect(ctx.inventoryChanged).toBe(true);
+    expect(gs.players[0].characterSheet.equipment).toEqual(["Enchanted Dagger"]);
+  });
+
+  test("INVENTORY with unknown target does not crash", () => {
+    const gs = makeExplorationState();
+    const text = "[[INVENTORY:ADD Gem TARGET:Nobody]]";
+    const ctx = processDirectives(text, gs);
+    expect(ctx.processedText).not.toContain("[[INVENTORY:");
+    expect(ctx.inventoryChanged).toBe(false);
+  });
+
+  test("INVENTORY:ADD works in combat state", () => {
+    const gs = makeCombatState();
+    const text = "[[INVENTORY:ADD Goblin Ear TARGET:Fusetsu]]";
+    const ctx = processDirectives(text, gs);
+    expect(ctx.inventoryChanged).toBe(true);
+    expect(gs.players[0].characterSheet.equipment).toContain("Goblin Ear");
+  });
+
+  test("INVENTORY:REMOVE works in combat state", () => {
+    const gs = makeCombatState();
+    gs.players[0].characterSheet.equipment = ["Potion of Healing", "Shortsword"];
+    const text = "[[INVENTORY:REMOVE Potion of Healing TARGET:Fusetsu]]";
+    const ctx = processDirectives(text, gs);
+    expect(ctx.inventoryChanged).toBe(true);
+    expect(gs.players[0].characterSheet.equipment).toEqual(["Shortsword"]);
+  });
+
+  test("INVENTORY:REMOVE only removes first occurrence of duplicates", () => {
+    const gs = makeExplorationState();
+    gs.players[0].characterSheet.equipment = [
+      "Potion of Healing",
+      "Shortsword",
+      "Potion of Healing",
+    ];
+    const text = "[[INVENTORY:REMOVE Potion of Healing TARGET:Fusetsu]]";
+    processDirectives(text, gs);
+    expect(gs.players[0].characterSheet.equipment).toEqual(["Shortsword", "Potion of Healing"]);
+  });
+});
+
+describe("directives — GOLD", () => {
+  test("positive gold adds to target", () => {
+    const gs = makeExplorationState();
+    gs.players[0].characterSheet.gold = 10;
+    const text = "[[GOLD:+50 TARGET:Fusetsu REASON:looted chest]]";
+    const ctx = processDirectives(text, gs);
+    expect(ctx.processedText).toContain("+50 gp");
+    expect(ctx.processedText).toContain("looted chest");
+    expect(ctx.goldChanged).toBe(true);
+    expect(gs.players[0].characterSheet.gold).toBe(60);
+  });
+
+  test("negative gold subtracts from target", () => {
+    const gs = makeExplorationState();
+    gs.players[0].characterSheet.gold = 30;
+    const text = "[[GOLD:-20 TARGET:Fusetsu REASON:bought rope]]";
+    const ctx = processDirectives(text, gs);
+    expect(ctx.processedText).toContain("-20 gp");
+    expect(ctx.goldChanged).toBe(true);
+    expect(gs.players[0].characterSheet.gold).toBe(10);
+  });
+
+  test("TARGET:party splits evenly", () => {
+    const gs = makeExplorationState();
+    gs.players[0].characterSheet.gold = 0;
+    gs.players[1].characterSheet.gold = 0;
+    const text = "[[GOLD:+100 TARGET:party REASON:treasure split]]";
+    const ctx = processDirectives(text, gs);
+    expect(ctx.processedText).toContain("+50 gp each");
+    expect(ctx.goldChanged).toBe(true);
+    expect(gs.players[0].characterSheet.gold).toBe(50);
+    expect(gs.players[1].characterSheet.gold).toBe(50);
+  });
+
+  test("gold cannot go below 0", () => {
+    const gs = makeExplorationState();
+    gs.players[0].characterSheet.gold = 5;
+    const text = "[[GOLD:-20 TARGET:Fusetsu REASON:expensive purchase]]";
+    const ctx = processDirectives(text, gs);
+    expect(gs.players[0].characterSheet.gold).toBe(0);
+    expect(ctx.processedText).toContain("insufficient gold");
+  });
+
+  test("defaults undefined gold to 0 before applying", () => {
+    const gs = makeExplorationState();
+    // gold is undefined by default
+    expect(gs.players[0].characterSheet.gold).toBeUndefined();
+    const text = "[[GOLD:+50 TARGET:Fusetsu REASON:quest reward]]";
+    processDirectives(text, gs);
+    expect(gs.players[0].characterSheet.gold).toBe(50);
+  });
+
+  test("GOLD with unknown target does not crash", () => {
+    const gs = makeExplorationState();
+    const text = "[[GOLD:+10 TARGET:Nobody REASON:mystery]]";
+    const ctx = processDirectives(text, gs);
+    expect(ctx.processedText).not.toContain("[[GOLD:");
+    expect(ctx.processedText).toContain("+10 gp");
+  });
+
+  test("GOLD works in combat state", () => {
+    const gs = makeCombatState();
+    gs.players[0].characterSheet.gold = 10;
+    const text = "[[GOLD:+25 TARGET:Fusetsu REASON:looted goblin]]";
+    const ctx = processDirectives(text, gs);
+    expect(ctx.goldChanged).toBe(true);
+    expect(gs.players[0].characterSheet.gold).toBe(35);
+  });
+
+  test("TARGET:party with uneven split floors per-player amount", () => {
+    const gs = makeExplorationState();
+    gs.players[0].characterSheet.gold = 0;
+    gs.players[1].characterSheet.gold = 0;
+    // 75 / 2 = 37.5 → Math.floor = 37 each (1 gp lost)
+    const text = "[[GOLD:+75 TARGET:party REASON:uneven loot]]";
+    const ctx = processDirectives(text, gs);
+    expect(ctx.processedText).toContain("+37 gp each");
+    expect(gs.players[0].characterSheet.gold).toBe(37);
+    expect(gs.players[1].characterSheet.gold).toBe(37);
+  });
+});

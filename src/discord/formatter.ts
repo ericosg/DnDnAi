@@ -64,10 +64,16 @@ export function inventoryEmbed(player: Player): EmbedBuilder {
   const cs = player.characterSheet;
   const items = cs.equipment.length ? cs.equipment.map((e) => `• ${e}`).join("\n") : "No equipment";
 
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setTitle(`${cs.name}'s Inventory`)
     .setDescription(items)
     .setColor(0xccaa33);
+
+  if (cs.gold != null) {
+    embed.addFields({ name: "Gold", value: `${cs.gold} gp`, inline: true });
+  }
+
+  return embed;
 }
 
 const CHARACTER_COLOR = 0x3388cc; // blue sidebar

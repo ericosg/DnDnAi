@@ -66,6 +66,13 @@ export function parseCharacterSheet(markdown: string): CharacterSheet {
     if (!Number.isNaN(xp)) sheet.experiencePoints = xp;
   }
 
+  // Parse gold if present
+  const goldValue = extractField(lines, "gold", "gold pieces", "gp");
+  if (goldValue) {
+    const gold = parseInt(goldValue, 10);
+    if (!Number.isNaN(gold)) sheet.gold = gold;
+  }
+
   // Parse feature charges from feature text
   const charges: CharacterSheet["featureCharges"] = [];
   for (const feature of sheet.features) {

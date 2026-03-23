@@ -28,19 +28,20 @@ async function waitWithTimeout(
   proc: { exited: Promise<number>; kill: (signal?: number) => void },
   timeoutMs: number,
 ): Promise<WaitResult> {
+  let killed = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
 
   const timeoutPromise = new Promise<WaitResult>((resolve) => {
-    timer = setTimeout(async () => {
+    timer = setTimeout(() => {
+      killed = true;
       proc.kill();
-      const exitCode = await proc.exited;
-      resolve({ exitCode: exitCode ?? -1, timedOut: true });
+      resolve({ exitCode: -1, timedOut: true });
     }, timeoutMs);
   });
 
   const exitPromise = proc.exited.then((code) => {
     clearTimeout(timer);
-    return { exitCode: code, timedOut: false } as WaitResult;
+    return { exitCode: code, timedOut: killed } as WaitResult;
   });
 
   return Promise.race([exitPromise, timeoutPromise]);

@@ -394,8 +394,6 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       const notation = interaction.options.getString("notation", true);
       const label = interaction.options.getString("label") ?? undefined;
       try {
-        const result = rollDice(notation, label);
-
         // Check for pending rolls matching this player
         const gameState = await findGameByChannel(channel.id);
         if (gameState?.pendingRolls?.length) {
@@ -404,6 +402,13 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
           );
           if (pendingIdx !== -1) {
             const pending = gameState.pendingRolls[pendingIdx];
+            // Enforce the requested notation — ignore what the player typed
+            const result = rollDice(pending.notation, pending.reason);
+            if (notation !== pending.notation) {
+              log.info(
+                `  Roll override: ${interaction.user.displayName} typed ${notation} but pending requires ${pending.notation}`,
+              );
+            }
             pending.result = result;
             await saveGameState(gameState);
 
@@ -422,6 +427,7 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
         }
 
         // Normal roll (no pending roll context)
+        const result = rollDice(notation, label);
         await interaction.reply(
           `**${interaction.user.displayName}** rolls ${diceResultText(result)}`,
         );

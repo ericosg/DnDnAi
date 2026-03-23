@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 bun run src/index.ts           # Start the bot
 bun --watch run src/index.ts   # Start with auto-reload (dev mode)
-bun test                       # Run unit tests (665 tests)
+bun test                       # Run unit tests (701 tests)
 bunx tsc --noEmit              # Type-check without emitting
 bunx biome check src/          # Lint and format check
 bun install                    # Install dependencies
@@ -37,7 +37,7 @@ TypeScript + Bun runtime, discord.js for Discord, Claude CLI for AI (uses Pro/Ma
 4. The orchestrator (`ai/orchestrator.ts:getNextAction()`) deterministically decides: prompt an AI agent, call the DM, wait for a human, or advance combat
 5. For agents: `ai/agent.ts` generates an in-character response using the personality file, posts via webhook
 6. For agents: after generating, `ai/guardrail.ts` (Haiku) checks the response isn't inventing world facts. If it is, the agent re-generates with feedback.
-7. For DM: `ai/dm.ts` generates narration with a 5-layer prompt, then `ai/guardrail.ts` (Haiku) checks for player agency violations before posting. If the DM narrated/controlled a PC, it re-generates with feedback. The DM also pushes back on player overreach (humans or agents declaring world facts). `game/directives.ts` processes all directives as a pure function: dice (`[[ROLL:...]]`), damage/heal (`[[DAMAGE:...]]`, `[[HEAL:...]]`), state corrections (`[[UPDATE_HP:...]]`, `[[UPDATE_CONDITION:...]]`), tabletop dice (`[[REQUEST_ROLL:...]]`), resources (`[[SPELL:...]]`, `[[USE:...]]`, `[[CONCENTRATE:...]]`), conditions (`[[CONDITION:...]]`), XP (`[[XP:...]]`), and combat signals (`[[COMBAT:START/END]]`). After combat HP/condition changes, an auto status embed is posted. The DM always narrates roll outcomes and prompts who goes next.
+7. For DM: `ai/dm.ts` generates narration with a 5-layer prompt, then `ai/guardrail.ts` (Haiku) checks for player agency violations before posting. If the DM narrated/controlled a PC, it re-generates with feedback. The DM also pushes back on player overreach (humans or agents declaring world facts). `game/directives.ts` processes all directives as a pure function: dice (`[[ROLL:...]]`), damage/heal (`[[DAMAGE:...]]`, `[[HEAL:...]]`), state corrections (`[[UPDATE_HP:...]]`, `[[UPDATE_CONDITION:...]]`), tabletop dice (`[[REQUEST_ROLL:...]]`), resources (`[[SPELL:...]]`, `[[USE:...]]`, `[[CONCENTRATE:...]]`), conditions (`[[CONDITION:...]]`), XP (`[[XP:...]]`), inventory (`[[INVENTORY:ADD/REMOVE ...]]`), gold (`[[GOLD:...]]`), and combat signals (`[[COMBAT:START/END]]`). After combat HP/condition changes, an auto status embed is posted. The DM always narrates roll outcomes and prompts who goes next.
 8. After DM resolves, the round clears and the cycle restarts
 9. State auto-persists to JSON after every turn; narrative compresses every 10 turns
 
@@ -69,7 +69,7 @@ All AI calls are stateless — context is rebuilt from game state + sliding hist
 - **Player IDs**: Humans = Discord user ID. Agents = `agent:<name>`.
 - **Round tracking**: In-memory `roundResponses` map in `game/engine.ts`. Cleared after DM resolves. Not persisted — on restart, `autoResume()` runs the orchestrator with an empty set, which correctly prompts pending AI agents.
 - **Turn mutex**: Per-game promise chain in `game/engine.ts` serializes concurrent `processTurn` calls. Prevents duplicate agent/DM responses when multiple humans act simultaneously.
-- **Directive processing**: All directive parsing and application is extracted into `game/directives.ts` as a pure function `processDirectives()`. This takes DM response text and game state, processes all directives (ROLL, DAMAGE, HEAL, UPDATE_HP, UPDATE_CONDITION, REQUEST_ROLL, SPELL, USE, CONCENTRATE, CONDITION, XP, COMBAT signals), mutates game state, and returns a `DirectiveContext` with the processed text and metadata. This enables testing directives independently from the engine's I/O concerns.
+- **Directive processing**: All directive parsing and application is extracted into `game/directives.ts` as a pure function `processDirectives()`. This takes DM response text and game state, processes all directives (ROLL, DAMAGE, HEAL, UPDATE_HP, UPDATE_CONDITION, REQUEST_ROLL, SPELL, USE, CONCENTRATE, CONDITION, XP, INVENTORY, GOLD, COMBAT signals), mutates game state, and returns a `DirectiveContext` with the processed text and metadata. This enables testing directives independently from the engine's I/O concerns.
 
 ### Typing Indicators
 
@@ -112,7 +112,7 @@ Game lookup scans all game directories for matching channel ID.
 
 ### Testing
 
-665 tests across 21 files. Agent tests (`ai/agent.test.ts`) load every agent file from disk, verify frontmatter fields, and run each `characterSpec` through `parseCharacterSheet()` to validate stats, ability scores, equipment, features, and spells parse correctly. Caster agents are verified to have spells in a separate `## Spells` section (not embedded in Features). Tests also verify all agents have unique names and unique race+class combinations. Formatter tests cover the `/character` embed builder (section filtering, ability modifiers, edge cases) and DM narration formatting. DM prompt tests (`ai/dm.test.ts`) verify prompt construction: party info, character reference (ability scores, features, spells, gender), file paths (SRD, dm-notes), combat state, history formatting, `/ask` verification instructions, and DM allowed tools. Other test files cover dice, combat, character parsing, orchestrator, engine, guardrails, webhooks, and Claude subprocess.
+701 tests across 21 files. Agent tests (`ai/agent.test.ts`) load every agent file from disk, verify frontmatter fields, and run each `characterSpec` through `parseCharacterSheet()` to validate stats, ability scores, equipment, features, and spells parse correctly. Caster agents are verified to have spells in a separate `## Spells` section (not embedded in Features). Tests also verify all agents have unique names and unique race+class combinations. Formatter tests cover the `/character` embed builder (section filtering, ability modifiers, edge cases) and DM narration formatting. DM prompt tests (`ai/dm.test.ts`) verify prompt construction: party info, character reference (ability scores, features, spells, gender), file paths (SRD, dm-notes), combat state, history formatting, `/ask` verification instructions, and DM allowed tools. Other test files cover dice, combat, character parsing, orchestrator, engine, guardrails, webhooks, and Claude subprocess.
 
 Note on Bun test isolation: `mock.module()` is global and pollutes across files. Tests that need mocked modules use pure-function extraction patterns (e.g., `guardrail-check.ts`, `claude-subprocess.ts`, `dm-prompt.ts`) or direct file I/O to avoid cross-file mock collisions.
 

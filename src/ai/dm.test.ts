@@ -255,6 +255,7 @@ describe("buildDMPrompt", () => {
     const { system } = buildDMPrompt(gs, [], "test action");
 
     expect(system).toContain("## Combat — Round 2");
+    expect(system).toContain("**CURRENT TURN: Grimbold**");
     expect(system).toContain("Fūsetsu: 20/24 HP");
     expect(system).toContain(">> Grimbold");
     expect(system).toContain("[prone]");
@@ -267,6 +268,42 @@ describe("buildDMPrompt", () => {
     const { system } = buildDMPrompt(gs, [], "test");
 
     expect(system).not.toContain("## Combat");
+  });
+
+  test("system prompt includes pending rolls when present", () => {
+    const gs = makeGameState({
+      pendingRolls: [
+        {
+          id: "roll-1",
+          playerId: "human1",
+          playerName: "Fūsetsu",
+          notation: "d20+5",
+          reason: "Perception check",
+        },
+      ],
+    });
+    const { system } = buildDMPrompt(gs, [], "test");
+    expect(system).toContain("## Waiting for Dice Rolls");
+    expect(system).toContain("Fūsetsu");
+    expect(system).toContain("d20+5");
+    expect(system).toContain("Perception check");
+  });
+
+  test("pending rolls omitted when all fulfilled", () => {
+    const gs = makeGameState({
+      pendingRolls: [
+        {
+          id: "roll-1",
+          playerId: "human1",
+          playerName: "Fūsetsu",
+          notation: "d20+5",
+          reason: "Perception check",
+          result: { notation: "d20+5", rolls: [15], modifier: 5, total: 20 },
+        },
+      ],
+    });
+    const { system } = buildDMPrompt(gs, [], "test");
+    expect(system).not.toContain("## Waiting for Dice Rolls");
   });
 
   test("system prompt includes character reference with mechanical details", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { Player } from "../state/types.js";
-import { abilityMod, characterEmbed, formatDMNarration } from "./formatter.js";
+import { abilityMod, characterEmbed, formatDMNarration, inventoryEmbed } from "./formatter.js";
 
 function makePlayer(overrides?: Partial<Player>): Player {
   return {
@@ -324,5 +324,35 @@ describe("formatDMNarration", () => {
   test("returns string, not embed objects", () => {
     const result = formatDMNarration("Test");
     expect(result).toBeString();
+  });
+});
+
+describe("inventoryEmbed", () => {
+  test("shows equipment items", () => {
+    const player = makePlayer();
+    player.characterSheet.equipment = ["Shortsword", "Leather Armor"];
+    const embed = inventoryEmbed(player);
+    const json = embed.toJSON();
+    expect(json.description).toContain("Shortsword");
+    expect(json.description).toContain("Leather Armor");
+  });
+
+  test("shows gold when present", () => {
+    const player = makePlayer();
+    player.characterSheet.gold = 50;
+    const embed = inventoryEmbed(player);
+    const json = embed.toJSON();
+    const goldField = json.fields?.find((f) => f.name === "Gold");
+    expect(goldField).toBeDefined();
+    expect(goldField?.value).toBe("50 gp");
+  });
+
+  test("omits gold field when gold is undefined", () => {
+    const player = makePlayer();
+    player.characterSheet.gold = undefined;
+    const embed = inventoryEmbed(player);
+    const json = embed.toJSON();
+    const goldField = json.fields?.find((f) => f.name === "Gold");
+    expect(goldField).toBeUndefined();
   });
 });

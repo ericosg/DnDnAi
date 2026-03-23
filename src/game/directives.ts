@@ -20,7 +20,9 @@ import {
   parseConditionDirective,
   parseDamageDirective,
   parseDiceDirective,
+  parseGoldDirective,
   parseHealDirective,
+  parseInventoryDirective,
   parseRequestRollDirective,
   parseSpellDirective,
   parseUpdateConditionDirective,
@@ -46,6 +48,8 @@ export interface DirectiveContext {
   featuresUsed: boolean;
   conditionsChanged: boolean;
   hpChanged: boolean;
+  inventoryChanged: boolean;
+  goldChanged: boolean;
   combatStarted: boolean;
   combatEnded: boolean;
   misuseWarnings: string[];
@@ -74,6 +78,8 @@ export function processDirectives(text: string, gameState: GameState): Directive
   let featuresUsed = false;
   let conditionsChanged = false;
   let hpChanged = false;
+  let inventoryChanged = false;
+  let goldChanged = false;
   let combatStarted = false;
   let combatEnded = false;
 
@@ -481,6 +487,91 @@ export function processDirectives(text: string, gameState: GameState): Directive
     }
   }
 
+  // === INVENTORY directives ===
+  const inventoryDirectives = parseInventoryDirective(processedText);
+  for (const directive of inventoryDirectives) {
+    const originalTag = `[[INVENTORY:${directive.action.toUpperCase()} ${directive.itemName} TARGET:${directive.target}]]`;
+    const player = gameState.players.find(
+      (p) => p.characterSheet.name.toLowerCase() === directive.target.toLowerCase(),
+    );
+    if (player) {
+      if (directive.action === "add") {
+        player.characterSheet.equipment.push(directive.itemName);
+        inventoryChanged = true;
+        log.info(`  Inventory: ${directive.target} gained ${directive.itemName}`);
+      } else {
+        const idx = player.characterSheet.equipment.findIndex(
+          (e) => e.toLowerCase() === directive.itemName.toLowerCase(),
+        );
+        if (idx !== -1) {
+          player.characterSheet.equipment.splice(idx, 1);
+          inventoryChanged = true;
+          log.info(`  Inventory: ${directive.target} lost ${directive.itemName}`);
+        } else {
+          log.warn(
+            `  Inventory: item "${directive.itemName}" not found in ${directive.target}'s equipment`,
+          );
+        }
+      }
+      processedText = processedText.replace(originalTag, "");
+    } else {
+      log.warn(`  Inventory: target "${directive.target}" not found`);
+      processedText = processedText.replace(originalTag, "");
+    }
+  }
+
+  // === GOLD directives ===
+  const goldDirectives = parseGoldDirective(processedText);
+  for (const directive of goldDirectives) {
+    const sign = directive.amount >= 0 ? `+${directive.amount}` : `${directive.amount}`;
+    const originalTag = `[[GOLD:${sign} TARGET:${directive.target} REASON:${directive.reason}]]`;
+    if (directive.target.toLowerCase() === "party") {
+      const playerCount = gameState.players.length;
+      const perPlayer = Math.floor(directive.amount / playerCount);
+      for (const p of gameState.players) {
+        const current = p.characterSheet.gold ?? 0;
+        p.characterSheet.gold = Math.max(0, current + perPlayer);
+        log.info(
+          `  Gold: ${perPlayer >= 0 ? "+" : ""}${perPlayer} gp to ${p.characterSheet.name} (total: ${p.characterSheet.gold})`,
+        );
+      }
+      goldChanged = true;
+      const label = perPlayer >= 0 ? `**+${perPlayer} gp each**` : `**${perPlayer} gp each**`;
+      processedText = processedText.replace(originalTag, `${label} (${directive.reason})`);
+    } else {
+      const player = gameState.players.find(
+        (p) => p.characterSheet.name.toLowerCase() === directive.target.toLowerCase(),
+      );
+      if (player) {
+        const current = player.characterSheet.gold ?? 0;
+        const newGold = current + directive.amount;
+        if (newGold < 0) {
+          player.characterSheet.gold = 0;
+          log.warn(
+            `  Gold: ${directive.target} has insufficient gold (had ${current}, tried ${directive.amount}) — set to 0`,
+          );
+          processedText = processedText.replace(
+            originalTag,
+            `**${sign} gp** ${directive.amount < 0 ? "from" : "to"} ${directive.target} (${directive.reason}) *[insufficient gold — set to 0]*`,
+          );
+        } else {
+          player.characterSheet.gold = newGold;
+          log.info(
+            `  Gold: ${sign} gp to ${directive.target} (total: ${player.characterSheet.gold})`,
+          );
+          processedText = processedText.replace(
+            originalTag,
+            `**${sign} gp** ${directive.amount < 0 ? "from" : "to"} ${directive.target} (${directive.reason})`,
+          );
+        }
+        goldChanged = true;
+      } else {
+        log.warn(`  Gold: target "${directive.target}" not found`);
+        processedText = processedText.replace(originalTag, `**${sign} gp** (${directive.reason})`);
+      }
+    }
+  }
+
   // === Combat signals ===
   if (processedText.includes("[[COMBAT:START]]")) {
     log.info("COMBAT START signal detected");
@@ -519,6 +610,8 @@ export function processDirectives(text: string, gameState: GameState): Directive
     featuresUsed,
     conditionsChanged,
     hpChanged,
+    inventoryChanged,
+    goldChanged,
     combatStarted,
     combatEnded,
     misuseWarnings,
