@@ -60,6 +60,7 @@ mock.module("../ai/dm.js", () => ({
   compressNarrative: async () => "Compressed narrative.",
   dmRecap: async () => "Previously on...",
   dmLook: async () => "You see a dark room.",
+  loadCanonicalFacts: async () => null,
 }));
 
 let agentActionCalls: { effort?: string }[] = [];

@@ -648,4 +648,48 @@ describe("buildDMPrompt — new features", () => {
     expect(DM_IDENTITY).toContain("MANDATORY before referencing character resources");
     expect(DM_IDENTITY).toContain("NEVER guess at spell slots");
   });
+
+  test("DM_IDENTITY contains REST directive instructions", () => {
+    expect(DM_IDENTITY).toContain("[[REST:");
+    expect(DM_IDENTITY).toContain("REST");
+    expect(DM_IDENTITY).toContain("narration alone does NOT reset resources");
+  });
+
+  test("DM_IDENTITY contains rules authority instruction", () => {
+    expect(DM_IDENTITY).toContain("hold firm");
+    expect(DM_IDENTITY).toContain("Do not capitulate");
+  });
+
+  test("buildAskPrompt contains rules authority section", () => {
+    const prompt = buildAskPrompt("What spells do I have?", "TestPlayer");
+    expect(prompt).toContain("RULES AUTHORITY");
+    expect(prompt).toContain("DO NOT capitulate");
+    expect(prompt).toContain("Quote the exact SRD text");
+  });
+
+  test("canonical facts are injected into system prompt", () => {
+    const gs = makeGameState();
+    const facts = "- Tavern name: **The Sheaf & Stone**\n- Barkeep: **Marta**";
+    const { system } = buildDMPrompt(gs, [], "test", null, facts);
+    expect(system).toContain("⚠️ CANONICAL FACTS");
+    expect(system).toContain("The Sheaf & Stone");
+    expect(system).toContain("Marta");
+  });
+
+  test("canonical facts appear before narrative summary", () => {
+    const gs = makeGameState({ narrativeSummary: "The party explored the mines." });
+    const facts = "- Tavern: The Sheaf & Stone";
+    const { system } = buildDMPrompt(gs, [], "test", null, facts);
+    const factsIdx = system.indexOf("CANONICAL FACTS");
+    const summaryIdx = system.indexOf("Story So Far");
+    expect(factsIdx).toBeGreaterThan(-1);
+    expect(summaryIdx).toBeGreaterThan(-1);
+    expect(factsIdx).toBeLessThan(summaryIdx);
+  });
+
+  test("null canonical facts are not injected", () => {
+    const gs = makeGameState();
+    const { system } = buildDMPrompt(gs, [], "test", null, null);
+    expect(system).not.toContain("⚠️ CANONICAL FACTS — DO NOT CONTRADICT");
+  });
 });

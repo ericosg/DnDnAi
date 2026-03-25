@@ -1,6 +1,6 @@
 import type { TextChannel } from "discord.js";
 import { generateAgentAction, loadAgentPersonality } from "../ai/agent.js";
-import { compressNarrative, dmNarrate } from "../ai/dm.js";
+import { compressNarrative, dmNarrate, loadCanonicalFacts } from "../ai/dm.js";
 import { checkAgentResponse, checkDMResponse } from "../ai/guardrail.js";
 import { getNextAction } from "../ai/orchestrator.js";
 import { AGENT_DELAY_MS, COMPRESS_EVERY, HISTORY_WINDOW } from "../config.js";
@@ -104,7 +104,8 @@ async function processTurnInner(
   if (gameState.turnCount % COMPRESS_EVERY === 0) {
     log.info(`Compressing narrative (turn ${gameState.turnCount})`);
     const history = await loadHistory(gameState.id);
-    gameState.narrativeSummary = await compressNarrative(gameState, history);
+    const canonicalFacts = await loadCanonicalFacts(gameState.id);
+    gameState.narrativeSummary = await compressNarrative(gameState, history, canonicalFacts);
     await saveGameState(gameState);
     log.info("Narrative compressed");
   }

@@ -410,6 +410,21 @@ export function parseInventoryDirective(
  * or [[GOLD:-20 TARGET:party REASON:bought supplies]]
  * Amount includes the sign (+/-).
  */
+/** Parse REST directives like [[REST:long TARGET:party]] or [[REST:short TARGET:Grimbold]] */
+export function parseRestDirective(text: string): { restType: "short" | "long"; target: string }[] {
+  const regex = /\[\[REST\s*:\s*(short|long)\s+TARGET\s*:\s*(.+?)\s*\]\]/gi;
+  const results: { restType: "short" | "long"; target: string }[] = [];
+  let match: RegExpExecArray | null = null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: idiomatic regex exec loop
+  while ((match = regex.exec(text)) !== null) {
+    results.push({
+      restType: match[1].trim().toLowerCase() as "short" | "long",
+      target: match[2].trim(),
+    });
+  }
+  return results;
+}
+
 export function parseGoldDirective(
   text: string,
 ): { amount: number; target: string; reason: string }[] {

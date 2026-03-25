@@ -24,6 +24,7 @@ import {
   parseHealDirective,
   parseInventoryDirective,
   parseRequestRollDirective,
+  parseRestDirective,
   parseSpellDirective,
   parseUpdateConditionDirective,
   parseUpdateHPDirective,
@@ -38,6 +39,7 @@ import {
 } from "./hp-reconciliation.js";
 import { checkLevelUp } from "./leveling.js";
 import { useFeatureCharge, useSpellSlot } from "./resources.js";
+import { longRest, shortRest } from "./rest.js";
 
 export interface DirectiveContext {
   processedText: string;
@@ -50,6 +52,7 @@ export interface DirectiveContext {
   hpChanged: boolean;
   inventoryChanged: boolean;
   goldChanged: boolean;
+  restApplied: boolean;
   combatStarted: boolean;
   combatEnded: boolean;
   misuseWarnings: string[];
@@ -298,6 +301,20 @@ export function processDirectives(text: string, gameState: GameState): Directive
       log.warn(`  Update conditions: target "${directive.target}" not found`);
       processedText = processedText.replace(originalTag, "");
     }
+  }
+
+  // === REST directives ===
+  let restApplied = false;
+  const restDirectives = parseRestDirective(processedText);
+  for (const directive of restDirectives) {
+    const originalTag = `[[REST:${directive.restType} TARGET:${directive.target}]]`;
+    const label = directive.restType === "short" ? "Short Rest" : "Long Rest";
+    const summary = directive.restType === "short" ? shortRest(gameState) : longRest(gameState);
+    restApplied = true;
+    hpChanged = directive.restType === "long" || hpChanged;
+    const desc = summary.length > 0 ? summary.join("; ") : "Everyone is at full capacity.";
+    log.info(`  ${label}: ${desc}`);
+    processedText = processedText.replace(originalTag, `*[${label}: ${desc}]*`);
   }
 
   // === SPELL directives ===
@@ -612,6 +629,7 @@ export function processDirectives(text: string, gameState: GameState): Directive
     hpChanged,
     inventoryChanged,
     goldChanged,
+    restApplied,
     combatStarted,
     combatEnded,
     misuseWarnings,

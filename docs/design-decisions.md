@@ -64,7 +64,7 @@ Every AI call (DM, agent, orchestrator) is a fresh API call with no conversation
 - AI can "forget" details from early in the campaign
 - Narrative compression is lossy
 
-The narrative compression system (every 10 turns, Haiku summarizes recent events) mitigates the memory loss. The full history is always saved to disk for potential future retrieval-augmented approaches.
+The narrative compression system (every 6 turns, Sonnet summarizes recent events) mitigates the memory loss. The full history is always saved to disk for potential future retrieval-augmented approaches.
 
 ## Why JSON Files Instead of a Database?
 
@@ -120,7 +120,7 @@ AI context windows are finite. Without compression:
 - Token cost per call would grow linearly
 - Eventually you'd hit the context limit
 
-Every 10 turns, Haiku (fast/cheap) summarizes recent events into 2-4 paragraphs. This compressed narrative replaces the full history in the DM's context. The sliding window (last 8 turns) provides recent detail, and the summary provides long-term continuity.
+Every 6 turns, Sonnet summarizes recent events into 2-4 paragraphs. This compressed narrative replaces the full history in the DM's context. The sliding window (last 8 turns) provides recent detail, and the summary provides long-term continuity.
 
 ## Why Agent Personality Files as Markdown?
 

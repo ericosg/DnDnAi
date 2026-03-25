@@ -208,7 +208,7 @@ data/games/
 
 - State saves after every turn (crash-safe)
 - History is append-only (never trimmed, only the sliding window is sent to AI)
-- Narrative summary compresses every 10 turns to manage context growth
+- Narrative summary compresses every 6 turns to manage context growth
 - All game data is gitignored
 - On restart, the bot resumes any game automatically — the next player action loads state from disk
 - Pending rolls (`GameState.pendingRolls`) persist to JSON, so tabletop-style rolls survive restarts
@@ -220,7 +220,7 @@ AI calls are stateless — no conversation memory. Context is rebuilt each call 
 
 1. **System prompt** — static identity + dynamic game state
 2. **Sliding window** — last 8 turns of history (configurable via `HISTORY_WINDOW`)
-3. **Narrative summary** — compressed story updated every 10 turns
+3. **Narrative summary** — compressed story updated every 6 turns
 4. **Current actions** — what the AI needs to resolve right now
 
 This means the AI "forgets" old details but maintains narrative continuity through the compressed summary. The full history is always available in `history.json` for debugging or future features.

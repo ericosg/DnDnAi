@@ -10,6 +10,7 @@ import {
   parseHealDirective,
   parseInventoryDirective,
   parseRequestRollDirective,
+  parseRestDirective,
   parseSpellDirective,
   parseUpdateConditionDirective,
   parseUpdateHPDirective,
@@ -614,5 +615,49 @@ describe("parseGoldDirective", () => {
 
   test("returns empty array for no directives", () => {
     expect(parseGoldDirective("no gold here")).toEqual([]);
+  });
+});
+
+describe("parseRestDirective", () => {
+  test("parses long rest for party", () => {
+    const results = parseRestDirective("[[REST:long TARGET:party]]");
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({ restType: "long", target: "party" });
+  });
+
+  test("parses short rest for party", () => {
+    const results = parseRestDirective("[[REST:short TARGET:party]]");
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({ restType: "short", target: "party" });
+  });
+
+  test("parses individual target", () => {
+    const results = parseRestDirective("[[REST:long TARGET:Grimbold Ironforge]]");
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({ restType: "long", target: "Grimbold Ironforge" });
+  });
+
+  test("case insensitive", () => {
+    const results = parseRestDirective("[[REST:LONG TARGET:party]]");
+    expect(results).toHaveLength(1);
+    expect(results[0].restType).toBe("long");
+  });
+
+  test("handles spacing variations", () => {
+    const results = parseRestDirective("[[REST : long  TARGET : party]]");
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({ restType: "long", target: "party" });
+  });
+
+  test("returns empty array for no directives", () => {
+    expect(parseRestDirective("no rest here")).toEqual([]);
+  });
+
+  test("parses rest embedded in narration", () => {
+    const text =
+      "The party settles in for the night. [[REST:long TARGET:party]] Dawn breaks over Halverton.";
+    const results = parseRestDirective(text);
+    expect(results).toHaveLength(1);
+    expect(results[0]).toEqual({ restType: "long", target: "party" });
   });
 });

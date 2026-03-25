@@ -20,7 +20,7 @@ export const models = {
 export const DATA_DIR = "data/games";
 export const AGENTS_DIR = "agents";
 export const HISTORY_WINDOW = 8;
-export const COMPRESS_EVERY = 10;
+export const COMPRESS_EVERY = 6;
 export const AGENT_DELAY_MS = 2500;
 
 export type NarrativeStyle = "concise" | "standard" | "elaborate";

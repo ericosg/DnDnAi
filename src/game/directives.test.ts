@@ -737,3 +737,70 @@ describe("directives — GOLD", () => {
     expect(gs.players[1].characterSheet.gold).toBe(37);
   });
 });
+
+describe("directives — REST", () => {
+  test("long rest restores HP and spell slots for whole party", () => {
+    const gs = makeExplorationState();
+    gs.players[0].characterSheet.hp.current = 15; // Fusetsu damaged
+    gs.players[1].characterSheet.hp.current = 20; // Grimbold damaged
+    gs.players[1].characterSheet.spellSlots = [{ level: 1, max: 2, current: 0 }];
+    gs.players[1].characterSheet.featureCharges = [
+      { name: "Second Wind", max: 1, current: 0, resetsOn: "short" },
+    ];
+
+    const text = "The party rests. [[REST:long TARGET:party]] Dawn breaks.";
+    const ctx = processDirectives(text, gs);
+
+    expect(ctx.restApplied).toBe(true);
+    expect(ctx.hpChanged).toBe(true);
+    expect(gs.players[0].characterSheet.hp.current).toBe(24); // restored to max
+    expect(gs.players[1].characterSheet.hp.current).toBe(31); // restored to max
+    expect(gs.players[1].characterSheet.spellSlots![0].current).toBe(2); // slots restored
+    expect(gs.players[1].characterSheet.featureCharges![0].current).toBe(1); // charges restored
+    expect(ctx.processedText).toContain("Long Rest");
+    expect(ctx.processedText).not.toContain("[[REST:");
+  });
+
+  test("short rest resets only short-rest features", () => {
+    const gs = makeExplorationState();
+    gs.players[0].characterSheet.hp.current = 15; // damaged
+    gs.players[1].characterSheet.spellSlots = [{ level: 1, max: 2, current: 0 }];
+    gs.players[1].characterSheet.featureCharges = [
+      { name: "Second Wind", max: 1, current: 0, resetsOn: "short" },
+    ];
+
+    const text = "A brief rest. [[REST:short TARGET:party]]";
+    const ctx = processDirectives(text, gs);
+
+    expect(ctx.restApplied).toBe(true);
+    // HP NOT restored on short rest (no Hit Die spending in directive)
+    expect(gs.players[0].characterSheet.hp.current).toBe(15);
+    // Short-rest features restored
+    expect(gs.players[1].characterSheet.featureCharges![0].current).toBe(1);
+    // Spell slots NOT restored on short rest (not warlock)
+    expect(gs.players[1].characterSheet.spellSlots![0].current).toBe(0);
+    expect(ctx.processedText).toContain("Short Rest");
+  });
+
+  test("long rest with party already at full capacity", () => {
+    const gs = makeExplorationState();
+    // Everyone at full — no changes needed
+    const text = "[[REST:long TARGET:party]]";
+    const ctx = processDirectives(text, gs);
+
+    expect(ctx.restApplied).toBe(true);
+    expect(ctx.processedText).toContain("Everyone is at full capacity.");
+  });
+
+  test("rest directive tag is replaced with summary", () => {
+    const gs = makeExplorationState();
+    gs.players[0].characterSheet.hp.current = 10;
+    const text = "Night passes. [[REST:long TARGET:party]] Morning arrives.";
+    const ctx = processDirectives(text, gs);
+
+    expect(ctx.processedText).toContain("Night passes.");
+    expect(ctx.processedText).toContain("Morning arrives.");
+    expect(ctx.processedText).toContain("*[Long Rest:");
+    expect(ctx.processedText).toContain("HP 10 → 24");
+  });
+});
