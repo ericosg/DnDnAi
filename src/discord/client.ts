@@ -667,12 +667,6 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
         content: `[/ask from ${askerName}]: ${question}\n[DM answered]: ${answer.slice(0, 500)}`,
       });
 
-      // Resume orchestrator after /ask — if the game is stuck (e.g., an agent
-      // should have been prompted but wasn't), this unsticks it. The DM's answer
-      // is informational; the orchestrator checks what actually needs to happen.
-      if (gameState.status === "active") {
-        resumeOrchestrator(gameState.id, channel);
-      }
       break;
     }
 
