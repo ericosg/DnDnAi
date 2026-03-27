@@ -33,6 +33,8 @@ function withGameLock(gameId: string, fn: () => Promise<void>): Promise<void> {
 const roundResponses = new Map<string, Set<string>>();
 // Track when each round started (ISO timestamp) to detect stale queued messages
 const roundStartTimes = new Map<string, string>();
+// Track who has already been pinged this round (prevents duplicate @mentions)
+const roundPings = new Map<string, Set<string>>();
 
 function getResponded(gameId: string): Set<string> {
   if (!roundResponses.has(gameId)) {
@@ -49,6 +51,16 @@ export function getRoundStartTime(gameId: string): string {
 export function clearRound(gameId: string): void {
   roundResponses.set(gameId, new Set());
   roundStartTimes.set(gameId, new Date().toISOString());
+  roundPings.set(gameId, new Set());
+}
+
+function hasPinged(gameId: string, playerId: string): boolean {
+  return roundPings.get(gameId)?.has(playerId) ?? false;
+}
+
+function markPinged(gameId: string, playerId: string): void {
+  if (!roundPings.has(gameId)) roundPings.set(gameId, new Set());
+  roundPings.get(gameId)?.add(playerId);
 }
 
 export function markResponded(gameId: string, playerId: string): void {
@@ -245,7 +257,8 @@ async function orchestratorLoop(gameState: GameState, channel: TextChannel): Pro
           const unfulfilled = gameState.pendingRolls.filter((r) => !r.result);
           for (const roll of unfulfilled) {
             const player = gameState.players.find((p) => p.id === roll.playerId);
-            if (player && !player.isAgent) {
+            if (player && !player.isAgent && !hasPinged(gameState.id, roll.playerId)) {
+              markPinged(gameState.id, roll.playerId);
               await channel.send(
                 `<@${roll.playerId}> — roll \`${roll.notation}\` for **${roll.reason}** (\`/roll ${roll.notation}\`)`,
               );
@@ -275,7 +288,9 @@ async function orchestratorLoop(gameState: GameState, channel: TextChannel): Pro
         const waitPlayer = gameState.players.find((p) => p.id === decision.targetPlayerId);
         log.info(`Waiting for human: ${waitPlayer?.name ?? decision.targetPlayerId}`);
         // Ping the player in Discord so they get notified (even with channel muted)
-        if (decision.targetPlayerId) {
+        // Skip if already pinged this round (prevents duplicates from /ask resumeOrchestrator)
+        if (decision.targetPlayerId && !hasPinged(gameState.id, decision.targetPlayerId)) {
+          markPinged(gameState.id, decision.targetPlayerId);
           const mention = `<@${decision.targetPlayerId}>`;
           const pending = gameState.pendingRolls?.find(
             (r) => r.playerId === decision.targetPlayerId && !r.result,
