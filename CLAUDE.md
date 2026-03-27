@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 bun run src/index.ts           # Start the bot
 bun --watch run src/index.ts   # Start with auto-reload (dev mode)
-bun test                       # Run unit tests (731 tests)
+bun test                       # Run unit tests (748 tests)
 bunx tsc --noEmit              # Type-check without emitting
 bunx biome check src/          # Lint and format check
 bun install                    # Install dependencies
@@ -67,7 +67,8 @@ All AI calls are stateless — context is rebuilt from game state + sliding hist
 - **Webhooks**: Each AI identity (agents + DM) gets a separate Discord webhook with custom name/avatar. DM narration uses rich plain text with visual separators (Discord markdown for formatting); system messages (combat status, dice, game events) use embeds. Agents use plain text.
 - **Agent personality files**: `agents/*.md` with gray-matter frontmatter + markdown body. The `characterSpec` field contains a character sheet in the same markdown format human players upload. 11 pre-built agents ship in `agents/` covering all 9 non-Fighter classes plus the original Fighter (Grimbold) and a second Bard (Pumpernickle). All are levels 1-3 with unique race+class combos.
 - **Player IDs**: Humans = Discord user ID. Agents = `agent:<name>`.
-- **Round tracking**: In-memory `roundResponses` map in `game/engine.ts`. Cleared after DM resolves. Not persisted — on restart, `autoResume()` runs the orchestrator with an empty set, which correctly prompts pending AI agents.
+- **Round tracking**: In-memory `roundResponses` map in `game/engine.ts`. Cleared after DM resolves. Not persisted — on restart, `autoResume()` runs the orchestrator with an empty set, which correctly prompts pending AI agents. Stale entry detection (`roundStartTimes` map) prevents queued messages from stealing turns in new rounds — entries timestamped before the current round start are recorded in history but don't count as round actions.
+- **Player @mentions**: When the orchestrator decides `wait_for_human`, it sends a Discord message that @mentions the player (`<@userId>`). In combat: "it's your turn!". In exploration: "what do you do?". For pending rolls: includes dice notation and reason. Also pings human players when DM narration creates pending rolls via `[[REQUEST_ROLL:...]]`.
 - **Turn mutex**: Per-game promise chain in `game/engine.ts` serializes concurrent `processTurn` calls. Prevents duplicate agent/DM responses when multiple humans act simultaneously.
 - **Directive processing**: All directive parsing and application is extracted into `game/directives.ts` as a pure function `processDirectives()`. This takes DM response text and game state, processes all directives (ROLL, DAMAGE, HEAL, UPDATE_HP, UPDATE_CONDITION, REQUEST_ROLL, SPELL, USE, CONCENTRATE, CONDITION, XP, INVENTORY, GOLD, REST, COMBAT signals), mutates game state, and returns a `DirectiveContext` with the processed text and metadata. This enables testing directives independently from the engine's I/O concerns.
 - **Canonical facts injection**: The `⚠️ CANONICAL FACTS` section from `dm-notes/world.md` is read at prompt-build time and injected directly into the DM system prompt. This prevents hallucination of names, locations, and established facts — the DM can't skip reading its notes because the facts are already in its prompt. The same facts are fed into narrative compression to prevent perpetuating errors in the summary.

@@ -98,6 +98,7 @@ The engine handles all of this automatically:
 - **Conditions** — prone, frightened, etc. tracked with mechanical notes on rolls
 - **XP** — awarded by the DM, tracked on your character sheet
 - **Saving throws** — the DM sees your exact modifiers, no math errors
+- **Turn notifications** — you get @mentioned when it's your turn (safe to mute the channel and rely on pings)
 
 ## FAQ
 

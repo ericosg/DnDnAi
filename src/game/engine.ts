@@ -31,6 +31,8 @@ function withGameLock(gameId: string, fn: () => Promise<void>): Promise<void> {
 
 // Track who has responded this round per game
 const roundResponses = new Map<string, Set<string>>();
+// Track when each round started (ISO timestamp) to detect stale queued messages
+const roundStartTimes = new Map<string, string>();
 
 function getResponded(gameId: string): Set<string> {
   if (!roundResponses.has(gameId)) {
@@ -40,8 +42,13 @@ function getResponded(gameId: string): Set<string> {
   return roundResponses.get(gameId)!;
 }
 
+export function getRoundStartTime(gameId: string): string {
+  return roundStartTimes.get(gameId) ?? new Date(0).toISOString();
+}
+
 export function clearRound(gameId: string): void {
   roundResponses.set(gameId, new Set());
+  roundStartTimes.set(gameId, new Date().toISOString());
 }
 
 export function markResponded(gameId: string, playerId: string): void {
@@ -82,11 +89,27 @@ async function processTurnInner(
   entry: TurnEntry,
   channel: TextChannel,
 ): Promise<void> {
-  // Record the entry
+  // Check if this entry was created before the current round started.
+  // This happens when a player sends multiple IC messages quickly — the second
+  // message gets queued behind the lock and processed after the round clears.
+  // Without this check, the stale message would count as the player's action in
+  // the NEW round, stealing their turn.
+  const roundStart = getRoundStartTime(gameState.id);
+  const isStale = entry.timestamp < roundStart;
+
+  // Record the entry (always — even stale messages are valid history)
   log.info(
-    `Turn ${gameState.turnCount + 1}: ${entry.playerName} [${entry.type}] — ${entry.content.slice(0, 80)}`,
+    `Turn ${gameState.turnCount + 1}: ${entry.playerName} [${entry.type}] — ${entry.content.slice(0, 80)}${isStale ? " (stale)" : ""}`,
   );
   await appendHistory(gameState.id, entry);
+
+  if (isStale) {
+    log.info(
+      `Stale entry from ${entry.playerName} (sent ${entry.timestamp}, round started ${roundStart}) — recorded but not counting as round action`,
+    );
+    return;
+  }
+
   gameState.turnCount++;
 
   // Mark this player as having responded
@@ -217,8 +240,17 @@ async function orchestratorLoop(gameState: GameState, channel: TextChannel): Pro
           return;
         }
 
-        // If pending rolls were created, don't clear round — wait for player input
+        // If pending rolls were created, ping the players and wait for input
         if (gameState.pendingRolls?.length) {
+          const unfulfilled = gameState.pendingRolls.filter((r) => !r.result);
+          for (const roll of unfulfilled) {
+            const player = gameState.players.find((p) => p.id === roll.playerId);
+            if (player && !player.isAgent) {
+              await channel.send(
+                `<@${roll.playerId}> — roll \`${roll.notation}\` for **${roll.reason}** (\`/roll ${roll.notation}\`)`,
+              );
+            }
+          }
           log.info("Pending rolls — waiting for player input before advancing");
           return;
         }
@@ -242,6 +274,19 @@ async function orchestratorLoop(gameState: GameState, channel: TextChannel): Pro
       case "wait_for_human": {
         const waitPlayer = gameState.players.find((p) => p.id === decision.targetPlayerId);
         log.info(`Waiting for human: ${waitPlayer?.name ?? decision.targetPlayerId}`);
+        // Ping the player in Discord so they get notified (even with channel muted)
+        if (decision.targetPlayerId) {
+          const mention = `<@${decision.targetPlayerId}>`;
+          const pending = gameState.pendingRolls?.find(
+            (r) => r.playerId === decision.targetPlayerId && !r.result,
+          );
+          const prompt = pending
+            ? `${mention} — roll \`${pending.notation}\` for **${pending.reason}** (\`/roll ${pending.notation}\`)`
+            : gameState.combat.active
+              ? `${mention} — it's your turn!`
+              : `${mention} — what do you do?`;
+          await channel.send(prompt);
+        }
         return;
       }
 
@@ -375,9 +420,8 @@ async function handleDMTurn(
       return;
     }
 
-    // Guardrail: check for player agency violations (only human PCs — AI agents
-    // have already declared actions, so DM is expected to narrate their outcomes)
-    const pcNames = gameState.players.filter((p) => !p.isAgent).map((p) => p.characterSheet.name);
+    // Guardrail: check for player agency violations (ALL PCs — human and AI agent alike)
+    const pcNames = gameState.players.map((p) => p.characterSheet.name);
     const guardrail = await checkDMResponse(dmResponse, pcNames, recentActions);
     if (!guardrail.pass) {
       log.warn(`Guardrail violation: ${guardrail.violation}`);

@@ -121,11 +121,13 @@ mock.module("../discord/formatter.js", () => ({
 
 let dmGuardrailResponses: { pass: boolean; violation?: string }[] = [];
 let dmGuardrailCallIndex = 0;
+let dmGuardrailCalls: { dmResponse: string; pcNames: string[]; statedActions?: string }[] = [];
 let agentGuardrailResponses: { pass: boolean; violation?: string }[] = [];
 let agentGuardrailCallIndex = 0;
 
 mock.module("../ai/guardrail.js", () => ({
-  checkDMResponse: async () => {
+  checkDMResponse: async (dmResponse: string, pcNames: string[], statedActions?: string) => {
+    dmGuardrailCalls.push({ dmResponse, pcNames, statedActions });
     if (dmGuardrailResponses.length > 0) {
       const response = dmGuardrailResponses[dmGuardrailCallIndex] ?? { pass: true };
       dmGuardrailCallIndex++;
@@ -143,7 +145,8 @@ mock.module("../ai/guardrail.js", () => ({
   },
 }));
 
-const { processTurn, resumeOrchestrator, markResponded, clearRound } = await import("./engine.js");
+const { processTurn, resumeOrchestrator, markResponded, clearRound, getRoundStartTime } =
+  await import("./engine.js");
 
 function makePlayer(overrides: Partial<Player> = {}): Player {
   return {
@@ -233,12 +236,18 @@ function makeGameState(): GameState {
 }
 
 // Minimal mock channel
-const mockChannel = { send: async () => {} } as unknown;
+let channelMessages: (string | { embeds?: unknown[] })[] = [];
+const mockChannel = {
+  send: async (msg: string | { embeds?: unknown[] }) => {
+    channelMessages.push(msg);
+  },
+} as unknown;
 
 beforeEach(() => {
   appendedHistory = [];
   savedStates = [];
   sentMessages = [];
+  channelMessages = [];
   typingStarted = 0;
   typingStopped = 0;
   mockGameStateForLoad = null;
@@ -248,6 +257,7 @@ beforeEach(() => {
   agentActionCalls = [];
   dmGuardrailResponses = [];
   dmGuardrailCallIndex = 0;
+  dmGuardrailCalls = [];
   agentGuardrailResponses = [];
   agentGuardrailCallIndex = 0;
   clearRound("test-game");
@@ -1363,5 +1373,259 @@ describe("engine — guardrail re-generation feedback", () => {
     expect(agentActionCalls[0].effort).toBeUndefined();
     // Re-gen call: effort escalated to medium
     expect(agentActionCalls[1].effort).toBe("medium");
+  });
+});
+
+describe("engine — stale entry detection", () => {
+  test("stale entry is recorded but does not count as round action", async () => {
+    const gs = makeGameState();
+    mockGameStateForLoad = gs;
+
+    // Simulate: round clears, then a stale message arrives with an old timestamp
+    clearRound(gs.id);
+
+    // Wait a tiny bit so the round start time is strictly after the entry timestamp
+    const staleTimestamp = new Date(Date.now() - 5000).toISOString();
+
+    const staleEntry: TurnEntry = {
+      id: 1,
+      timestamp: staleTimestamp,
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I catch the dagger",
+    };
+
+    await processTurn(gs.id, staleEntry, mockChannel as never);
+
+    // Entry should be recorded in history
+    expect(appendedHistory.length).toBe(1);
+    expect(appendedHistory[0].content).toBe("I catch the dagger");
+
+    // But orchestrator should NOT have run (no DM/agent calls)
+    expect(dmNarrateCalls.length).toBe(0);
+    expect(agentActionCalls.length).toBe(0);
+    expect(sentMessages.length).toBe(0);
+  });
+
+  test("fresh entry in same round counts normally", async () => {
+    const gs = makeGameState();
+    mockGameStateForLoad = gs;
+
+    clearRound(gs.id);
+
+    const freshEntry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I sneak forward",
+    };
+
+    await processTurn(gs.id, freshEntry, mockChannel as never);
+
+    // Entry recorded in history
+    expect(appendedHistory.length).toBeGreaterThanOrEqual(1);
+
+    // Orchestrator should have run (agent + DM)
+    expect(agentActionCalls.length).toBeGreaterThanOrEqual(1);
+    expect(dmNarrateCalls.length).toBeGreaterThanOrEqual(1);
+  });
+
+  test("clearRound updates round start time", () => {
+    const before = new Date().toISOString();
+    clearRound("test-game");
+    const roundStart = getRoundStartTime("test-game");
+    expect(roundStart >= before).toBe(true);
+  });
+
+  test("getRoundStartTime returns epoch for unknown game", () => {
+    const start = getRoundStartTime("nonexistent-game");
+    expect(start).toBe(new Date(0).toISOString());
+  });
+});
+
+describe("engine — player @mention notifications", () => {
+  test("orchestrator pings human player when waiting for their turn", async () => {
+    // Set up a game with 2 humans + 1 agent where one human has already acted
+    const gs = makeGameState();
+    const human2 = makePlayer({ id: "human2", name: "Pastos" });
+    human2.characterSheet.name = "Hierophantis";
+    gs.players.push(human2);
+    mockGameStateForLoad = gs;
+
+    clearRound(gs.id);
+    // Human1 acts — triggers agent then DM. After DM, round clears.
+    // Then human2 acts in new round — triggers agent, but orchestrator waits for human1.
+    // However in this test, we can just simulate: human2 acts, agent responds, then wait for human1.
+
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human2",
+      playerName: "Hierophantis",
+      type: "ic",
+      content: "I draw my blade",
+    };
+    await processTurn(gs.id, entry, mockChannel as never);
+
+    // The orchestrator should have pinged human1 (Fusetsu) since they haven't acted
+    const mentions = channelMessages.filter(
+      (m) => typeof m === "string" && m.includes("<@human1>"),
+    );
+    expect(mentions.length).toBeGreaterThanOrEqual(1);
+    expect(mentions[0]).toContain("what do you do?");
+  });
+
+  test("combat mention says 'it's your turn'", async () => {
+    // Set up combat where human acts, agent prompted, DM resolves, then turn
+    // advances to human again — should ping on the next wait_for_human
+    const gs = makeGameState();
+    gs.combat = {
+      active: true,
+      round: 1,
+      turnIndex: 0,
+      combatants: [
+        {
+          playerId: "human1",
+          name: "Fusetsu",
+          hp: { max: 24, current: 24, temp: 0 },
+          initiative: 18,
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+        {
+          playerId: "agent:grimbold",
+          name: "Grimbold Ironforge",
+          hp: { max: 31, current: 31, temp: 0 },
+          initiative: 12,
+          conditions: [],
+          deathSaves: { successes: 0, failures: 0 },
+        },
+      ],
+    };
+    mockGameStateForLoad = gs;
+
+    clearRound(gs.id);
+
+    // Human acts in combat — DM resolves human turn, advances to agent,
+    // agent acts, DM resolves agent turn, advances back to human → ping
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I attack the goblin",
+    };
+    await processTurn(gs.id, entry, mockChannel as never);
+
+    const mentions = channelMessages.filter(
+      (m) => typeof m === "string" && m.includes("<@human1>"),
+    );
+    expect(mentions.length).toBeGreaterThanOrEqual(1);
+    // In combat, the message should say "it's your turn"
+    const combatMention = mentions.find((m) => typeof m === "string" && m.includes("your turn"));
+    expect(combatMention).toBeDefined();
+  });
+
+  test("pending roll mention includes dice notation", async () => {
+    const gs = makeGameState();
+    // DM response creates pending rolls via directive processing
+    dmNarrateResponse =
+      "The goblin lunges! [[REQUEST_ROLL:d20+5 FOR:Fusetsu REASON:Dexterity saving throw]]";
+    mockGameStateForLoad = gs;
+
+    clearRound(gs.id);
+
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I dodge",
+    };
+    await processTurn(gs.id, entry, mockChannel as never);
+
+    // Should have a pending roll mention
+    const rollMentions = channelMessages.filter(
+      (m) => typeof m === "string" && m.includes("<@human1>") && m.includes("/roll"),
+    );
+    expect(rollMentions.length).toBeGreaterThanOrEqual(1);
+    expect(rollMentions[0]).toContain("d20+5");
+    expect(rollMentions[0]).toContain("Dexterity saving throw");
+  });
+});
+
+describe("engine — guardrail receives all PC names", () => {
+  test("DM guardrail receives both human and agent character names", async () => {
+    const gs = makeGameState();
+    mockGameStateForLoad = gs;
+
+    clearRound(gs.id);
+
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I sneak forward",
+    };
+    await processTurn(gs.id, entry, mockChannel as never);
+
+    // The guardrail should have been called with ALL PC names
+    expect(dmGuardrailCalls.length).toBeGreaterThanOrEqual(1);
+    const pcNames = dmGuardrailCalls[0].pcNames;
+    expect(pcNames).toContain("Fusetsu"); // human
+    expect(pcNames).toContain("Grimbold Ironforge"); // agent
+  });
+});
+
+describe("engine — stale entry edge cases", () => {
+  test("stale entry does NOT increment turnCount", async () => {
+    const gs = makeGameState();
+    gs.turnCount = 10;
+    mockGameStateForLoad = gs;
+
+    clearRound(gs.id);
+
+    const staleEntry: TurnEntry = {
+      id: 1,
+      timestamp: new Date(Date.now() - 5000).toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "stale action",
+    };
+    await processTurn(gs.id, staleEntry, mockChannel as never);
+
+    // turnCount should NOT have changed
+    expect(gs.turnCount).toBe(10);
+  });
+
+  test("entry with timestamp equal to round start is NOT stale", async () => {
+    const gs = makeGameState();
+    mockGameStateForLoad = gs;
+
+    // Set round start to a known time
+    clearRound(gs.id);
+    const roundStart = getRoundStartTime(gs.id);
+
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: roundStart, // exactly equal
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I act at the boundary",
+    };
+    await processTurn(gs.id, entry, mockChannel as never);
+
+    // Should have triggered the orchestrator (agent + DM calls)
+    expect(agentActionCalls.length).toBeGreaterThanOrEqual(1);
+    expect(dmNarrateCalls.length).toBeGreaterThanOrEqual(1);
   });
 });

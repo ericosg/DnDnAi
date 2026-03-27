@@ -24,8 +24,25 @@ describe("guardrail", () => {
 
     test("lists non-violation examples", () => {
       expect(GUARDRAIL_SYSTEM).toContain("NOT violations");
-      expect(GUARDRAIL_SYSTEM).toContain("outcome of an action the PC explicitly stated");
+      expect(GUARDRAIL_SYSTEM).toContain("outcome/result of an action the PC explicitly stated");
       expect(GUARDRAIL_SYSTEM).toContain("Addressing a PC directly");
+    });
+
+    test("covers AI agents explicitly", () => {
+      expect(GUARDRAIL_SYSTEM).toContain("human players AND AI-controlled agents");
+    });
+
+    test("covers involuntary reactions as a violation", () => {
+      expect(GUARDRAIL_SYSTEM).toContain("involuntary reactions");
+      expect(GUARDRAIL_SYSTEM).toContain("body language");
+    });
+
+    test("covers embellishment of stated actions as a violation", () => {
+      expect(GUARDRAIL_SYSTEM).toContain("embellishments");
+    });
+
+    test("instructs strictness", () => {
+      expect(GUARDRAIL_SYSTEM).toContain("Be STRICT");
     });
 
     test("whitelists dice roll prompts as non-violations", () => {
@@ -83,6 +100,22 @@ describe("guardrail", () => {
       for (const name of names) {
         expect(prompt).toContain(`- ${name}`);
       }
+    });
+
+    test("includes stated actions when provided", () => {
+      const prompt = buildGuardrailPrompt(
+        "The goblin falls.",
+        pcNames,
+        "Fūsetsu: I attack the goblin\nGrimbold: I charge",
+      );
+      expect(prompt).toContain("## What Players Stated They Are Doing This Turn");
+      expect(prompt).toContain("Fūsetsu: I attack the goblin");
+      expect(prompt).toContain("Grimbold: I charge");
+    });
+
+    test("omits stated actions section when not provided", () => {
+      const prompt = buildGuardrailPrompt("The goblin falls.", pcNames);
+      expect(prompt).not.toContain("## What Players Stated");
     });
   });
 

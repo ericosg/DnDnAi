@@ -129,6 +129,10 @@ describe("DM_IDENTITY", () => {
     expect(DM_IDENTITY).toContain("dice directive");
   });
 
+  test("explicitly covers AI agents in agency rule", () => {
+    expect(DM_IDENTITY).toContain("applies EQUALLY to AI agents");
+  });
+
   test("contains player overreach rules", () => {
     expect(DM_IDENTITY).toContain("Player Overreach");
     expect(DM_IDENTITY).toContain("sole authority");
