@@ -109,6 +109,16 @@ export const commands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
     .toJSON(),
 
   new SlashCommandBuilder()
+    .setName("pause")
+    .setDescription("Pause the game — DM saves full context for seamless resume")
+    .toJSON(),
+
+  new SlashCommandBuilder()
+    .setName("resume")
+    .setDescription("Resume a paused game — DM reloads context and continues")
+    .toJSON(),
+
+  new SlashCommandBuilder()
     .setName("end")
     .setDescription("End the campaign and save final state")
     .toJSON(),

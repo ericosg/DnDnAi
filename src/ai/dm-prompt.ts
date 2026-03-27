@@ -340,6 +340,62 @@ ${charFiles}
 }
 
 /**
+ * Build the prompt for /pause — tells the DM to dump full context to dm-notes.
+ * Pure function — no AI call.
+ */
+export function buildPausePrompt(): string {
+  return `[SYSTEM — GRACEFUL PAUSE REQUESTED]
+
+The server is about to shut down. You need to save your ENTIRE current context to dm-notes so you can resume seamlessly after restart.
+
+Do the following NOW:
+
+1. **Read your existing dm-notes** (Glob dm-notes/ to see what's there, then read each file)
+2. **Read the full recent history** (history.json) to capture the exact current scene state
+3. **Write a comprehensive resume file** to \`dm-notes/resume.md\` containing:
+   - **Current scene**: Exactly where the party is, what they see, what's happening RIGHT NOW
+   - **Recent events summary**: What just happened in the last few turns (be specific)
+   - **Active conversations**: Any NPC dialogue or player interactions in progress
+   - **Pending actions**: What the party was about to do, who needs to act next
+   - **Combat state**: If in combat, full initiative order, current turn, tactical positions
+   - **Atmosphere/tone**: The current mood, tension level, time of day, weather
+   - **Secret plans**: ALL your planned encounters, plot twists, NPC motivations, and narrative beats you were building toward — both immediate and long-term
+   - **Foreshadowing planted**: Things you've hinted at that haven't paid off yet
+   - **Character arcs**: Notes on each PC's personal story threads you're developing
+   - **Full transcription of recent key moments**: If there were important dialogue exchanges or dramatic moments in the last few turns, include them verbatim so you can maintain continuity
+
+4. **Update dm-notes/plot.md** with any secret plans not already recorded
+5. **Update dm-notes/world.md** with current location and any world state not already recorded
+6. **Update dm-notes/session-log.md** with a log entry for this pause point
+
+Be THOROUGH. When you resume, you'll have no memory of this session except what's in dm-notes. Write as if you're briefing a replacement DM who needs to pick up mid-scene without the players noticing any discontinuity.
+
+After saving everything, respond with a brief in-character acknowledgment that the game is pausing (keep it short and atmospheric — a moment frozen in time).`;
+}
+
+/**
+ * Build the prompt for /resume — tells the DM to reload context from dm-notes.
+ * Pure function — no AI call.
+ */
+export function buildResumePrompt(): string {
+  return `[SYSTEM — RESUMING FROM PAUSE]
+
+The game was previously paused and is now resuming. Your dm-notes contain everything you need to pick up exactly where you left off.
+
+Do the following NOW:
+
+1. **Read dm-notes/resume.md** — this is your primary context restoration file
+2. **Read dm-notes/plot.md** — your planned encounters and secret narrative beats
+3. **Read dm-notes/world.md** — established world state and canonical facts
+4. **Read dm-notes/session-log.md** — recent session history
+5. **Read any character notes** in dm-notes/characters/
+
+Once you've loaded everything, narrate the resumption. Pick up EXACTLY where you left off — same scene, same tension, same atmosphere. Do not summarize what happened before; instead, continue the scene as if only a brief pause occurred. A short atmospheric line acknowledging the return, then immediately back into the action.
+
+Remember: the players expect seamless continuity. Your resume.md file has everything you need.`;
+}
+
+/**
  * Build the user-facing prompt for a /ask OOC question.
  * Pure function — no AI call.
  */

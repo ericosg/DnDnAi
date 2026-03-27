@@ -80,6 +80,13 @@ In combat, turns follow initiative order (the DM rolls for everyone at the start
 | `/level-up` | Level up when you have enough XP (uses fixed HP average by default) |
 | `/level-up hp:Roll` | Level up and roll for HP instead of taking the average |
 
+### Game Management
+| Command | What It Does |
+|---------|-------------|
+| `/pause` | Gracefully pause — DM saves full context (scene, plans, secrets) for seamless resume |
+| `/resume` | Resume a paused game — DM reloads context and continues the scene |
+| `/end` | End the campaign permanently |
+
 ## Things You Don't Need to Worry About
 
 The engine handles all of this automatically:

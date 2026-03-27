@@ -2,7 +2,13 @@ import { readFile } from "node:fs/promises";
 import { COMPRESS_EVERY, models } from "../config.js";
 import type { GameState, TurnEntry } from "../state/types.js";
 import { chat, chatAgentic } from "./claude.js";
-import { buildAskPrompt, buildDMPrompt, DM_ALLOWED_TOOLS } from "./dm-prompt.js";
+import {
+  buildAskPrompt,
+  buildDMPrompt,
+  buildPausePrompt,
+  buildResumePrompt,
+  DM_ALLOWED_TOOLS,
+} from "./dm-prompt.js";
 
 export { buildDMPrompt } from "./dm-prompt.js";
 
@@ -88,6 +94,30 @@ export async function dmAsk(
     canonicalFacts,
   );
   return chatAgentic(models.dm, system, messages, DM_ALLOWED_TOOLS, "DM ask");
+}
+
+export async function dmPause(gameState: GameState, history: TurnEntry[]): Promise<string> {
+  const canonicalFacts = await loadCanonicalFacts(gameState.id);
+  const { system, messages } = buildDMPrompt(
+    gameState,
+    history,
+    buildPausePrompt(),
+    null,
+    canonicalFacts,
+  );
+  return chatAgentic(models.dm, system, messages, DM_ALLOWED_TOOLS, "DM pause");
+}
+
+export async function dmResume(gameState: GameState, history: TurnEntry[]): Promise<string> {
+  const canonicalFacts = await loadCanonicalFacts(gameState.id);
+  const { system, messages } = buildDMPrompt(
+    gameState,
+    history,
+    buildResumePrompt(),
+    null,
+    canonicalFacts,
+  );
+  return chatAgentic(models.dm, system, messages, DM_ALLOWED_TOOLS, "DM resume");
 }
 
 export async function compressNarrative(

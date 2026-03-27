@@ -11,7 +11,7 @@ import {
 } from "discord.js";
 import { loadAgentPersonality } from "../ai/agent.js";
 import { chatAgentic } from "../ai/claude.js";
-import { dmAsk, dmLook, dmNarrate, dmRecap } from "../ai/dm.js";
+import { dmAsk, dmLook, dmNarrate, dmPause, dmRecap, dmResume } from "../ai/dm.js";
 import { buildHelpPrompt, HELP_ALLOWED_TOOLS } from "../ai/help-prompt.js";
 import { config, models, VERSION } from "../config.js";
 import { addAskExchange, formatAskHistoryForPrompt } from "../game/ask-history.js";
@@ -861,6 +861,115 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
       await interaction.reply({
         embeds: [systemEmbed(`${cs.name} Levels Up!`, parts.join("\n"))],
       });
+      break;
+    }
+
+    case "pause": {
+      await interaction.deferReply();
+      const gameState = await findGameByChannel(channel.id);
+      if (!gameState) {
+        await interaction.editReply("No game in this channel.");
+        return;
+      }
+      if (gameState.status === "paused") {
+        await interaction.editReply("The game is already paused. Use `/resume` to continue.");
+        return;
+      }
+      if (gameState.status !== "active") {
+        await interaction.editReply("Only active games can be paused.");
+        return;
+      }
+
+      // Ask the DM to dump full context to dm-notes before pausing
+      const history = await loadHistory(gameState.id);
+      const rawResponse = await dmPause(gameState, history);
+
+      // Process any directives (unlikely but consistent with other DM calls)
+      const ctx = processDirectives(rawResponse, gameState);
+      const response = ctx.processedText;
+
+      // Post the DM's farewell/acknowledgment in the channel
+      await sendAsIdentity(channel, "Dungeon Master", formatDMNarration(response));
+
+      // Now pause the game
+      gameState.status = "paused";
+      await saveGameState(gameState);
+
+      // Record in history
+      const { appendHistory } = await import("../state/store.js");
+      await appendHistory(gameState.id, {
+        id: 0,
+        timestamp: new Date().toISOString(),
+        playerId: "system",
+        playerName: "System",
+        type: "system",
+        content: `[/pause] Game paused at turn ${gameState.turnCount}. DM context saved to dm-notes/resume.md.`,
+      });
+
+      await interaction.editReply({
+        embeds: [
+          systemEmbed(
+            "Game Paused",
+            `The campaign has been paused at turn ${gameState.turnCount}.\nThe DM has saved full context to notes. Use \`/resume\` to continue.`,
+          ),
+        ],
+      });
+      break;
+    }
+
+    case "resume": {
+      await interaction.deferReply();
+      const gameState = await findGameByChannel(channel.id);
+      if (!gameState) {
+        await interaction.editReply("No game in this channel.");
+        return;
+      }
+      if (gameState.status === "active") {
+        await interaction.editReply("The game is already active!");
+        return;
+      }
+      if (gameState.status !== "paused") {
+        await interaction.editReply("Only paused games can be resumed.");
+        return;
+      }
+
+      // Reactivate the game
+      gameState.status = "active";
+      await saveGameState(gameState);
+
+      // Ask the DM to reload context from dm-notes and narrate the resumption
+      const history = await loadHistory(gameState.id);
+      const rawResponse = await dmResume(gameState, history);
+
+      // Process any directives
+      const ctx = processDirectives(rawResponse, gameState);
+      const response = ctx.processedText;
+      if (response !== rawResponse) {
+        await saveGameState(gameState);
+      }
+
+      // Post the DM's resumption narration
+      await sendAsIdentity(channel, "Dungeon Master", formatDMNarration(response));
+
+      // Record in history
+      const { appendHistory } = await import("../state/store.js");
+      await appendHistory(gameState.id, {
+        id: 0,
+        timestamp: new Date().toISOString(),
+        playerId: "system",
+        playerName: "System",
+        type: "system",
+        content: `[/resume] Game resumed at turn ${gameState.turnCount}. DM reloaded context from dm-notes.`,
+      });
+
+      await interaction.editReply({
+        embeds: [
+          systemEmbed("Game Resumed", `The adventure continues at turn ${gameState.turnCount}!`),
+        ],
+      });
+
+      // Resume the orchestrator to handle any pending AI turns
+      resumeOrchestrator(gameState.id, channel);
       break;
     }
 

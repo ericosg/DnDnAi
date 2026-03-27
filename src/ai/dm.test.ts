@@ -19,9 +19,14 @@ mock.module("../config.js", () => ({
   },
 }));
 
-const { buildDMPrompt, buildAskPrompt, DM_IDENTITY, DM_ALLOWED_TOOLS } = await import(
-  "./dm-prompt.js"
-);
+const {
+  buildDMPrompt,
+  buildAskPrompt,
+  buildPausePrompt,
+  buildResumePrompt,
+  DM_IDENTITY,
+  DM_ALLOWED_TOOLS,
+} = await import("./dm-prompt.js");
 
 function makeGameState(overrides: Partial<GameState> = {}): GameState {
   return {
@@ -691,5 +696,93 @@ describe("buildDMPrompt — new features", () => {
     const gs = makeGameState();
     const { system } = buildDMPrompt(gs, [], "test", null, null);
     expect(system).not.toContain("⚠️ CANONICAL FACTS — DO NOT CONTRADICT");
+  });
+});
+
+describe("buildPausePrompt", () => {
+  test("instructs DM to save context to dm-notes/resume.md", () => {
+    const prompt = buildPausePrompt();
+    expect(prompt).toContain("dm-notes/resume.md");
+  });
+
+  test("instructs DM to read existing notes and history", () => {
+    const prompt = buildPausePrompt();
+    expect(prompt).toContain("history.json");
+    expect(prompt).toContain("dm-notes/");
+  });
+
+  test("instructs DM to save secret plans", () => {
+    const prompt = buildPausePrompt();
+    expect(prompt).toContain("Secret plans");
+    expect(prompt).toContain("plot.md");
+  });
+
+  test("instructs DM to update world and session log", () => {
+    const prompt = buildPausePrompt();
+    expect(prompt).toContain("world.md");
+    expect(prompt).toContain("session-log.md");
+  });
+
+  test("identifies as a system pause request", () => {
+    const prompt = buildPausePrompt();
+    expect(prompt).toContain("GRACEFUL PAUSE");
+  });
+
+  test("warns DM that memory is lost without notes", () => {
+    const prompt = buildPausePrompt();
+    expect(prompt).toContain("no memory of this session except what's in dm-notes");
+  });
+});
+
+describe("buildResumePrompt", () => {
+  test("instructs DM to read resume.md", () => {
+    const prompt = buildResumePrompt();
+    expect(prompt).toContain("dm-notes/resume.md");
+  });
+
+  test("instructs DM to read all note files", () => {
+    const prompt = buildResumePrompt();
+    expect(prompt).toContain("plot.md");
+    expect(prompt).toContain("world.md");
+    expect(prompt).toContain("session-log.md");
+  });
+
+  test("instructs DM to continue seamlessly", () => {
+    const prompt = buildResumePrompt();
+    expect(prompt).toContain("seamless continuity");
+  });
+
+  test("identifies as a system resume request", () => {
+    const prompt = buildResumePrompt();
+    expect(prompt).toContain("RESUMING FROM PAUSE");
+  });
+
+  test("instructs DM not to summarize but to continue the scene", () => {
+    const prompt = buildResumePrompt();
+    expect(prompt).toContain("Do not summarize");
+  });
+});
+
+describe("buildDMPrompt with pause/resume prompts", () => {
+  test("pause prompt integrates into full DM prompt", () => {
+    const gs = makeGameState({ turnCount: 42 });
+    const pauseAction = buildPausePrompt();
+    const { system, messages } = buildDMPrompt(gs, [], pauseAction);
+
+    // System prompt still has DM identity and party info
+    expect(system).toContain("Dungeon Master");
+    expect(system).toContain("Fūsetsu");
+    // User message contains the pause instructions
+    expect(messages[0].content).toContain("GRACEFUL PAUSE");
+    expect(messages[0].content).toContain("dm-notes/resume.md");
+  });
+
+  test("resume prompt integrates into full DM prompt", () => {
+    const gs = makeGameState({ turnCount: 42 });
+    const resumeAction = buildResumePrompt();
+    const { system, messages } = buildDMPrompt(gs, [], resumeAction);
+
+    expect(system).toContain("Dungeon Master");
+    expect(messages[0].content).toContain("RESUMING FROM PAUSE");
   });
 });

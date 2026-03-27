@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 bun run src/index.ts           # Start the bot
 bun --watch run src/index.ts   # Start with auto-reload (dev mode)
-bun test                       # Run unit tests (718 tests)
+bun test                       # Run unit tests (731 tests)
 bunx tsc --noEmit              # Type-check without emitting
 bunx biome check src/          # Lint and format check
 bun install                    # Install dependencies
@@ -87,6 +87,8 @@ Configurable via `NARRATIVE_STYLE` env var (`concise`, `standard`, `elaborate`).
 ### Resumability
 
 The bot is fully resumable across restarts. All game state persists to JSON; AI calls are stateless. On startup, `autoResume()` in `discord/client.ts` scans for active games, posts a startup greeting embed in each game's channel, and runs the orchestrator loop via `resumeOrchestrator()` in `game/engine.ts` to prompt any pending AI agent turns. This prevents deadlocks where AI agents would never act after a restart mid-combat. No `/start` command is needed to resume — the bot auto-detects and continues.
+
+**Graceful pause/resume**: `/pause` asks the DM to dump full context (scene state, secret plans, foreshadowing, character arcs) to `dm-notes/resume.md` before setting `status = "paused"`. Paused games are excluded from `autoResume()`. `/resume` reactivates the game, asks the DM to reload context from dm-notes, and resumes the orchestrator. The DM prompt builders (`buildPausePrompt`, `buildResumePrompt` in `dm-prompt.ts`) instruct the DM to read/write specific note files.
 
 ### Persistence
 

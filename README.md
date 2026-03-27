@@ -85,6 +85,8 @@ Use the OAuth2 URL Generator in the Developer Portal with the `bot` and `applica
 | `/rest <short\|long>` | Take a rest to recover spell slots, features, and HP |
 | `/level-up [hp:Roll\|Fixed]` | Level up when you have enough XP |
 | `/pass` | Skip your turn |
+| `/pause` | Gracefully pause — DM saves full context for seamless resume |
+| `/resume` | Resume a paused game — DM reloads context and continues |
 | `/end` | End the campaign and save final state |
 
 ## Playing the Game
