@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 bun run src/index.ts           # Start the bot
 bun --watch run src/index.ts   # Start with auto-reload (dev mode)
-bun test                       # Run unit tests (748 tests)
+bun test                       # Run unit tests (767 tests)
 bunx tsc --noEmit              # Type-check without emitting
 bunx biome check src/          # Lint and format check
 bun install                    # Install dependencies
@@ -55,7 +55,7 @@ All AI calls are stateless — context is rebuilt from game state + sliding hist
 ### Key Protocols
 
 - **Agentic DM**: The DM runs with `--allowedTools Read,Write,Edit,Glob,Grep` so it can read character sheet JSONs, the full history, the SRD rules, and maintain its own persistent notes. The system prompt includes file paths for all game data. The DM's Character Reference section in the prompt provides a quick summary of each character's mechanical details (ability scores, features, spells, equipment, gender), while file access lets it dig deeper when needed. The DM looks up rules in the SRD rather than relying on training data, preventing hallucination of abilities or incorrect rule applications.
-- **DM Notes (persistent memory)**: The DM maintains notes in `data/games/<id>/dm-notes/` — character details learned in RP (`characters/{name}.md`), world state (`world.md`), plot threads (`plot.md`), rules rulings (`rulings.md`), and a session log (`session-log.md`). The DM reads these before responding and writes to them when it learns something new. Directory is seeded with templates on `/start`.
+- **DM Notes (persistent memory)**: The DM maintains notes in `data/games/<id>/dm-notes/` — running context (`dm.md`, always loaded), character details learned in RP (`characters/{name}.md`), world state (`world.md`), plot threads (`plot.md`), rules rulings (`rulings.md`), and a session log (`session-log.md`). The DM reads these before responding and writes to them when it learns something new. Directory is seeded with templates on `/start`.
 - **DM dice directives**: DM AI outputs `[[ROLL:d20+5 FOR:Name REASON:text]]` — engine rolls real dice and injects results. AI never simulates randomness. Directives are resolved instantly before the message is posted — the DM narrates outcomes in the same response.
 - **Tabletop dice (REQUEST_ROLL)**: DM outputs `[[REQUEST_ROLL:d20+5 FOR:Name REASON:text]]` for human players — the engine creates a `PendingRoll` in `GameState.pendingRolls`, shows a `/roll` prompt, and pauses until the player rolls. For AI agents, REQUEST_ROLL auto-resolves like a normal ROLL. When all pending rolls are fulfilled, the orchestrator triggers a resolution phase where the DM narrates outcomes.
 - **Damage/heal directives**: DM outputs `[[DAMAGE:2d6+3 TARGET:Name REASON:text]]` or `[[HEAL:1d8+3 TARGET:Name REASON:text]]` — engine rolls dice and calls `applyDamage()`/`applyHealing()` in `combat.ts` to update combatant and character sheet HP. Results display inline with updated HP values.
@@ -72,6 +72,8 @@ All AI calls are stateless — context is rebuilt from game state + sliding hist
 - **Turn mutex**: Per-game promise chain in `game/engine.ts` serializes concurrent `processTurn` calls. Prevents duplicate agent/DM responses when multiple humans act simultaneously.
 - **Directive processing**: All directive parsing and application is extracted into `game/directives.ts` as a pure function `processDirectives()`. This takes DM response text and game state, processes all directives (ROLL, DAMAGE, HEAL, UPDATE_HP, UPDATE_CONDITION, REQUEST_ROLL, SPELL, USE, CONCENTRATE, CONDITION, XP, INVENTORY, GOLD, REST, COMBAT signals), mutates game state, and returns a `DirectiveContext` with the processed text and metadata. This enables testing directives independently from the engine's I/O concerns.
 - **Canonical facts injection**: The `⚠️ CANONICAL FACTS` section from `dm-notes/world.md` is read at prompt-build time and injected directly into the DM system prompt. This prevents hallucination of names, locations, and established facts — the DM can't skip reading its notes because the facts are already in its prompt. The same facts are fed into narrative compression to prevent perpetuating errors in the summary.
+- **DM persistent context (`dm.md`)**: `dm-notes/dm.md` is the DM's running context file — loaded into every DM prompt automatically. The DM maintains it via Write/Edit tools, keeping it concise and current. It contains active plot threads, key NPCs, important rulings, and session notes. Unlike other dm-notes files which the DM must manually read, dm.md is always in context. Seeded with a template on `/start`.
+- **Structured scene state**: Narrative compression (`compressNarrative()`) outputs a structured header (LOCATION, TIME, NPCS_PRESENT, KEY_STATE) parsed into `GameState.sceneState`. This is injected into the DM prompt as a `## Current Scene` section, giving the DM a precise snapshot of where things stand — preventing "forgot who's present" and time-of-day drift bugs.
 
 ### Typing Indicators
 

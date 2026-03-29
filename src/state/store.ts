@@ -157,6 +157,30 @@ export async function initDMNotes(gameId: string): Promise<void> {
   if (!existsSync(sessionLogPath)) {
     await writeFile(sessionLogPath, "# Session Log\n\nKey events by session.\n");
   }
+
+  const dmContextPath = path.join(notesDir, "dm.md");
+  if (!existsSync(dmContextPath)) {
+    await writeFile(
+      dmContextPath,
+      `# DM Context
+
+This file is loaded into your system prompt on EVERY call. Keep it concise and current.
+Use it as your running memory — anything here, you will always see. Anything elsewhere, you might miss.
+
+## Active Plot Threads
+<!-- What's happening RIGHT NOW in the story. Update after major developments. -->
+
+## Key NPCs
+<!-- NPCs the party has met or will meet soon. Name, role, disposition, last interaction. -->
+
+## Important Rulings & Precedents
+<!-- Rules calls you've made that should stay consistent. -->
+
+## Session Notes
+<!-- Brief notes from the current session. What just happened, what's coming next. -->
+`,
+    );
+  }
 }
 
 // --- Factory ---

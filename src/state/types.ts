@@ -97,6 +97,13 @@ export interface AgentPersonality {
   avatarUrl?: string;
 }
 
+export interface SceneState {
+  location: string;
+  timeOfDay: string;
+  presentNPCs: string[];
+  keyFacts: string[];
+}
+
 export interface PendingRoll {
   id: string;
   playerId: string;
@@ -118,6 +125,7 @@ export interface GameState {
   createdAt: string;
   lastActivity: string;
   pendingRolls?: PendingRoll[];
+  sceneState?: SceneState;
 }
 
 export interface OrchestratorDecision {

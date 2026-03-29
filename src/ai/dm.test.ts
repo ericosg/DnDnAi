@@ -9,7 +9,7 @@ import type { GameState, TurnEntry } from "../state/types.js";
 mock.module("../config.js", () => ({
   config: { discordToken: "test", guildId: "test" },
   models: { dm: "test-model", agent: "test-model", orchestrator: "test-model" },
-  HISTORY_WINDOW: 8,
+  HISTORY_WINDOW: 12,
   COMPRESS_EVERY: 10,
   NARRATIVE_STYLE: "concise",
   STYLE_INSTRUCTIONS: {
@@ -24,6 +24,8 @@ const {
   buildAskPrompt,
   buildPausePrompt,
   buildResumePrompt,
+  formatSceneState,
+  parseSceneState,
   DM_IDENTITY,
   DM_ALLOWED_TOOLS,
 } = await import("./dm-prompt.js");
@@ -764,6 +766,225 @@ describe("buildResumePrompt", () => {
   test("instructs DM not to summarize but to continue the scene", () => {
     const prompt = buildResumePrompt();
     expect(prompt).toContain("Do not summarize");
+  });
+});
+
+describe("parseSceneState", () => {
+  test("parses valid structured header", () => {
+    const raw = `LOCATION: Root cellar, east Halverton
+TIME: Noon
+NPCS_PRESENT: Edric (outside entrance), Marsh (captive)
+KEY_STATE: Marsh has confessed|Two caches remain in town|Dead drop on Thornwall road
+---
+The party has been interrogating Marsh in the cellar.`;
+
+    const result = parseSceneState(raw);
+    expect(result).not.toBeNull();
+    expect(result?.sceneState.location).toBe("Root cellar, east Halverton");
+    expect(result?.sceneState.timeOfDay).toBe("Noon");
+    expect(result?.sceneState.presentNPCs).toEqual(["Edric (outside entrance)", "Marsh (captive)"]);
+    expect(result?.sceneState.keyFacts).toEqual([
+      "Marsh has confessed",
+      "Two caches remain in town",
+      "Dead drop on Thornwall road",
+    ]);
+    expect(result?.prose).toBe("The party has been interrogating Marsh in the cellar.");
+  });
+
+  test("returns null when no delimiter found", () => {
+    const raw = "Just a plain summary with no structured header.";
+    expect(parseSceneState(raw)).toBeNull();
+  });
+
+  test("returns null when LOCATION is missing", () => {
+    const raw = `TIME: Noon
+NPCS_PRESENT: Edric
+---
+Some prose.`;
+    expect(parseSceneState(raw)).toBeNull();
+  });
+
+  test("handles empty NPCS_PRESENT and KEY_STATE", () => {
+    const raw = `LOCATION: The town square
+TIME: Morning
+NPCS_PRESENT:
+KEY_STATE:
+---
+The party is resting in the square.`;
+
+    const result = parseSceneState(raw);
+    expect(result).not.toBeNull();
+    expect(result?.sceneState.presentNPCs).toEqual([]);
+    expect(result?.sceneState.keyFacts).toEqual([]);
+  });
+
+  test("returns null when delimiter appears with no LOCATION before it", () => {
+    const raw = `---
+Just prose with a delimiter at the start.`;
+    expect(parseSceneState(raw)).toBeNull();
+  });
+
+  test("preserves multiline prose after delimiter", () => {
+    const raw = `LOCATION: The mines
+TIME: Night
+NPCS_PRESENT: Harlan
+KEY_STATE: Crystals growing
+---
+First paragraph of prose.
+
+Second paragraph of prose.`;
+
+    const result = parseSceneState(raw);
+    expect(result).not.toBeNull();
+    expect(result?.prose).toContain("First paragraph");
+    expect(result?.prose).toContain("Second paragraph");
+  });
+});
+
+describe("formatSceneState", () => {
+  test("formats complete scene state", () => {
+    const scene = {
+      location: "Root cellar, east Halverton",
+      timeOfDay: "Noon",
+      presentNPCs: ["Edric (outside)", "Marsh (captive)"],
+      keyFacts: ["Marsh has confessed", "Two caches remain"],
+    };
+    const result = formatSceneState(scene);
+    expect(result).toContain("## Current Scene");
+    expect(result).toContain("**Location:** Root cellar, east Halverton");
+    expect(result).toContain("**Time:** Noon");
+    expect(result).toContain("**NPCs present:** Edric (outside), Marsh (captive)");
+    expect(result).toContain("- Marsh has confessed");
+    expect(result).toContain("- Two caches remain");
+  });
+
+  test("omits empty fields", () => {
+    const scene = { location: "A cave", timeOfDay: "", presentNPCs: [], keyFacts: [] };
+    const result = formatSceneState(scene);
+    expect(result).toContain("**Location:** A cave");
+    expect(result).not.toContain("**Time:**");
+    expect(result).not.toContain("**NPCs present:**");
+    expect(result).not.toContain("**Key state:**");
+  });
+});
+
+describe("buildDMPrompt — DM context injection", () => {
+  test("includes dm.md context when provided", () => {
+    const gs = makeGameState();
+    const dmContext =
+      "## Active Plot Threads\n- Party investigating shadowstone smuggling\n\n## Key NPCs\n- Edric: chapel keeper, cooperative";
+    const { system } = buildDMPrompt(gs, [], "test action", null, null, dmContext);
+
+    expect(system).toContain("## DM Context");
+    expect(system).toContain("shadowstone smuggling");
+    expect(system).toContain("Edric: chapel keeper");
+  });
+
+  test("omits dm.md context when not provided", () => {
+    const gs = makeGameState();
+    const { system } = buildDMPrompt(gs, [], "test action", null, null, null);
+
+    expect(system).not.toContain("## DM Context");
+  });
+
+  test("dm.md context appears after canonical facts and scene state", () => {
+    const gs = makeGameState({
+      sceneState: {
+        location: "Town square",
+        timeOfDay: "Noon",
+        presentNPCs: [],
+        keyFacts: [],
+      },
+    });
+    const facts = "- Tavern: The Sheaf & Stone";
+    const dmContext = "## Active Plot Threads\n- Smuggling investigation";
+    const { system } = buildDMPrompt(gs, [], "test", null, facts, dmContext);
+
+    const factsIdx = system.indexOf("CANONICAL FACTS");
+    const sceneIdx = system.indexOf("## Current Scene");
+    const contextIdx = system.indexOf("## DM Context");
+    const partyIdx = system.indexOf("## Party");
+
+    expect(factsIdx).toBeLessThan(sceneIdx);
+    expect(sceneIdx).toBeLessThan(contextIdx);
+    expect(contextIdx).toBeLessThan(partyIdx);
+  });
+
+  test("DM_IDENTITY mentions dm.md as critical file", () => {
+    expect(DM_IDENTITY).toContain("dm-notes/dm.md");
+    expect(DM_IDENTITY).toContain("Running Context");
+  });
+
+  test("file paths include dm.md reference", () => {
+    const gs = makeGameState();
+    const { system } = buildDMPrompt(gs, [], "test");
+    expect(system).toContain("dm-notes/dm.md");
+  });
+});
+
+describe("buildDMPrompt — scene state injection", () => {
+  test("includes scene state when present in game state", () => {
+    const gs = makeGameState({
+      sceneState: {
+        location: "Root cellar, east Halverton",
+        timeOfDay: "Noon",
+        presentNPCs: ["Edric (outside entrance)"],
+        keyFacts: ["Marsh is cooperating"],
+      },
+    });
+    const { system } = buildDMPrompt(gs, [], "test action");
+
+    expect(system).toContain("## Current Scene");
+    expect(system).toContain("**Location:** Root cellar, east Halverton");
+    expect(system).toContain("**Time:** Noon");
+    expect(system).toContain("Edric (outside entrance)");
+    expect(system).toContain("- Marsh is cooperating");
+  });
+
+  test("omits scene state when not present", () => {
+    const gs = makeGameState();
+    const { system } = buildDMPrompt(gs, [], "test action");
+
+    expect(system).not.toContain("## Current Scene");
+  });
+
+  test("scene state appears before narrative summary", () => {
+    const gs = makeGameState({
+      narrativeSummary: "The party explored the mines.",
+      sceneState: {
+        location: "Mine entrance",
+        timeOfDay: "Morning",
+        presentNPCs: [],
+        keyFacts: [],
+      },
+    });
+    const { system } = buildDMPrompt(gs, [], "test");
+    const sceneIdx = system.indexOf("## Current Scene");
+    const summaryIdx = system.indexOf("## Story So Far");
+    expect(sceneIdx).toBeGreaterThan(-1);
+    expect(summaryIdx).toBeGreaterThan(-1);
+    expect(sceneIdx).toBeLessThan(summaryIdx);
+  });
+});
+
+describe("buildAskPrompt — anti-hallucination", () => {
+  test("includes honesty-over-consistency rules", () => {
+    const prompt = buildAskPrompt("Who is Drest?", "Fūsetsu");
+    expect(prompt).toContain("HONESTY OVER CONSISTENCY");
+    expect(prompt).toContain("NEVER fabricate retcons");
+    expect(prompt).toContain("say so plainly");
+  });
+
+  test("requires reading history.json before answering factual questions", () => {
+    const prompt = buildAskPrompt("What happened at the mine?", "Fūsetsu");
+    expect(prompt).toContain("YOU MUST USE THE READ TOOL");
+    expect(prompt).toContain("read history.json FIRST");
+  });
+
+  test("instructs DM to admit uncertainty rather than guess", () => {
+    const prompt = buildAskPrompt("Is Aldric dead?", "Fūsetsu");
+    expect(prompt).toContain("I don't have a record of that");
+    expect(prompt).toContain("I'm not sure");
   });
 });
 

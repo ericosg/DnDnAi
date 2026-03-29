@@ -219,8 +219,11 @@ data/games/
 AI calls are stateless — no conversation memory. Context is rebuilt each call from:
 
 1. **System prompt** — static identity + dynamic game state
-2. **Sliding window** — last 8 turns of history (configurable via `HISTORY_WINDOW`)
-3. **Narrative summary** — compressed story updated every 6 turns
-4. **Current actions** — what the AI needs to resolve right now
+2. **Sliding window** — last 12 turns of history (configurable via `HISTORY_WINDOW`)
+3. **Canonical facts** — ground-truth facts from `dm-notes/world.md`, injected into system prompt
+4. **Structured scene state** — location, time, present NPCs, key facts (parsed from narrative compression output, stored in `GameState.sceneState`)
+5. **DM persistent context** — `dm-notes/dm.md`, always loaded into the DM system prompt. The DM maintains this file as its running memory — active plot threads, key NPCs, rulings, session notes.
+6. **Narrative summary** — compressed story updated every 6 turns (compression uses a 12-turn input window for better context)
+7. **Current actions** — what the AI needs to resolve right now
 
-This means the AI "forgets" old details but maintains narrative continuity through the compressed summary. The full history is always available in `history.json` for debugging or future features.
+This means the AI "forgets" old details but maintains narrative continuity through the compressed summary, structured scene state, and persistent DM context. The full history is always available in `history.json` for deeper lookups.

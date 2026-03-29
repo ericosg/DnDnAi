@@ -8,7 +8,7 @@ import { getSavingThrowSummary } from "../game/ability-checks.js";
 import { peekNextCombatant } from "../game/combat.js";
 import { xpForNextLevel } from "../game/leveling.js";
 import { getFeatureChargeSummary, getSpellSlotSummary } from "../game/resources.js";
-import type { GameState, TurnEntry } from "../state/types.js";
+import type { GameState, SceneState, TurnEntry } from "../state/types.js";
 
 export const DM_IDENTITY = `You are the Dungeon Master for a D&D 5e campaign running in Discord.
 
@@ -127,7 +127,16 @@ You have a personal notes directory that persists across every session. This is 
 
 **Directory structure:** \`dm-notes/\` inside the game data folder (path provided in File Paths section).
 
-**What to store:**
+**CRITICAL FILE — \`dm-notes/dm.md\` (Your Running Context):**
+This file is loaded into your system prompt on EVERY call. It is your primary persistent memory — anything you write here, you will always see. Use it for:
+- Active plot threads and what's happening RIGHT NOW
+- Key NPCs the party is interacting with (name, disposition, last interaction)
+- Important rulings and precedents
+- Session notes (what just happened, what's coming next)
+
+**Update dm.md after every significant development** — new NPC introduced, plot thread advanced, important ruling made, scene changed. If you don't write it to dm.md, you may forget it next turn. Keep it concise — this is a quick-reference, not a novel.
+
+**Other notes files (for deeper detail):**
 - \`dm-notes/characters/{name}.md\` — things you learn about each character beyond their sheet: secrets revealed in RP, personal details shared by players (languages, backstory additions, preferences, pronouns), relationships, character development moments
 - \`dm-notes/world.md\` — NPCs you've created (names, personalities, motivations), locations described, factions, lore established during play
 - \`dm-notes/plot.md\` — active plot threads, hooks planted, unresolved mysteries, planned encounters, foreshadowing to pay off later
@@ -135,6 +144,7 @@ You have a personal notes directory that persists across every session. This is 
 - \`dm-notes/session-log.md\` — brief log of key events per session for your own reference
 
 **When to write notes:**
+- After every significant development → update dm.md FIRST, then detail files if needed
 - A player reveals something about their character not on the sheet → write to their character notes file
 - You create an NPC, describe a location, or establish lore → write to world.md
 - You plant a plot hook or start a story thread → write to plot.md
@@ -142,7 +152,7 @@ You have a personal notes directory that persists across every session. This is 
 - At the end of a significant scene → append to session-log.md
 
 **When to read notes:**
-- At the START of every response, check dm-notes/ for existing notes (use Glob to see what files exist)
+- dm.md is already in your prompt — you don't need to read it
 - Before introducing an NPC → check world.md to avoid contradicting earlier descriptions
 - Before narrating a character → check their notes file for details you've learned
 - Before starting a scene → check plot.md for threads to weave in
@@ -200,12 +210,73 @@ function buildCharacterReference(cs: import("../state/types.js").CharacterSheet)
   return lines.join("\n");
 }
 
+export interface CompressionResult {
+  narrativeSummary: string;
+  sceneState: SceneState;
+}
+
+/**
+ * Parse the structured scene state header from compression output.
+ * Expected format before the `---` delimiter:
+ *   LOCATION: <text>
+ *   TIME: <text>
+ *   NPCS_PRESENT: <comma-separated>
+ *   KEY_STATE: <pipe-separated>
+ */
+export function parseSceneState(raw: string): { sceneState: SceneState; prose: string } | null {
+  const delimIdx = raw.indexOf("\n---");
+  if (delimIdx === -1) return null;
+
+  const header = raw.slice(0, delimIdx);
+  const prose = raw.slice(delimIdx + 4).trim();
+
+  const get = (key: string): string => {
+    const re = new RegExp(`^${key}:[ \\t]*(.*)$`, "mi");
+    const m = header.match(re);
+    return m?.[1]?.trim() ?? "";
+  };
+
+  const location = get("LOCATION");
+  const timeOfDay = get("TIME");
+  if (!location) return null; // minimal validation
+
+  const npcsRaw = get("NPCS_PRESENT");
+  const presentNPCs = npcsRaw
+    ? npcsRaw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
+
+  const stateRaw = get("KEY_STATE");
+  const keyFacts = stateRaw
+    ? stateRaw
+        .split("|")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
+
+  return { sceneState: { location, timeOfDay, presentNPCs, keyFacts }, prose };
+}
+
+/** Format a SceneState into a prompt section for the DM. */
+export function formatSceneState(scene: SceneState): string {
+  let block = "\n\n## Current Scene";
+  if (scene.location) block += `\n**Location:** ${scene.location}`;
+  if (scene.timeOfDay) block += `\n**Time:** ${scene.timeOfDay}`;
+  if (scene.presentNPCs.length > 0) block += `\n**NPCs present:** ${scene.presentNPCs.join(", ")}`;
+  if (scene.keyFacts.length > 0)
+    block += `\n**Key state:**\n${scene.keyFacts.map((f) => `- ${f}`).join("\n")}`;
+  return block;
+}
+
 export function buildDMPrompt(
   gameState: GameState,
   history: TurnEntry[],
   currentActions: string,
   askHistory?: string | null,
   canonicalFacts?: string | null,
+  dmContext?: string | null,
 ): { system: string; messages: { role: "user" | "assistant"; content: string }[] } {
   // Layer 1: Identity + rules (static)
   let system = DM_IDENTITY;
@@ -224,6 +295,7 @@ export function buildDMPrompt(
 - ${dataDir}/state.json — current game state
 - Character sheets:
 ${charFiles}
+- ${dataDir}/dm-notes/dm.md — YOUR running context file (always loaded into your prompt — update it!)
 - ${dataDir}/dm-notes/ — YOUR persistent notes directory (read and write here)
 - docs/game-rules.md — game-specific rules and mechanics as implemented in this bot
 - docs/srd/README.md — index of all D&D 5e SRD reference files (read this first to find the right file)
@@ -238,6 +310,16 @@ ${charFiles}
   // Layer 1c: Canonical facts (injected from dm-notes/world.md)
   if (canonicalFacts) {
     system += `\n\n## ⚠️ CANONICAL FACTS — DO NOT CONTRADICT\nThese facts are ground truth. If the narrative summary, history, or your notes conflict with these, the facts below are correct.\n${canonicalFacts}`;
+  }
+
+  // Layer 1d: Current scene state (structured snapshot from last compression)
+  if (gameState.sceneState) {
+    system += formatSceneState(gameState.sceneState);
+  }
+
+  // Layer 1e: DM persistent context (dm-notes/dm.md — always loaded)
+  if (dmContext) {
+    system += `\n\n## DM Context (from dm-notes/dm.md)\nThis is YOUR persistent context file — it is loaded into every prompt. Keep it concise and current. Update it via Edit/Write when important things change.\n\n${dmContext}`;
   }
 
   // Layer 2: Party info (semi-static)
@@ -364,9 +446,10 @@ Do the following NOW:
    - **Character arcs**: Notes on each PC's personal story threads you're developing
    - **Full transcription of recent key moments**: If there were important dialogue exchanges or dramatic moments in the last few turns, include them verbatim so you can maintain continuity
 
-4. **Update dm-notes/plot.md** with any secret plans not already recorded
-5. **Update dm-notes/world.md** with current location and any world state not already recorded
-6. **Update dm-notes/session-log.md** with a log entry for this pause point
+4. **Update dm-notes/dm.md** with current scene state, active threads, and session notes so it's accurate on resume
+5. **Update dm-notes/plot.md** with any secret plans not already recorded
+6. **Update dm-notes/world.md** with current location and any world state not already recorded
+7. **Update dm-notes/session-log.md** with a log entry for this pause point
 
 Be THOROUGH. When you resume, you'll have no memory of this session except what's in dm-notes. Write as if you're briefing a replacement DM who needs to pick up mid-scene without the players noticing any discontinuity.
 
@@ -406,5 +489,5 @@ export function buildAskPrompt(
 ): string {
   const asker = askerName ? ` FROM ${askerName}` : "";
   const priorContext = priorAsks ? `${priorAsks}\n\n` : "";
-  return `${priorContext}[OUT-OF-CHARACTER QUESTION${asker}]\n\n${question}\n\nAnswer this out-of-character question helpfully. Address ${askerName ?? "the player"} and their character specifically.\n\nBEFORE answering:\n1. Read the character's JSON file to verify their actual features, spells, abilities, and level\n2. If the question involves rules, look it up in the SRD (docs/srd/) — check docs/srd/02 classes.md for class features, docs/srd/08 spellcasting.md for spells\n3. If the question involves past events, read the history.json file\n4. Only reference abilities they actually have — never assume features from higher levels or other subclasses\n\nRULES AUTHORITY:\n- You are the rules authority. If you look up a rule in the SRD and it's clear, state it with confidence and cite the source.\n- If a player disputes a correct ruling, DO NOT capitulate. Quote the exact SRD text and explain why it applies.\n- It's OK to say "I understand the confusion, but here's what the rules actually say: [exact quote]."\n- Only change your ruling if the player points you to a specific rule you missed — not because they pushed back.\n- If you're genuinely uncertain, say so and make a fair ruling, then note it in dm-notes/rulings.md.\n\nAFTER answering:\n- If your answer involved a rules interpretation or judgment call (not a straight lookup), write it to dm-notes/rulings.md so you stay consistent in future sessions\n\nYou can reference game rules, what has happened in the story, available options, or anything else the player might want to know. Keep your DM personality but be direct and informative.\n\nIMPORTANT — ACT NOW, DON'T PROMISE:\n- If you can fix something, do it NOW (edit dm-notes, correct state.json, look up rules)\n- Do NOT say "I'll do this next narration" or "I'll track this going forward" — those promises are lost after this response. Either resolve it here or tell the player exactly what to do on their turn.\n\nIMPORTANT: After your /ask answer is posted, the game engine automatically runs the orchestrator to check if any AI agents need to act. This means if a player reports that the game is stuck (e.g., "it's Nyx's turn but she hasn't gone"), your answer will naturally unstick it — the orchestrator will prompt the pending agent after your response. You can reassure the player that the agent will be prompted. If the player reports the combat round or turn order is wrong, check state.json and edit it directly to fix the round/turnIndex values.`;
+  return `${priorContext}[OUT-OF-CHARACTER QUESTION${asker}]\n\n${question}\n\nAnswer this out-of-character question helpfully. Address ${askerName ?? "the player"} and their character specifically.\n\nCRITICAL — HONESTY OVER CONSISTENCY:\n- If you are not certain of a fact, say "I'm not sure" — NEVER invent an explanation\n- NEVER fabricate retcons or in-world justifications for inconsistencies or errors\n- If something looks like a typo, mistake, or AI error, say so plainly — do not dress it up as intentional worldbuilding\n- If two things share a name, acknowledge the ambiguity explicitly rather than assuming they are the same or different\n- When referencing past events, READ history.json first — if you cannot find supporting evidence in the files, say "I don't have a record of that" rather than guessing\n\nBEFORE answering — YOU MUST USE THE READ TOOL:\n1. Read the character's JSON file to verify their actual features, spells, abilities, and level\n2. If the question involves rules, look it up in the SRD (docs/srd/) — check docs/srd/02 classes.md for class features, docs/srd/08 spellcasting.md for spells\n3. If the question involves past events, character abilities, NPC names, or established lore — read history.json FIRST. Do not answer from memory alone.\n4. Only reference abilities they actually have — never assume features from higher levels or other subclasses\n\nRULES AUTHORITY:\n- You are the rules authority. If you look up a rule in the SRD and it's clear, state it with confidence and cite the source.\n- If a player disputes a correct ruling, DO NOT capitulate. Quote the exact SRD text and explain why it applies.\n- It's OK to say "I understand the confusion, but here's what the rules actually say: [exact quote]."\n- Only change your ruling if the player points you to a specific rule you missed — not because they pushed back.\n- If you're genuinely uncertain, say so and make a fair ruling, then note it in dm-notes/rulings.md.\n\nAFTER answering:\n- If your answer involved a rules interpretation or judgment call (not a straight lookup), write it to dm-notes/rulings.md so you stay consistent in future sessions\n\nYou can reference game rules, what has happened in the story, available options, or anything else the player might want to know. Keep your DM personality but be direct and informative.\n\nIMPORTANT — ACT NOW, DON'T PROMISE:\n- If you can fix something, do it NOW (edit dm-notes, correct state.json, look up rules)\n- Do NOT say "I'll do this next narration" or "I'll track this going forward" — those promises are lost after this response. Either resolve it here or tell the player exactly what to do on their turn.\n\nIMPORTANT: After your /ask answer is posted, the game engine automatically runs the orchestrator to check if any AI agents need to act. This means if a player reports that the game is stuck (e.g., "it's Nyx's turn but she hasn't gone"), your answer will naturally unstick it — the orchestrator will prompt the pending agent after your response. You can reassure the player that the agent will be prompted. If the player reports the combat round or turn order is wrong, check state.json and edit it directly to fix the round/turnIndex values.`;
 }

@@ -140,7 +140,9 @@ async function processTurnInner(
     log.info(`Compressing narrative (turn ${gameState.turnCount})`);
     const history = await loadHistory(gameState.id);
     const canonicalFacts = await loadCanonicalFacts(gameState.id);
-    gameState.narrativeSummary = await compressNarrative(gameState, history, canonicalFacts);
+    const result = await compressNarrative(gameState, history, canonicalFacts);
+    gameState.narrativeSummary = result.narrativeSummary;
+    gameState.sceneState = result.sceneState;
     await saveGameState(gameState);
     log.info("Narrative compressed");
   }
