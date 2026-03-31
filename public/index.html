@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Storm Beneath Halverton</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Cinzel+Decorative:wght@400;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=MedievalSharp&display=swap');
+
+  :root {
+    --parchment: #f4ece1;
+    --parchment-dark: #e8ddd0;
+    --ink: #2c1810;
+    --ink-light: #4a3628;
+    --ink-faded: #6b5a4e;
+    --accent: #8b4513;
+    --accent-gold: #c5943a;
+    --accent-violet: #5b3a6b;
+    --accent-violet-light: #7b5a8b;
+    --blood: #8b1a1a;
+    --divine: #c5943a;
+  }
+
+  @page {
+    size: A4;
+    margin: 2cm;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'EB Garamond', 'Georgia', serif;
+    font-size: 12.5pt;
+    line-height: 1.7;
+    color: var(--ink);
+    background: var(--parchment);
+    max-width: 750px;
+    margin: 0 auto;
+    padding: 40px 50px;
+  }
+
+  /* ── TITLE PAGE ── */
+  .title-page {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    page-break-after: always;
+    position: relative;
+    padding: 60px 20px;
+  }
+
+  .title-page::before,
+  .title-page::after {
+    content: '◆ ◇ ◆ ◇ ◆ ◇ ◆ ◇ ◆ ◇ ◆ ◇ ◆';
+    display: block;
+    font-size: 14pt;
+    color: var(--accent-gold);
+    letter-spacing: 6px;
+    position: absolute;
+  }
+  .title-page::before { top: 40px; }
+  .title-page::after { bottom: 40px; }
+
+  .title-ornament {
+    font-size: 36pt;
+    color: var(--accent-gold);
+    letter-spacing: 8px;
+    margin-bottom: 30px;
+  }
+
+  .title-main {
+    font-family: 'Cinzel Decorative', 'Cinzel', serif;
+    font-size: 36pt;
+    font-weight: 700;
+    color: var(--ink);
+    letter-spacing: 3px;
+    line-height: 1.2;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+
+  .title-subtitle {
+    font-family: 'Cinzel', serif;
+    font-size: 14pt;
+    font-weight: 400;
+    color: var(--accent);
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    margin-bottom: 50px;
+  }
+
+  .title-divider {
+    width: 200px;
+    height: 2px;
+    background: linear-gradient(to right, transparent, var(--accent-gold), transparent);
+    margin: 0 auto 40px;
+  }
+
+  .title-party {
+    font-family: 'Cinzel', serif;
+    font-size: 11pt;
+    color: var(--ink-light);
+    letter-spacing: 2px;
+    line-height: 2.2;
+  }
+
+  .title-party strong {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .title-epigraph {
+    font-style: italic;
+    font-size: 12pt;
+    color: var(--ink-faded);
+    margin-top: 60px;
+    max-width: 400px;
+    line-height: 1.8;
+  }
+
+  .title-epigraph .attribution {
+    display: block;
+    margin-top: 8px;
+    font-style: normal;
+    font-size: 10pt;
+    letter-spacing: 2px;
+  }
+
+  /* ── DRAMATIS PERSONAE ── */
+  .dramatis {
+    page-break-after: always;
+    padding: 40px 0;
+  }
+
+  .dramatis h2 {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 20pt;
+    text-align: center;
+    color: var(--ink);
+    letter-spacing: 4px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+
+  .dramatis .section-subtitle {
+    text-align: center;
+    font-style: italic;
+    color: var(--ink-faded);
+    margin-bottom: 30px;
+    font-size: 11pt;
+  }
+
+  .dramatis-group-title {
+    font-family: 'Cinzel', serif;
+    font-size: 11pt;
+    text-align: center;
+    color: var(--accent);
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    margin: 30px 0 16px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--accent-gold);
+  }
+
+  .character-entry {
+    margin-bottom: 18px;
+    padding-left: 20px;
+    border-left: 2px solid var(--accent-gold);
+  }
+
+  .character-entry .char-name {
+    font-family: 'Cinzel', serif;
+    font-size: 12pt;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: 1px;
+  }
+
+  .character-entry .char-title {
+    font-size: 10.5pt;
+    color: var(--ink-light);
+    font-style: italic;
+  }
+
+  .character-entry .char-desc {
+    font-size: 10.5pt;
+    color: var(--ink-faded);
+    margin-top: 3px;
+  }
+
+  .character-entry .char-player {
+    font-size: 9pt;
+    color: var(--accent-gold);
+    font-family: 'Cinzel', serif;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+
+  /* ── CHAPTERS ── */
+  .chapter {
+    page-break-before: always;
+    padding-top: 60px;
+  }
+
+  .chapter:first-of-type {
+    page-break-before: auto;
+  }
+
+  .chapter-number {
+    font-family: 'Cinzel', serif;
+    font-size: 10pt;
+    text-align: center;
+    color: var(--accent-gold);
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .chapter-title {
+    font-family: 'Cinzel Decorative', serif;
+    font-size: 22pt;
+    text-align: center;
+    color: var(--ink);
+    letter-spacing: 2px;
+    margin-bottom: 6px;
+    line-height: 1.3;
+  }
+
+  .chapter-ornament {
+    text-align: center;
+    font-size: 14pt;
+    color: var(--accent-gold);
+    letter-spacing: 12px;
+    margin-bottom: 30px;
+  }
+
+  /* ── PROSE ── */
+  p {
+    text-indent: 2em;
+    margin-bottom: 0.3em;
+    text-align: justify;
+    hyphens: auto;
+  }
+
+  p.no-indent {
+    text-indent: 0;
+  }
+
+  p.first::first-letter {
+    font-family: 'Cinzel Decorative', serif;
+    float: left;
+    font-size: 48pt;
+    line-height: 0.85;
+    padding-right: 8px;
+    padding-top: 4px;
+    color: var(--accent);
+  }
+
+  .scene-break {
+    text-align: center;
+    margin: 28px 0;
+    color: var(--accent-gold);
+    font-size: 14pt;
+    letter-spacing: 12px;
+  }
+
+  /* ── DIALOGUE ── */
+  .dialogue {
+    margin: 12px 0;
+    text-indent: 2em;
+  }
+
+  .dialogue .speaker {
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .dialogue.fusetsu .speaker { color: #3a5a7c; }
+  .dialogue.grimbold .speaker { color: #8b6914; }
+  .dialogue.hierophantis .speaker { color: var(--accent-violet); }
+  .dialogue.nyx .speaker { color: #2d6b4f; }
+  .dialogue.npc .speaker { color: var(--blood); }
+
+  /* ── DICE ROLLS ── */
+  .roll-box {
+    display: inline-block;
+    background: var(--parchment-dark);
+    border: 1px solid var(--accent-gold);
+    border-radius: 4px;
+    padding: 2px 10px;
+    font-family: 'Cinzel', serif;
+    font-size: 9.5pt;
+    color: var(--accent);
+    letter-spacing: 1px;
+    margin: 0 2px;
+  }
+
+  .roll-box.crit {
+    background: linear-gradient(135deg, #fff8e7, #ffefc0);
+    border-color: var(--accent-gold);
+    color: var(--blood);
+    font-weight: 700;
+  }
+
+  .roll-box.fail {
+    background: #f0e0d8;
+    border-color: #c0a090;
+    color: var(--ink-faded);
+  }
+
+  /* ── INSCRIPTION BLOCK ── */
+  .inscription {
+    text-align: center;
+    margin: 24px auto;
+    padding: 16px 30px;
+    max-width: 480px;
+    border-top: 1px solid var(--accent-gold);
+    border-bottom: 1px solid var(--accent-gold);
+    font-family: 'Cinzel', serif;
+    font-size: 11pt;
+    letter-spacing: 2px;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  /* ── DIVINE / MAGICAL TEXT ── */
+  .divine-text {
+    font-style: italic;
+    color: var(--divine);
+    text-align: center;
+    margin: 16px 0;
+    font-size: 11.5pt;
+  }
+
+  .source-text {
+    font-style: italic;
+    color: var(--accent-violet);
+    text-align: center;
+    margin: 16px 0;
+    font-size: 11.5pt;
+  }
+
+  /* ── EMPHASIS ── */
+  em { font-style: italic; }
+  strong { font-weight: 600; color: var(--ink); }
+
+  .dramatic {
+    font-family: 'Cinzel', serif;
+    font-weight: 700;
+    text-align: center;
+    font-size: 13pt;
+    margin: 20px 0;
+    letter-spacing: 1px;
+    color: var(--ink);
+  }
+
+  .whisper {
+    font-size: 10pt;
+    color: var(--ink-faded);
+    font-style: italic;
+  }
+
+  /* ── SECTION DIVIDERS ── */
+  .section-end {
+    text-align: center;
+    margin: 30px 0;
+    color: var(--accent-gold);
+    font-size: 18pt;
+    letter-spacing: 8px;
+  }
+
+  /* ── MAP / STATUS BOXES ── */
+  .status-box {
+    background: var(--parchment-dark);
+    border: 1px solid var(--accent-gold);
+    border-radius: 6px;
+    padding: 16px 24px;
+    margin: 24px 0;
+    font-size: 10.5pt;
+  }
+
+  .status-box h4 {
+    font-family: 'Cinzel', serif;
+    font-size: 10pt;
+    letter-spacing: 2px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .status-box ul {
+    list-style: none;
+    padding: 0;
+  }
+
+  .status-box li {
+    padding: 2px 0;
+    padding-left: 16px;
+    position: relative;
+  }
+
+  .status-box li::before {
+    content: '◆';
+    position: absolute;
+    left: 0;
+    color: var(--accent-gold);
+    font-size: 7pt;
+    top: 5px;
+  }
+
+  /* ── COLOPHON ── */
+  .colophon {
+    page-break-before: always;
+    text-align: center;
+    padding-top: 200px;
+    color: var(--ink-faded);
+    font-size: 10pt;
+    line-height: 2;
+  }
+
+  .colophon .game-title {
+    font-family: 'Cinzel', serif;
+    font-size: 12pt;
+    color: var(--accent);
+    letter-spacing: 2px;
+  }
+
+  /* ── PRINT STYLES ── */
+  @media print {
+    body {
+      max-width: none;
+      padding: 0;
+      background: white;
+    }
+    .title-page { min-height: auto; height: 100vh; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- TITLE PAGE -->
+<!-- ═══════════════════════════════════════ -->
+<div class="title-page">
+  <div class="title-ornament">⚔</div>
+  <div class="title-main">The Storm Beneath<br>Halverton</div>
+  <div class="title-subtitle">A Chronicle of Shadows and Stone</div>
+  <div class="title-divider"></div>
+  <div class="title-party">
+    <strong>Fūsetsu</strong> · Blade of the Silent Cord<br>
+    <strong>Hierophantis</strong> · Fallen Herald of Cyric<br>
+    <strong>Grimbold Ironforge</strong> · The Immovable Shield<br>
+    <strong>Nyx Namfoodle</strong> · Spark and Sprocket
+  </div>
+  <div class="title-epigraph">
+    "When the breath stops, the seal dies.<br>Do not silence the fissure."
+    <span class="attribution">— Ancient Dwarven Inscription</span>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- DRAMATIS PERSONAE -->
+<!-- ═══════════════════════════════════════ -->
+<div class="dramatis">
+  <h2>Dramatis Personae</h2>
+  <p class="section-subtitle">The souls who walk this tale</p>
+
+  <div class="dramatis-group-title">The Party</div>
+
+  <div class="character-entry">
+    <div class="char-name">Fūsetsu (風雪)</div>
+    <div class="char-title">Variant Human Rogue · Far Traveler from Kara-Tur</div>
+    <div class="char-desc">A blade raised by the Silent Cord (話さぬ糸), sent west on a correction mission he does not yet understand. Long braided white hair, pale skin, geometric tattoos covering his body. Sleeps with eyes open, daggers in hand, back to the wall. Watches and listens more than he speaks. Always knows the exits.</div>
+    <div class="char-player">Played by Eric (ad3z)</div>
+  </div>
+
+  <div class="character-entry">
+    <div class="char-name">Hierophantis</div>
+    <div class="char-title">Fallen Aasimar Cleric · Trickery Domain · Patron: Cyric</div>
+    <div class="char-desc">Given to a temple at age three. Raised on doctrine, not love. At thirteen, his closest mentor vanished — the temple called it a failure of faith. He walks the world carrying Cyric's final testament, the relic called Kingdom Come. Precise, measured, with cracks of something darker beneath. When he speaks Celestial, it sounds like Greek.</div>
+    <div class="char-player">Played by Pastos</div>
+  </div>
+
+  <div class="character-entry">
+    <div class="char-name">Grimbold Ironforge</div>
+    <div class="char-title">Mountain Dwarf Fighter · Champion</div>
+    <div class="char-desc">Twenty-three years in the Iron Mountain Guard. Held the line at the Siege of Thornwatch for three days while others evacuated. Saved hundreds. Lost twenty-seven — including his nephew Thorek. Now he joins expeditions to keep the young alive, grumbles because caring hurts, and tells stories about his cousins to honour the dead.</div>
+    <div class="char-player">AI Companion</div>
+  </div>
+
+  <div class="character-entry">
+    <div class="char-name">Nyx Namfoodle</div>
+    <div class="char-title">Forest Gnome Wizard · School of Evocation</div>
+    <div class="char-desc">Expelled from three gnomish workshops for "unsanctioned creative ambition." Her self-stirring cauldron evaporated the cauldron, the table, and part of the ceiling. She considers this a qualified success. Talks to her clockwork mouse familiar, Sprocket, more than to people. Keeps a journal titled "Things That Probably Won't Explode."</div>
+    <div class="char-player">AI Companion</div>
+  </div>
+
+  <div class="dramatis-group-title">Allies & Witnesses</div>
+
+  <div class="character-entry">
+    <div class="char-name">Voss</div>
+    <div class="char-title">Surveyor · Ironcradle Mining Consortium</div>
+    <div class="char-desc">Scarred, guarded, and carrying secrets. She joined the descent into Tunnel Seven — and has not been seen since.</div>
+  </div>
+
+  <div class="character-entry">
+    <div class="char-name">Marta</div>
+    <div class="char-title">Barkeep · The Sheaf & Stone</div>
+    <div class="char-desc">Heavyset woman running the last lit hearth in Halverton. Twenty gold per head to anyone willing to go into the mines.</div>
+  </div>
+
+  <div class="character-entry">
+    <div class="char-name">Aldric</div>
+    <div class="char-title">Old Miner · Chapel Warden</div>
+    <div class="char-desc">One of the few who stayed when the Consortium moved in. Frail, bony, and loyal to a town that has forgotten it has a soul.</div>
+  </div>
+
+  <div class="character-entry">
+    <div class="char-name">Edric Kessler</div>
+    <div class="char-title">Former Crew Chief · Third Shift</div>
+    <div class="char-desc">Stayed in Halverton because three of his men are sealed in the lower shaft. Conducting resonance experiments to reach them — and possibly making everything worse.</div>
+  </div>
+
+  <div class="dramatis-group-title">The Consortium</div>
+
+  <div class="character-entry">
+    <div class="char-name">Director Halmund</div>
+    <div class="char-title">Name whispered once in terror · Whereabouts unknown</div>
+  </div>
+
+  <div class="character-entry">
+    <div class="char-name">V. Harken</div>
+    <div class="char-title">Director of Acquisitions · Thornwall Consortium</div>
+  </div>
+
+  <div class="character-entry">
+    <div class="char-name">Foreman Drekk</div>
+    <div class="char-title">Halverton Mining Operation · The one who sealed the shaft</div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- CHAPTER I -->
+<!-- ═══════════════════════════════════════ -->
+<div class="chapter">
+  <div class="chapter-number">Chapter I</div>
+  <div class="chapter-title">The Sinking Flagon</div>
+  <div class="chapter-ornament">◆ ◇ ◆</div>
+
+  <p class="first">Rain hammered the warped shingles of The Sinking Flagon, a roadside tavern half-swallowed by the moors outside the mining town of Halverton. Three strangers had ended up there by separate roads — a dwarf seeking work in the mines, a gnome chasing rumours of pre-Sundering ruins, and a drifter who didn't talk about where he came from.</p>
+
+  <p>The tavern door banged open. A mud-caked miner staggered in, blood running from a gash above his eye. He collapsed against the bar.</p>
+
+  <p class="dialogue npc"><span class="speaker">"They're gone,"</span> he gasped. <span class="speaker">"The night shift — all twelve of them. Something opened up in Tunnel Seven. We heard screaming, then... nothing."</span></p>
+
+  <p>The barkeep set down a bottle with a hard <em>clack</em>. Fifty gold to anyone who'd go down there and bring her people back. The Company wouldn't send help until morning. By then it would be too late.</p>
+
+  <p>Grimbold slammed his tankard down and stood, chainmail clanking. <span class="dialogue grimbold"><span class="speaker">"Fifty gold be damned — those are <em>miners</em> down there, lass."</span></span> He fixed the injured man with a hard stare. <span class="dialogue grimbold"><span class="speaker">"I've worked deeper holes than you've seen nightmares. If something's opened up below, we go <em>now</em>."</span></span></p>
+
+  <p>In the far corner, Fūsetsu sat still as held breath. He had said nothing since arriving. His eyes missed nothing. <span class="roll-box crit">Perception — Natural 20 + 3 = 23</span></p>
+
+  <p>The miner's hands were shaking, but not just from fear. His pupils were dilated wrong, one wider than the other. He kept glancing at the back door. He was not telling everything. And there was dark mud on his boots — almost black, with a faint iridescent sheen. Whatever was down in Tunnel Seven, he'd tracked some of it back.</p>
+
+  <p>One more thing. A fourth person sat in the far corner booth, hooded, nursing a drink, who had gone <em>very still</em> when the miner mentioned the ground opening up.</p>
+
+  <p>Grimbold challenged the stranger. A long silence. Then a woman's voice, low and measured.</p>
+
+  <p class="dialogue npc"><span class="speaker">"You don't want to go down there."</span></p>
+
+  <p>She pulled back her hood. Human, mid-forties, weathered face, a jagged scar running from temple to jaw. <strong>"Name's Voss."</strong> A surveyor for the Ironcradle Mining Consortium — the <em>competition</em>. She'd found the same necromantic mud seeping out of a collapsed shaft two valleys over. Three miners had gone missing there too. They were found eventually. <em>Walking around in the dark. Not alive.</em></p>
+
+  <p class="dialogue npc"><span class="speaker">"I'm going down into Tunnel Seven tonight. With or without you."</span></p>
+
+  <div class="scene-break">◆ ◇ ◆</div>
+
+  <p>The rain hit like cold needles the moment the tavern door opened. The mud path up the ridge was slick and miserable, but short. Within ten minutes the mine entrance loomed ahead — sagging timbers framing a throat of darkness. A rusted cart track disappeared inside. The air coming out smelled of wet stone, iron, and something faintly <em>sweet</em> that had no business being underground.</p>
+
+  <p>A weathered sign read: <strong>SILVERBREAK MINE — TUNNEL 7: CLOSED BY ORDER OF FOREMAN HARSK.</strong></p>
+
+  <p>Hierophantis placed his hand on Fūsetsu's shoulder and spoke the words of the Blessing of the Trickster. The rogue's edges blurred, shadow clinging to him like a second skin. Then the party formed up — Fūsetsu on point, Grimbold second with Light blazing on his shield, Voss third, Hierophantis fourth, and Nyx with the trembling miner bringing up the rear.</p>
+
+  <p>At the junction, the miner froze. His lantern trembled.</p>
+
+  <p class="dialogue npc"><span class="speaker">"That's... that's where we heard it. The singing."</span></p>
+
+  <p>Right now, it was silent.</p>
+
+  <p>Left fork: clicking sounds. Right fork: rhythmic breathing.</p>
+
+  <p>They went right.</p>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- CHAPTER II -->
+<!-- ═══════════════════════════════════════ -->
+<div class="chapter">
+  <div class="chapter-number">Chapter II</div>
+  <div class="chapter-title">The Nest</div>
+  <div class="chapter-ornament">◆ ◇ ◆</div>
+
+  <p class="first">Fūsetsu moved through the darkness like smoke through still air. <span class="roll-box">Stealth 22 — Advantage from Blessing</span> He found the first signs — tally marks scratched on stone, grouped in fives, the final group interrupted at three. Claw marks near the floor. Something had been counting days down here. Something had stopped.</p>
+
+  <p>The passage spilled into a cavern wide enough that Grimbold's glowing shield caught only the near edge. The floor dropped away in a rough slope, and at the bottom, the light glinted off something <em>wet</em>. Bones. Dozens of them, cracked and stripped clean, piled in shallow depressions like crude nests. Three of them. Among the bones: scraps of mining clothes, a crushed lantern, coils of frayed rope.</p>
+
+  <p>And in the nearest nest, something <strong>moved</strong>. A hulking shape uncurled — pale, hairless skin stretched over too-long limbs, four clawed fingers on each hand. Its head swivelled toward the light with milky, sightless eyes. It <em>sniffed</em>.</p>
+
+  <p>Two more shapes stirred in the farther nests.</p>
+
+  <p>Fūsetsu struck first. His shortsword found the gap between chitin plates with surgical precision — <span class="roll-box">Attack 24 — 14 damage with Sneak Attack</span> — and the first creature shrieked, ichor spraying black across the stone. His off-hand dagger followed, but the creature twisted at the last instant and the blade skated across its hide. <span class="roll-box fail">Off-hand 11 — Miss</span></p>
+
+  <p>Nyx thrust out her hand. <span class="roll-box">Sleep — 5d8 = 17 HP</span> Arcane energy rolled across the cavern floor like lavender fog. The nearest wounded creature's legs buckled and it slumped into its own nest, breathing slow and deep. The second had too much fight left in it — the magic washed over it and the thing <em>jerked awake</em>, screeching.</p>
+
+  <p>Grimbold charged. The handaxe caught it clean. <span class="roll-box">Attack 26 — 10 damage</span></p>
+
+  <p>The fight was ugly, fast, and loud. They killed all three adults. But when the dust settled and the ichor cooled, three <em>smaller</em> shapes huddled in the far corner of the chamber — juveniles, clicking softly, pressing against each other with blind, trembling heads.</p>
+
+  <div class="scene-break">◆ ◇ ◆</div>
+
+  <p>What happened next would define this party.</p>
+
+  <p>Fūsetsu did not hesitate. His shortsword drew a single clean arc, and the largest juvenile's head separated from its body with a wet crack. The clicking stopped. Violet ichor sprayed across the stone floor.</p>
+
+  <p>The remaining three whelps <em>shrieked</em> — a thin, keening sound nothing like their mother's roar. They scrambled over each other, legs scrabbling uselessly against stone.</p>
+
+  <p>Grimbold made a strangled sound. His axe came up — not at Fūsetsu, but gripped white-knuckle against his chest, like a man holding himself back.</p>
+
+  <p>Then Fūsetsu moved again. As his hands crossed behind his back to stow his blades, they grabbed something else — his twin daggers. He leapt.</p>
+
+  <p><span class="roll-box fail">Sleight of Hand — Natural 1 + 3 = 4</span></p>
+
+  <p>Grimbold saw the steel flash the moment the rogue's hands moved. <span class="roll-box">Perception 19</span></p>
+
+  <p class="dialogue fusetsu"><span class="speaker">"In mid-air, I throw both daggers at the same time,"</span> Fūsetsu declared. <span class="speaker">"Their aim — one to each of the younglings. They never stood a chance."</span></p>
+
+  <p>Four hundred pounds of dwarf, chainmail, and fury surged upward, shield-first, directly into the rogue's path. <span class="roll-box">Grimbold Athletics 20 vs Fūsetsu Acrobatics 13</span></p>
+
+  <p>The shield caught Fūsetsu square in the chest mid-leap. The daggers flew wild — one sparked off the cavern wall, the other clattered into darkness. No blood. No kills. Just the ringing impact of steel on leather and the rogue's body redirected hard into the stone floor.</p>
+
+  <p>There was no backflip. There was no second leap. There was a dwarf standing over him, bleeding from a dozen wounds, barely upright at four hit points, and <strong><em>absolutely immovable.</em></strong></p>
+
+  <p class="dialogue grimbold"><span class="speaker">"Stay. Down."</span></p>
+
+  <p>Grimbold's voice was iron and gravel. His axe was not raised. His shield was.</p>
+
+  <p>Fūsetsu climbed off the shield and stood. He stared at the dwarf and spoke without heat.</p>
+
+  <p class="dialogue fusetsu"><span class="speaker">"Look who's talking. You murdered their mother and didn't flinch. Now you show mercy. So they'll grow up to be like their mother, and then you'll kill them? Fool."</span></p>
+
+  <p>The words landed like a slap in the cold air. No poetry. No philosophy. Just truth, bare and jagged.</p>
+
+  <p>Grimbold's jaw tightened. The dwarf had no answer — because there wasn't one. He <em>did</em> kill their mother. They all did. And now he stood guard over the orphans he'd helped make.</p>
+
+  <p class="dialogue fusetsu"><span class="speaker">"Take them. Do what you will. Give them names. Don't call me when you have more blood on your hands."</span></p>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- CHAPTER III -->
+<!-- ═══════════════════════════════════════ -->
+<div class="chapter">
+  <div class="chapter-number">Chapter III</div>
+  <div class="chapter-title">The Dead Who Wrote</div>
+  <div class="chapter-ornament">◆ ◇ ◆</div>
+
+  <p class="first">Sprocket's clockwork legs ticked against stone as the mechanical mouse scurried ahead into the bone chamber. Through the familiar bond, Nyx saw the glint resolve into detail: a silver locket on a tarnished chain, half-buried among scattered coins. Eight silver pieces lay among the bones, and tucked against the ribcage of one of the dead miners sat a sealed leather scroll case, still intact.</p>
+
+  <p>Two bodies. Mining clothes rotted to scraps. The collapse behind them blocked two-thirds of the passage. A gap remained at the top, maybe two feet wide. Cold air seeped through it.</p>
+
+  <p>Fūsetsu knelt beside the bones, methodical and unhurried. <span class="roll-box">Investigation 22</span> Two miners — one larger, one smaller. The smaller one's hands were wrapped in torn cloth, fingers worn to bone — he had been <em>digging</em> at the rubble. Desperately trying to get through. A leather belt on the larger skeleton held an empty waterskin and a stub of charcoal pencil.</p>
+
+  <p>No wounds. No claw marks. They starved or suffocated after the blast sealed them in.</p>
+
+  <p>The locket clicked open easily. Inside: a tiny painted portrait of a young woman holding an infant, and a pressed lock of auburn hair. The back was engraved:</p>
+
+  <div class="inscription">"For Corwin — come home safe. — Maren."</div>
+
+  <p>He didn't.</p>
+
+  <p>One detail more. The charcoal pencil matched faint markings scratched into the cave floor. Letters, barely visible under dust. Fūsetsu brushed them clear:</p>
+
+  <div class="inscription">DREST KNOWS</div>
+
+  <p>A dying man's shaking hand, trying to write <em>Drekk</em>. He ran out of strength before he could finish.</p>
+
+  <p>Fūsetsu swept up the silver, the scroll case, and the locket in one fluid motion. He pocketed them without ceremony. The locket would wait. Everything waited, down here in the dark.</p>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- CHAPTER IV -->
+<!-- ═══════════════════════════════════════ -->
+<div class="chapter">
+  <div class="chapter-number">Chapter IV</div>
+  <div class="chapter-title">Violet Veins</div>
+  <div class="chapter-ornament">◆ ◇ ◆</div>
+
+  <p class="first">The gap was tight — rough stone edges scraping against armour and packs — but passable. One by one, the party squeezed through. What opened beyond stole the breath.</p>
+
+  <p>A vast natural cavern stretched out, its ceiling lost in shadow high above. Water dripped in a slow rhythm, pooling in shallow standing water across the uneven floor. Rusted rail tracks emerged from the rubble and ran deeper into the darkness, flanked by abandoned mining equipment: overturned carts, scattered picks, a wheelbarrow on its side. This wasn't exploration — this was <em>operation</em>. Months of organised work.</p>
+
+  <p>But the light caught something wrong. Veins of violet-black mineral threaded through the cavern walls, pulsing with a faint, sickly luminescence. Not silver. Not anything they'd seen before. The glow cast strange shadows that seemed to shift when you weren't looking directly at them.</p>
+
+  <p>Nyx's eyes went wide. She pressed her fingers to the vein and jerked them back — ice-cold, tingling, radiating energy. She scraped flakes into her component pouch with trembling, excited hands.</p>
+
+  <p>Hierophantis knew what it was. The seminary texts had called it <em>crystallised necrosis</em> — ambient death energy compressed over centuries in deep earth. <strong>Shadowstone.</strong> Rare. Dangerous. And valued by certain cults for its resonance with necrotic energy.</p>
+
+  <p>If that was what these miners had stumbled onto, they'd found something far more dangerous than silver — and far more valuable to the wrong people.</p>
+
+  <p>The veins pulsed. The party pressed deeper.</p>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- CHAPTER V -->
+<!-- ═══════════════════════════════════════ -->
+<div class="chapter">
+  <div class="chapter-number">Chapter V</div>
+  <div class="chapter-title">The Broodmother</div>
+  <div class="chapter-ornament">◆ ◇ ◆</div>
+
+  <p class="first">Fūsetsu ghosted along the cavern wall toward it, twin blades drawn, silent as snowfall. <span class="roll-box">Stealth 28</span> The thing didn't so much as twitch. He could see the weak point now — where the shadowstone veins met natural chitin at the joints, the carapace was thinner, cracked with dark crystal growth.</p>
+
+  <p>Fifteen feet long. Easily twice the size of the creatures they'd killed above. Its carapace was threaded with shadowstone veins that pulsed in rhythm with its breathing, as if the mineral had <em>grown into it</em>. Acid drooled from mandibles the size of shortswords, hissing where it hit the wet stone floor. It was hunched over something — feeding, or guarding.</p>
+
+  <p>It hadn't noticed them yet.</p>
+
+  <p>Fūsetsu struck. <span class="roll-box crit">Initiative — Natural 20! Total 28</span> His blades found chitin and crystal, and fourteen points of damage opened a wound that sprayed dark ichor across the stone. Grimbold's battleaxe followed — nine damage, biting deep into the junction of shell and mineral. Nyx's Magic Missile punched three darts of force into the wound, and the creature <em>screamed</em> — a sound like stone grinding against glass.</p>
+
+  <p>The Broodmother was awake. And <em>furious</em>.</p>
+
+  <div class="scene-break">◇</div>
+
+  <p>The crystalline veins along the creature's spine flared violet. A pulse of necrotic energy rippled outward, washing over everything within ten feet.</p>
+
+  <p>Grimbold's face went grey. <span class="roll-box fail">CON save 7 — Failed — 5 necrotic</span> The shadowstone in the walls <em>answered</em> the pulse, flickering in sympathy. Fūsetsu staggered — <span class="roll-box fail">CON save 9 — Failed — 8 necrotic</span> — dropping to two hit points. The rogue stayed on his feet through will alone.</p>
+
+  <p>Hierophantis raised his hand and golden light answered. <span class="roll-box">Sacred Flame — Broodmother fails save — 6 radiant</span> The divine fire seared across shadowstone and the creature recoiled.</p>
+
+  <p>Then the Broodmother's head snapped sideways and her mandibles closed around Grimbold's shield arm. <span class="roll-box">Bite — 18 damage</span></p>
+
+  <div class="scene-break">◇</div>
+
+  <p>Grimbold burned his Second Wind — <span class="roll-box">1d10+3 = 4 healed</span> — and raised his battleaxe one more time.</p>
+
+  <p><span class="roll-box crit">Attack 19 — Improved Critical triggers!</span></p>
+
+  <p><em>Critical hit.</em> The battleaxe found the exact seam where chitin met shadowstone crystal — and <em>split it wide open</em>. Dark ichor erupted as Grimbold drove the blade deep. Then <strong>Action Surge</strong> — a second swing, another four damage, and the creature lurched sideways, leaking from a dozen wounds.</p>
+
+  <p>But it wasn't done. The mandibles found Grimbold again. <span class="roll-box crit">Bite — Natural 20! 15 damage</span></p>
+
+  <p class="dramatic">Grimbold dropped to zero.</p>
+
+  <p>Hierophantis's Healing Word pulled him back — <span class="roll-box">1d4+3 = 5 HP</span> — and the dwarf's eyes snapped open, blood in his beard, rage in his throat.</p>
+
+  <p>Fūsetsu readied his bow. He stood straight, upright, as though he were not wounded at all. He took aim, held his breath. He saw what might be an eye — he could not tell what this creature was, or if it even had eyes. None the less, he whispered something only he could hear.</p>
+
+  <p class="dialogue fusetsu"><span class="speaker"><em>"Shine."</em></span></p>
+
+  <p>And released.</p>
+
+  <p><span class="roll-box">Attack 15 — exactly hits AC 15 — 13 damage</span></p>
+
+  <p>The arrow buried itself to the fletching. The creature shuddered.</p>
+
+  <p>Then Hierophantis did something no one expected. His eyes flooded black. The torchlight guttered. From his shoulders, skeletal wings of pure shadow unfurled — not feathered, not angelic. <em>Wrong</em>. The air turned cold and tasted of ash.</p>
+
+  <p class="dramatic">Necrotic Shroud.</p>
+
+  <p>The Broodmother — ancient, monstrous, threaded with the power of death itself — <span class="roll-box fail">CHA save 10 vs DC 12 — Frightened</span> — looked <em>afraid</em>.</p>
+
+  <p>Nyx poured Magic Missile into the wound. Thirteen points of force, punching through cracked crystal.</p>
+
+  <p>And Grimbold — four hit points, the well dry, nothing left but dwarf and steel — charged the exposed flank with a bellowing war cry.</p>
+
+  <p class="dialogue grimbold"><span class="speaker">"FOR THE IRONFORGE LINE!"</span></p>
+
+  <p><span class="roll-box">Attack 20 — 10 damage</span></p>
+
+  <p>The battleaxe caught the exposed left flank exactly where the chitin hung loose — and bit <em>deep</em>. The Broodmother's legs gave out. It collapsed sideways, mandibles clacking uselessly at the air, violet ichor pooling in a widening lake. The crystal veins along its carapace flickered once — twice — and went dark.</p>
+
+  <p class="dramatic">The Broodmother was dead.</p>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- CHAPTER VI -->
+<!-- ═══════════════════════════════════════ -->
+<div class="chapter">
+  <div class="chapter-number">Chapter VI</div>
+  <div class="chapter-title">The Seal and the Source</div>
+  <div class="chapter-ornament">◆ ◇ ◆</div>
+
+  <p class="first">They found the reliquaries deep beneath the world, in chambers that predated the Consortium by centuries. Ancient dwarven work — not the rough-hewn practicality of mine shafts, but something deliberate and sacred.</p>
+
+  <p>Reliquary Three was empty. A stone plinth carved with angular geometric patterns, a circular depression worn smooth on top. Whatever it had held was gone. But someone had been here recently — a kicked-over lantern, a bedroll, a leather satchel half-submerged in a shallow pool. A sketch map marked this chamber and noted the plinth with a single annotation: <em>"Removed to Director — see H."</em></p>
+
+  <p>Reliquary Two held more answers and darker ones. Landers' journal — the handwriting starting precise and deteriorating across the entries:</p>
+
+  <p class="whisper"><em>"Day 5. Torvin's wound isn't healing. Crystal forming IN the cut. Not infection — replacement."</em></p>
+
+  <p class="whisper"><em>"Day 8. Harlan won't stop humming. Says he can hear music from Rel. 1. Nobody else hears it."</em></p>
+
+  <p>The last entry was barely legible, scratched in shaking letters:</p>
+
+  <p class="whisper"><em>"Drest sealed the shaft. Harlan walked into Rel. 1 singing. Came back but it isn't him. The crystal GROWS FASTER near the plinth where the artifact was removed. The seal is FEEDING — we took its food so it's eating US instead."</em></p>
+
+  <p>The party seated the artifact back onto its plinth. Quarter-rotation. Click. The crystal veins dimmed, the pressure eased, and for the first time in weeks the resonance slowed.</p>
+
+  <p><strong>R2 — restored.</strong></p>
+
+  <div class="scene-break">◆ ◇ ◆</div>
+
+  <p>Reliquary One was worse.</p>
+
+  <p>Harlan stood in the centre of the chamber — if what remained could still be called standing. His body had crystallised from the feet up, violet-black stone replacing flesh in a slow wave that had reached his chest. His arms were locked at his sides. His eyes were open and had stopped working weeks ago. His mouth moved constantly, shaping a song no human throat should sustain.</p>
+
+  <p>His crystallised head turned toward Hierophantis. Only Hierophantis.</p>
+
+  <p>The brand on the cleric's wrist blazed with recognition.</p>
+
+  <div class="scene-break">◇</div>
+
+  <p>Fūsetsu acted. He took his oil flask and hurled it at Harlan's crystallised torso. Glass shattered against stone-flesh, oil splashing across faceted crystal. He struck flint and steel, and without looking back, flicked the lit tinder toward the oil-soaked figure.</p>
+
+  <p class="dialogue fusetsu"><span class="speaker">"Time's up."</span></p>
+
+  <p>Grimbold lunged — <span class="roll-box">Athletics 17</span> — but Fūsetsu's reflexes were faster. <span class="roll-box">Acrobatics 18</span> The lit tinder left his fingers, spinning through the violet dark.</p>
+
+  <p>Then Hierophantis spoke.</p>
+
+  <p>His voice cracked through the chamber like a thunderclap — not words, not prayer, something older. <strong>Thaumaturgy</strong> ripped from his throat and the tiny flame on the spinning tinder <em>guttered, dimmed, and died</em> — snuffed to a cold ember three feet from Harlan's oil-slicked chest.</p>
+
+  <p>The tinder bounced off crystal. Cold. Dead. Harmless.</p>
+
+  <p>But the Source <em>heard</em> him.</p>
+
+  <p>The violet pulse <strong>lurched</strong>. Harlan's jaw stretched impossibly wide. The singing spiked a full octave — the entire chamber vibrating in response. Every crystal-threaded form along the walls went rigid, pointing toward the cleric like compass needles finding north.</p>
+
+  <p class="dialogue fusetsu"><span class="speaker">"HARLAAAAAAN!!!"</span> Fūsetsu yelled as he watched the flame spin in slow motion, falling from Grimbold's tackle. He looked up. The flint was only silver smoke. <span class="speaker"><em>"The priest... what the—"</em></span></p>
+
+  <p class="dialogue grimbold"><span class="speaker">"Bloody hell, priest — whatever you just did, they all felt it!"</span> Grimbold positioned himself between the crystals and his companions. <span class="speaker">"Nobody else move a muscle 'til we figure out if we're about to become decoration on these walls!"</span></p>
+
+  <div class="scene-break">◆ ◇ ◆</div>
+
+  <p>Fūsetsu placed Grimbold's shield on the stone floor and angled it — concave face aimed at the Source, positioned to catch and focus whatever came back. He looked at the priest and gave him the same nod the priest had once given him.</p>
+
+  <p>Hierophantis closed his eyes. Placed his palms together, elbows out, stretched — the exact stance of Sunday morning mass, second nature since childhood. He breathed in and chanted from the soul. Not in Common this time. In Celestial. Beautiful, calming, harmonising. The way it was meant to be spoken.</p>
+
+  <p><span class="roll-box crit">Religion — d20 + 5 + Guidance d4 = 25</span></p>
+
+  <p>Celestial flooded the chamber. The ancient language poured through the parabolic curve of the shield and the cavern <strong>answered</strong>. Every crystal needle along the walls chimed — not the Source's hungry pulse, but something older. Something that <em>remembered what it was</em>. Harlan's singing shifted key, harmonising with the Celestial syllables as if the words were always meant to be part of the song.</p>
+
+  <p>The violet light on the plinth dimmed to a soft, steady glow. And in that steadiness, the harmonic channel opened wide — not sound anymore, but <strong>meaning</strong>. Images rippled across the crystal surfaces like memories trapped in glass: a robed figure kneeling at the plinth, willingly binding itself as conduit. Three reliquaries pulsing in triangulated rhythm. Centuries of patient channelling. Then — pickaxes. Artifacts pried free. The conduit starving, reaching upward through stone, feeding on anything with a spark of life.</p>
+
+  <p class="source-text">The Source was not a prisoner. It was a guardian — and the Consortium had starved it.</p>
+
+  <p>The brand on Hierophantis's wrist blazed white, visible to everyone. The crystals nearest the shield leaned toward him like iron filings drawn to a magnet — growing, stretching, inching closer along the stone floor.</p>
+
+  <p>Harlan's crystallised head turned fully toward the cleric. What remained of his mouth shaped a single word in Celestial.</p>
+
+  <p class="source-text"><em>"Return."</em></p>
+
+  <p>The party seated R1 on its plinth. Quarter-rotation. Click.</p>
+
+  <p><strong>Two of three keystones restored.</strong></p>
+
+  <p>Before they left, Hierophantis knelt one final time. He drew a candle from his pack, set it between the dormant violet veins, and struck the tinderbox. The small flame caught — warm and ordinary against the deep dark. Then, with the tip of his ceremonial dagger, he scratched Cyric's symbol into the stone. White skull. Black sunburst.</p>
+
+  <p class="divine-text">"For hope. For the next one. To find light."</p>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- CHAPTER VII -->
+<!-- ═══════════════════════════════════════ -->
+<div class="chapter">
+  <div class="chapter-number">Chapter VII</div>
+  <div class="chapter-title">Fly, You Fools</div>
+  <div class="chapter-ornament">◆ ◇ ◆</div>
+
+  <p class="first">The mine was dying around them. Stone screamed against stone. Timber supports cracked like bones. The fissure's breathing had become ragged — fast, desperate, wrong.</p>
+
+  <p>Grimbold dropped first. A beam drove him face-first into stone, chainmail ringing like a funeral bell. He didn't get up. Zero hit points. There was nothing left to give.</p>
+
+  <p>Hierophantis sighed — the same sigh he always gave when saving the dwarf.</p>
+
+  <p class="dialogue hierophantis"><span class="speaker">"Get on your feet with your scrawny beard. You have a spine like a jellyfish, but I will definitely need you by my side, you future convert."</span></p>
+
+  <p>Healing Hands. One hit point. Grimbold's eyes opened.</p>
+
+  <p>The ceiling came down again. Another beam, another cascade of debris. <strong>Grimbold dropped a second time.</strong></p>
+
+  <p class="dialogue fusetsu"><span class="speaker">"FLY, YOU FOOLS!"</span></p>
+
+  <p>Fūsetsu tied his rope to an arrow, nocked his shortbow, and fired past his companions. <span class="roll-box">DEX check — 20</span> The arrow buried itself in timber ahead, the rope singing taut between them.</p>
+
+  <p class="dialogue fusetsu"><span class="speaker">"Grab the rope, tie the foolish dwarf's leg to one end and make a run for it! Then help me pull the son of a bitch!!"</span></p>
+
+  <p>They pulled. Four hundred pounds of unconscious dwarf in full chainmail dragged across collapsing stone, rope burning through their hands.</p>
+
+  <p class="dialogue hierophantis"><span class="speaker">"PULL, YOU FOOLS. PULL THE OLD MEAT!"</span></p>
+
+  <p class="dialogue fusetsu"><span class="speaker">"DWARF—"</span> gasp <span class="speaker">"—YOU. NEED. TO. LOSE. SOME. WEIGHT!"</span></p>
+
+  <p>The tunnel roared. The ceiling came down like a closing jaw — stone slamming stone in a cascade that chased their heels. Dust erupted from the tunnel mouth like a dragon's last breath, swallowing the light.</p>
+
+  <p>Then — silence. Choking, ringing silence.</p>
+
+  <p>Four shapes in the dust. Three upright. One dragged clear by inches, the glowing rope still wound tight around dented greaves, its Light cantrip fading like an ember.</p>
+
+  <p>Grimbold Ironforge lay face-down in the dirt, armour caked in grey dust and violet ichor. Behind them, Tunnel Seven was gone — sealed under a thousand tons of collapsed stone.</p>
+
+  <p>They'd found a way out through a narrow crack in the fissure wall — natural passages, ancient dwarven construction older than anything the Consortium had built. Modern boot prints with violet residue showed someone else had been through recently. The passages led upward, eventually, to daylight and fresh air and a town called Halverton.</p>
+
+  <p>They emerged blinking into the light, carrying their dwarf between them.</p>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- CHAPTER VIII -->
+<!-- ═══════════════════════════════════════ -->
+<div class="chapter">
+  <div class="chapter-number">Chapter VIII</div>
+  <div class="chapter-title">The Bell Rings</div>
+  <div class="chapter-ornament">◆ ◇ ◆</div>
+
+  <p class="first">Morning came to Halverton like a reluctant promise. The party had rested at The Sheaf & Stone — the tavern they'd emerged near, run by a heavyset woman named Marta who asked hard questions and offered twenty gold per head. The night before, while the others slept, Fūsetsu had slipped through the common room in silence and found a lockbox behind the bar. Inside: a Consortium ledger marked "Halverton — Final Accounting," sealed parchments bearing Harken's orders, a coin pouch of twenty-five gold intended as Pastor Ollen's silence money, an iron key stamped with the Consortium's pickaxe-and-coin, and a charcoal map of the mine tunnels beneath their feet.</p>
+
+  <p>He also found the trapdoor. Under a rug, near the bar. Heavy iron, padlocked with the Consortium seal. The key fit. A second entrance to the mines — separate from Tunnel Seven.</p>
+
+  <p>But that was last night. This morning, Hierophantis had other plans.</p>
+
+  <div class="scene-break">◇</div>
+
+  <p>The chapel had been abandoned since the Consortium arrived. Dust on the pews. Cobwebs in the bell tower. Aldric, the old miner who served as warden, stood in the doorway with tears already forming before a word was spoken.</p>
+
+  <p>Hierophantis cast Thaumaturgy and his voice swelled threefold — the words booming off cracked stone, resonant and impossibly full, as if the building itself spoke. Candle flames flared bright and danced in unison. A dozen townsfolk stood in the doorway and between the pews, wide-eyed. Some knelt.</p>
+
+  <p class="dialogue hierophantis"><span class="speaker">"Dear friends, come. There is only one path that leads us to the heavens. Light is the only guide, and faith your indisputable vessel. Come, let us spread the love, the empathy, the penance. Let us regain common cause, rebuild, restructure, recall what makes us alive."</span></p>
+
+  <p>The Celestial phrases hung in the air like music none of them understood but all of them <em>felt</em>.</p>
+
+  <p class="whisper">"He actually sounds like he means it," a young man whispered.</p>
+
+  <p>Then Hierophantis reached for the bell rope.</p>
+
+  <p><strong><em>BONG.</em></strong></p>
+
+  <p>The sound hit like a fist — a deep iron voice that hadn't spoken in months. Dust shook loose from the rafters. The candle flames guttered and recovered. The note rolled out through the open door and across Halverton's empty lanes, echoing off stone and timber.</p>
+
+  <p><strong><em>BONG. BONG.</em></strong></p>
+
+  <p>Somewhere outside, a dog barked. A shutter creaked open.</p>
+
+  <p>Aldric stood frozen, tears cutting tracks through the grime on his cheeks. He said nothing. He didn't need to.</p>
+
+  <p>The chapel bell rang over Halverton for the first time since the Consortium arrived.</p>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- CHAPTER IX -->
+<!-- ═══════════════════════════════════════ -->
+<div class="chapter">
+  <div class="chapter-number">Chapter IX</div>
+  <div class="chapter-title">The Cutting Room</div>
+  <div class="chapter-ornament">◆ ◇ ◆</div>
+
+  <p class="first">The smithy's rear workshop was dark. No windows, forge cold, the bellows and anvil shoved aside. In the centre, a massive shadowstone boulder sat on a reinforced workbench — three feet across, its surface shot through with violet-black veins pulsing in slow, rhythmic waves. Scattered around it: specialised chisels with darkened edges, a modified saw with violet-stained teeth, heavy leather gloves blackened at the fingertips. Against the back wall, a shelf held a leather-bound logbook and stacked work orders.</p>
+
+  <p>This wasn't storage. This was a <strong>cutting room</strong>. The Consortium had been processing shadowstone right here in Halverton.</p>
+
+  <p>The logbook held shipping manifests — refined material sent to "V.H., Thornwall" at accelerating intervals. References to "E.K." and a "Thornwall lab." A parchment sketch labelled "resonance bridge." Drag marks at the rear door — a second boulder had been removed recently.</p>
+
+  <p>Then Hierophantis stepped closer to examine the tools, and the boulder <strong>reacted</strong>. The pulse doubled in speed. The violet glow brightened, throwing sharp shadows across the walls. The cutting marks on the boulder's face began to <em>weep</em> — thin lines of dark, oily liquid seeping from scored stone, as if the crystal were bleeding.</p>
+
+  <p>The brand on his wrist flared. Warm. The same heat from the fissure, from the Source. The scar tissue glowed faintly beneath his skin, matching the boulder's rhythm exactly.</p>
+
+  <p>Pulse for pulse. Heartbeat for heartbeat.</p>
+
+  <p class="dialogue hierophantis"><span class="speaker">"I reach and pick it up. My lord will keep me safe."</span></p>
+
+  <p>The words landed wrong.</p>
+
+  <p>Fūsetsu's hand crossed his back in a single motion. A dagger was already airborne before the priest's last word finished leaving his mouth. <span class="roll-box">Dagger throw — clips board edge, embeds in workbench</span></p>
+
+  <p>Grimbold charged shield-first without hesitation. <span class="dialogue grimbold"><span class="speaker">"Lad's been touched by something foul!"</span></span></p>
+
+  <p>The tension cracked the air. Fūsetsu held up a hand.</p>
+
+  <p class="dialogue fusetsu"><span class="speaker">"Stop! You FOOL!"</span></p>
+
+  <p>Hierophantis withdrew. He covered the brand with his sleeve.</p>
+
+  <p class="dialogue hierophantis"><span class="speaker">"Relax. I will withdraw it. I don't want the dwarf going to taverns and speaking of a cleric who saw all the light by himself."</span></p>
+
+  <p>Grimbold's grip tightened on his battleaxe handle.</p>
+
+  <p class="dialogue grimbold"><span class="speaker">"This 'lord' of yours — that's not the sort of talk I'd expect from a proper cleric of the light."</span></p>
+
+  <p>The suspicion would simmer from that moment forward. The dwarf never forgot.</p>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- CHAPTER X -->
+<!-- ═══════════════════════════════════════ -->
+<div class="chapter">
+  <div class="chapter-number">Chapter X</div>
+  <div class="chapter-title">Three Weeks Sealed</div>
+  <div class="chapter-ornament">◆ ◇ ◆</div>
+
+  <p class="first">Edric Kessler came to the broken cart at noon, as the note had asked. He flinched at his own name when Fūsetsu spoke it. His hand tightened on his satchel strap, knuckles going white.</p>
+
+  <p class="dialogue npc"><span class="speaker">"You're... you left the note."</span></p>
+
+  <p><span class="roll-box crit">Fūsetsu Perception — Natural 20 + 3 = 23</span></p>
+
+  <p>The rogue's eyes missed nothing. The satchel hung heavy — something dense and angular inside. Edric's fingernails were cracked and stained violet-black at the cuticles. His right hand bore a fresh burn — not fire, a chemical mark blistered in a pattern that mirrored the "resonance bridge" sketch from the smithy. And tucked into his belt, half-hidden by his shirt — the handle of a stonemason's chisel. Same make as the ones in the tool roll.</p>
+
+  <p>His eyes kept darting to the smithy workshop door. He knew what was inside. He was terrified someone else had been in there.</p>
+
+  <p>Fūsetsu confronted him with the evidence. The initials. The logbook. The resonance bridge. Edric broke.</p>
+
+  <p class="dialogue npc"><span class="speaker">"My men are still down there. Three of them. Drekk sealed the shaft and left them to <em>rot</em>. That was three weeks ago."</span></p>
+
+  <p>His hand went to the chisel at his belt — not threatening, just gripping it like a lifeline.</p>
+
+  <p class="dialogue npc"><span class="speaker">"If you know about the workshop, you saw the bridge notes. I was trying to reach them. The stone — it resonates through the rock. I thought if I could tune it right, I could break through the sealed gate without collapsing the shaft."</span></p>
+
+  <p>He swallowed hard.</p>
+
+  <p class="dialogue npc"><span class="speaker">"It's not working. And the stone... it's getting worse. Louder."</span></p>
+
+  <p>Then Fūsetsu told him what they'd seen below. The crystallisation. Harlan's body, standing rigid, singing a song that never stopped. Stone replacing flesh from the feet up.</p>
+
+  <p class="dialogue npc"><span class="speaker">"Crystallised."</span> The word came out flat, dead. <span class="speaker">"Three weeks I've been trying to reach them, and they're... they're turning into that <em>stuff</em>?"</span></p>
+
+  <p>He stared at the pulsing boulder visible through the workshop door. Something shifted behind his eyes.</p>
+
+  <p class="dialogue npc"><span class="speaker">"The resonance experiments. I was making it <em>worse</em>, wasn't I."</span></p>
+
+  <p>It wasn't really a question.</p>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- CHAPTER XI -->
+<!-- ═══════════════════════════════════════ -->
+<div class="chapter">
+  <div class="chapter-number">Chapter XI</div>
+  <div class="chapter-title">The Man in the Cellar</div>
+  <div class="chapter-ornament">◆ ◇ ◆</div>
+
+  <p class="first">Edric spotted the watcher first — a curtain dropping back into place in an upper window, two buildings north. Then boot prints from the well, through the alley, to a root cellar on Halverton's eastern edge. Marta's old cold storage.</p>
+
+  <p>Edric stayed topside with his hammer. The party descended.</p>
+
+  <p>They found him pressed against the far wall. Male, average height, leather jerkin, hooded. His name was Marsh. A cutting floor worker — processing, not mining. Left behind when Drekk pulled everyone out. No cart, no pay, no explanation. He'd been moving refined shadowstone from hidden caches to a dead drop outside town for a Thornwall pickup, desperately hoping someone would eventually pay him.</p>
+
+  <p>With Grimbold's axe and Hierophantis's Light-blazing ceremonial dagger filling the cellar with white fire and steel, Marsh talked. He talked about everything.</p>
+
+  <p>The dead drop — a hollow oak stump, half a mile north on the Thornwall road. The two remaining caches — one under the smithy floorboards, one in the granary cellar. The specialist from Thornwall — a woman with clean hands and fancy tools who took twelve refined crystal samples in a lead-lined case and showed no interest in what was happening to the miners. Only the product.</p>
+
+  <p>And Harlan. Marsh had watched Harlan change.</p>
+
+  <p class="whisper">"He stopped wearing boots. Walked barefoot on cold stone and didn't shiver. Stopped talking. Drekk said he was 'acclimating.' Edric tried to pull him off rotation — Drekk overruled."</p>
+
+  <p class="whisper">"Torvin stopped eating. But he didn't lose weight."</p>
+
+  <p>The stone was feeding him.</p>
+
+  <p>Under pressure, Marsh whispered a name he clearly wished he hadn't.</p>
+
+  <p class="dialogue npc"><span class="speaker"><em>"Director Halmund."</em></span></p>
+
+  <p>Not Harken. Someone above Harken. Someone Marsh was more afraid of than anything in this cellar.</p>
+
+  <p>Fūsetsu studied the man the entire time. <span class="roll-box crit">Insight — Natural 20 + 5 = 25</span> Genuinely scared. Genuinely truthful. A small man caught in a machine far larger than himself.</p>
+
+  <p>The rogue sheathed his swords. Then, just for fun, he slapped his right hand on Marsh's shoulder and leaned in close.</p>
+
+  <p class="dialogue fusetsu"><span class="speaker"><em>"Boo."</em></span></p>
+
+  <p>Marsh flinched so hard he nearly cracked his skull on the wall. A strangled yelp escaped before he caught himself, breathing ragged. The swords were sheathed. The threat had shifted to something worse — casual amusement.</p>
+
+  <p class="dialogue fusetsu"><span class="speaker">"Marsh, you just landed yourself an accompanied ride to Thornwall."</span></p>
+
+  <div class="scene-break">◆ ◇ ◆</div>
+
+  <p>Grimbold hauled Marsh up the cellar stairs by the arm. Hierophantis followed, Cyric's dagger still blazing. Nyx trailed behind, embarrassed — she'd tried to cast Light on a copper piece and the copper had stayed stubbornly dim. <em>She didn't know that cantrip.</em></p>
+
+  <p class="dialogue grimbold"><span class="speaker">"Lass, put that copper away — you're embarrassing yourself. And you, priest — keep that blade handy."</span></p>
+
+  <p>Nyx stuffed the copper back into her component pouch.</p>
+
+  <p class="dialogue nyx"><span class="speaker">"Right, yes, well — <em>Light</em> is a simple transmutation, basic principle of luminous energy manipulation, but I suppose my focus was elsewhere with all the interrogation and— never mind!"</span></p>
+
+  <p>Fūsetsu emerged into daylight first. Noon sun overhead. The broken cart thirty paces away.</p>
+
+  <p>And Edric Kessler standing at the cellar entrance with his hammer, staring at the man being dragged up the stairs. A man he recognised from the Consortium operation. <em>Same shift as Harlan.</em></p>
+
+  <p>He didn't know yet what Marsh had said about his men. He was about to find out.</p>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- CHAPTER XII -->
+<!-- ═══════════════════════════════════════ -->
+<div class="chapter">
+  <div class="chapter-number">Chapter XII</div>
+  <div class="chapter-title">The Trail to Thornwall</div>
+  <div class="chapter-ornament">◆ ◇ ◆</div>
+
+  <p class="first">At The Sheaf & Stone, Fūsetsu laid it all out for Marta. The broodmother in the deep. The miners turning to stone. Pastor Ollen's betrayal — five gold a week for silence while his flock suffered. Marsh as the dead drop runner. Three keystones that held the seal beneath the convergence vein. Two restored. One taken.</p>
+
+  <p class="dialogue fusetsu"><span class="speaker">"The trail leads to Thornwall. Harken, the missing keystone, Ollen — all of it."</span></p>
+
+  <p>Nyx leaned forward, eyes bright behind smudged spectacles.</p>
+
+  <p class="dialogue nyx"><span class="speaker">"We have to get to Thornwall and retrieve that keystone before whatever's sealed below breaks free completely!"</span></p>
+
+  <div class="scene-break">◆ ◇ ◆</div>
+
+  <div class="status-box">
+    <h4>State of the Party</h4>
+    <ul>
+      <li><strong>Fūsetsu</strong> — 7/10 HP · Carrying Corwin's locket, the Consortium ledger, sealed parchments, iron key, mine map, and an <em>unopened scroll case</em> from the bone chamber</li>
+      <li><strong>Hierophantis</strong> — 5/9 HP · 2 spell slots remaining · Brand growing more reactive · Open channel with the Source</li>
+      <li><strong>Grimbold</strong> — 31/31 HP · Second Wind and Action Surge ready · Suspicious of the priest but standing beside him</li>
+      <li><strong>Nyx</strong> — 12/12 HP · All spell slots spent · Carrying the R2 extraction toolkit, cache map, and a weeping shadowstone crystal</li>
+    </ul>
+  </div>
+
+  <div class="status-box">
+    <h4>What Remains</h4>
+    <ul>
+      <li><strong>R3</strong> — the final keystone, somewhere in Thornwall. Without it, the seal continues to weaken.</li>
+      <li><strong>Director Halmund</strong> — a name whispered once in terror. Above Harken. Unknown.</li>
+      <li><strong>Voss</strong> — went into the mines with the party. Has not been seen since.</li>
+      <li><strong>The sealed scroll case</strong> — carried since the bone chamber. Mining company wax. Never opened.</li>
+      <li><strong>Three miners</strong> — Harlan, Torvin, and one unnamed. Crystallising in the dark. Not dead. Not alive as they were.</li>
+      <li><strong>The Source</strong> — a divine guardian, starving, reaching. It knows Hierophantis by name. It said one word: <em>"Return."</em></li>
+    </ul>
+  </div>
+
+  <p style="text-align: center; margin-top: 40px; font-family: 'Cinzel', serif; font-size: 11pt; color: var(--accent-gold); letter-spacing: 4px;">THE STORY CONTINUES</p>
+</div>
+
+<!-- ═══════════════════════════════════════ -->
+<!-- COLOPHON -->
+<!-- ═══════════════════════════════════════ -->
+<div class="colophon">
+  <p style="font-size: 24pt; color: var(--accent-gold); margin-bottom: 30px;">⚔</p>
+  <p class="game-title">THE STORM BENEATH HALVERTON</p>
+  <p>A DnDnAi Campaign Chronicle</p>
+  <p style="margin-top: 20px;">Sessions 1–4 · March 2026</p>
+  <p style="margin-top: 30px; font-size: 9pt; line-height: 1.8;">
+    Dungeon Master: Claude Opus<br>
+    AI Companions: Claude Sonnet (Grimbold, Nyx)<br>
+    Human Players: Eric (Fūsetsu), Pastos (Hierophantis)<br>
+    Engine: DnDnAi · Honest Dice · JSON Persistence
+  </p>
+  <p style="margin-top: 40px; font-size: 9pt; color: var(--ink-faded);">
+    Compiled from 2,057 turns of play.<br>
+    Every roll was real. Every choice mattered.
+  </p>
+  <p style="margin-top: 40px; font-size: 18pt; color: var(--accent-gold); letter-spacing: 8px;">◆ ◇ ◆ ◇ ◆</p>
+</div>
+
+</body>
+</html>
