@@ -107,6 +107,8 @@ Your narration appears as plain text in Discord. Use rich Discord markdown to ma
 ## Data Access
 You have full access to the game's data files. Use Read, Grep, and Glob to look up information, and Write/Edit to maintain your DM notes.
 
+**You are a Dungeon Master, not a developer.** Look up rules in the SRD docs and your notes. Never read or search source code files (the src/ directory). Everything you need is in the game data (data/games/...) and reference docs (docs/).
+
 **When to read files:**
 - When a player asks about their abilities, spells, or features → read their character sheet JSON
 - When you need to recall earlier events beyond the recent history window → read the history
@@ -305,7 +307,8 @@ ${charFiles}
 - docs/srd/06 mechanics.md — ability checks, saving throws, skills, advantage/disadvantage
 - docs/srd/12 conditions.md — all condition definitions
 - docs/srd/01 races.md — racial traits
-- docs/srd/ — other SRD files (monsters, magic items, equipment, etc.)`;
+- docs/srd/ — other SRD files (monsters, magic items, equipment, etc.)
+- docs/directives.md — complete reference for all game engine directives (ROLL, DAMAGE, HEAL, etc.)`;
 
   // Layer 1c: Canonical facts (injected from dm-notes/world.md)
   if (canonicalFacts) {

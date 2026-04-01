@@ -10,7 +10,6 @@ export function buildSpawnArgs(
   prompt: string,
   allowedTools?: string[],
   outputFormat: "text" | "stream-json" = "text",
-  maxTurns?: number,
   effort?: "low" | "medium" | "high" | "max",
 ): string[] {
   const args = [
@@ -37,10 +36,6 @@ export function buildSpawnArgs(
 
   if (allowedTools?.length) {
     args.push("--allowedTools", allowedTools.join(","));
-  }
-
-  if (maxTurns) {
-    args.push("--max-turns", String(maxTurns));
   }
 
   return args;

@@ -192,23 +192,9 @@ describe("claude CLI subprocess", () => {
     });
   });
 
-  describe("maxTurns parameter", () => {
-    test("appends --max-turns when provided", () => {
-      const args = buildSpawnArgs("m", "s", "p", [], "text", 10);
-      const idx = args.indexOf("--max-turns");
-      expect(idx).toBeGreaterThan(-1);
-      expect(args[idx + 1]).toBe("10");
-    });
-
-    test("omits --max-turns when not provided", () => {
-      const args = buildSpawnArgs("m", "s", "p");
-      expect(args).not.toContain("--max-turns");
-    });
-
-    test("omits --max-turns when zero", () => {
-      const args = buildSpawnArgs("m", "s", "p", [], "text", 0);
-      expect(args).not.toContain("--max-turns");
-    });
+  test("never includes --max-turns (relies on CLI timeout instead)", () => {
+    const args = buildSpawnArgs("m", "s", "p", ["Read"], "stream-json", "high");
+    expect(args).not.toContain("--max-turns");
   });
 
   describe("effort parameter", () => {
@@ -218,39 +204,38 @@ describe("claude CLI subprocess", () => {
     });
 
     test("omits --effort when undefined", () => {
-      const args = buildSpawnArgs("m", "s", "p", [], "text", undefined, undefined);
+      const args = buildSpawnArgs("m", "s", "p", [], "text", undefined);
       expect(args).not.toContain("--effort");
     });
 
     test("includes --effort low", () => {
-      const args = buildSpawnArgs("m", "s", "p", [], "text", undefined, "low");
+      const args = buildSpawnArgs("m", "s", "p", [], "text", "low");
       const idx = args.indexOf("--effort");
       expect(idx).toBeGreaterThan(-1);
       expect(args[idx + 1]).toBe("low");
     });
 
     test("includes --effort medium", () => {
-      const args = buildSpawnArgs("m", "s", "p", [], "text", undefined, "medium");
+      const args = buildSpawnArgs("m", "s", "p", [], "text", "medium");
       const idx = args.indexOf("--effort");
       expect(args[idx + 1]).toBe("medium");
     });
 
     test("includes --effort high", () => {
-      const args = buildSpawnArgs("m", "s", "p", [], "text", undefined, "high");
+      const args = buildSpawnArgs("m", "s", "p", [], "text", "high");
       const idx = args.indexOf("--effort");
       expect(args[idx + 1]).toBe("high");
     });
 
     test("includes --effort max", () => {
-      const args = buildSpawnArgs("m", "s", "p", [], "text", undefined, "max");
+      const args = buildSpawnArgs("m", "s", "p", [], "text", "max");
       const idx = args.indexOf("--effort");
       expect(args[idx + 1]).toBe("max");
     });
 
-    test("effort works with stream-json and maxTurns", () => {
-      const args = buildSpawnArgs("m", "s", "p", ["Read"], "stream-json", 10, "high");
+    test("effort works with stream-json and allowedTools", () => {
+      const args = buildSpawnArgs("m", "s", "p", ["Read"], "stream-json", "high");
       expect(args).toContain("--effort");
-      expect(args).toContain("--max-turns");
       expect(args).toContain("--verbose");
       const idx = args.indexOf("--effort");
       expect(args[idx + 1]).toBe("high");

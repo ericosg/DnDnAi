@@ -129,6 +129,7 @@ Note on Bun test isolation: `mock.module()` is global and pollutes across files.
 - `docs/creating-characters.md` — how to create a character sheet for human players (format, AI generation tips, sample)
 - `docs/creating-agents.md` — how to write agent personality files
 - `docs/game-rules.md` — D&D 5e rules as implemented, deviations, dice system, combat
+- `docs/directives.md` — complete reference for all game engine directives (ROLL, DAMAGE, HEAL, etc.) — the DM reads this to look up directive syntax
 - `docs/srd/` — D&D 5e SRD 5.1 (CC-BY-4.0) in markdown — the DM reads these files to look up rules, class features, spells, and monster stats instead of guessing from training data. See `docs/srd/README.md` for the index.
 
 ## Origin & Context

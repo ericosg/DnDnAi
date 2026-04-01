@@ -420,6 +420,21 @@ describe("buildDMPrompt", () => {
     expect(system).toContain("data/games/test-game/characters/grimbold-ironforge.json");
   });
 
+  test("file paths include directives reference", () => {
+    const gs = makeGameState();
+    const { system } = buildDMPrompt(gs, [], "test");
+
+    expect(system).toContain("docs/directives.md");
+  });
+
+  test("system prompt includes source code boundary", () => {
+    const gs = makeGameState();
+    const { system } = buildDMPrompt(gs, [], "test");
+
+    expect(system).toContain("not a developer");
+    expect(system).toContain("Never read or search source code");
+  });
+
   test("messages include recent history when present", () => {
     const gs = makeGameState();
     const history = makeHistory([

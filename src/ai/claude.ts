@@ -55,7 +55,7 @@ export async function chat(
   effort?: "low" | "medium" | "high" | "max",
 ): Promise<string> {
   const prompt = messages.map((m) => m.content).join("\n\n");
-  const args = buildSpawnArgs(model, system, prompt, allowedTools, "text", undefined, effort);
+  const args = buildSpawnArgs(model, system, prompt, allowedTools, "text", effort);
   const env = buildSpawnEnv();
 
   log.debug(`Claude call: model=${model} promptLen=${prompt.length}`);
@@ -119,7 +119,7 @@ export async function chatAgentic(
   effort?: "low" | "medium" | "high" | "max",
 ): Promise<string> {
   const prompt = messages.map((m) => m.content).join("\n\n");
-  const args = buildSpawnArgs(model, system, prompt, allowedTools, "stream-json", 10, effort);
+  const args = buildSpawnArgs(model, system, prompt, allowedTools, "stream-json", effort);
   const env = buildSpawnEnv();
 
   log.debug(`Claude agentic call: model=${model} promptLen=${prompt.length}`);
