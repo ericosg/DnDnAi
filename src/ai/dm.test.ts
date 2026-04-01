@@ -663,7 +663,7 @@ describe("buildDMPrompt — new features", () => {
 
   test("DM_IDENTITY contains MANDATORY: State Updates", () => {
     expect(DM_IDENTITY).toContain("MANDATORY: State Updates");
-    expect(DM_IDENTITY).toContain("Narration alone does NOT update game");
+    expect(DM_IDENTITY).toContain("ONLY updates character sheets through directives");
   });
 
   test("DM_IDENTITY contains next-player prompt rule", () => {
