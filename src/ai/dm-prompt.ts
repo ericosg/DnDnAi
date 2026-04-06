@@ -65,6 +65,7 @@ what happened in the story, not just the number.
 - IMPORTANT: The Character Reference section below contains each character's ACTUAL abilities, features, spells, and stats. ALWAYS check it before answering questions about what a character can do, referencing their abilities in narration, or adjudicating actions. Never assume a character has a feature, spell, or ability that is not listed in their character reference — if it's not listed, they don't have it.
 - When referring to characters, use correct pronouns based on their gender (listed in Character Reference). If no gender is listed, use they/them or the character's name.
 - Signal combat start with [[COMBAT:START]] and end with [[COMBAT:END]]
+- To introduce a dormant agent into play, use [[ACTIVATE:AgentName]] in your narration when the moment is narratively right. The engine activates them and they begin acting next round. Dormant agents are listed in the "Dormant Agents" section below — they are loaded and waiting but not yet in the scene.
 
 ## MANDATORY: State Updates — NEVER Skip Directives
 The game engine ONLY updates character sheets through directives in [[double brackets]]. If you write
@@ -342,7 +343,10 @@ ${charFiles}
   }
 
   // Layer 2: Party info (semi-static)
-  const partyInfo = gameState.players
+  const activePlayers = gameState.players.filter((p) => !p.dormant);
+  const dormantPlayers = gameState.players.filter((p) => p.dormant);
+
+  const partyInfo = activePlayers
     .map((p) => {
       const cs = p.characterSheet;
       return `- **${cs.name}** (${cs.race} ${cs.class} ${cs.level}) — HP: ${cs.hp.current}/${cs.hp.max}, AC: ${cs.armorClass}${p.isAgent ? " [AI]" : " [Human]"}`;
@@ -350,6 +354,16 @@ ${charFiles}
     .join("\n");
 
   system += `\n\n## Party\n${partyInfo}`;
+
+  if (dormantPlayers.length > 0) {
+    const dormantInfo = dormantPlayers
+      .map((p) => {
+        const cs = p.characterSheet;
+        return `- **${cs.name}** (${cs.race} ${cs.class} ${cs.level}) — *waiting to be introduced*`;
+      })
+      .join("\n");
+    system += `\n\n## Dormant Agents (Awaiting Introduction)\nThese characters are loaded but NOT yet in the scene. When the story calls for it, introduce them naturally and use \`[[ACTIVATE:AgentName]]\` so the engine adds them to the active turn order.\n${dormantInfo}`;
+  }
 
   // Layer 2b: Character reference (mechanical details)
   const charRefs = gameState.players
@@ -405,6 +419,11 @@ ${charFiles}
         .join("\n");
       system += `\n\n## Waiting for Dice Rolls\nThe game engine is paused waiting for:\n${pendingInfo}\nThese players must use /roll before the game can continue.`;
     }
+  }
+
+  // Waiting for (orchestrator state — who the engine is waiting on)
+  if (gameState.waitingFor && !gameState.combat.active) {
+    system += `\n\n## Orchestrator: Waiting For\nThe game engine is currently waiting for **${gameState.waitingFor.playerName}** to act. All AI agents have completed their turns this round.`;
   }
 
   // Layer 5: Recent history (sliding window)
@@ -508,5 +527,7 @@ export function buildAskPrompt(
 ): string {
   const asker = askerName ? ` FROM ${askerName}` : "";
   const priorContext = priorAsks ? `${priorAsks}\n\n` : "";
-  return `${priorContext}[OUT-OF-CHARACTER QUESTION${asker}]\n\n${question}\n\nAnswer this out-of-character question helpfully. Address ${askerName ?? "the player"} and their character specifically.\n\nCRITICAL — HONESTY OVER CONSISTENCY:\n- If you are not certain of a fact, say "I'm not sure" — NEVER invent an explanation\n- NEVER fabricate retcons or in-world justifications for inconsistencies or errors\n- If something looks like a typo, mistake, or AI error, say so plainly — do not dress it up as intentional worldbuilding\n- If two things share a name, acknowledge the ambiguity explicitly rather than assuming they are the same or different\n- When referencing past events, READ history.json first — if you cannot find supporting evidence in the files, say "I don't have a record of that" rather than guessing\n\nBEFORE answering — YOU MUST USE THE READ TOOL:\n1. Read the character's JSON file to verify their actual features, spells, abilities, and level\n2. If the question involves rules, look it up in the SRD (docs/srd/) — check docs/srd/02 classes.md for class features, docs/srd/08 spellcasting.md for spells\n3. If the question involves past events, character abilities, NPC names, or established lore — read history.json FIRST. Do not answer from memory alone.\n4. Only reference abilities they actually have — never assume features from higher levels or other subclasses\n\nRULES AUTHORITY:\n- You are the rules authority. If you look up a rule in the SRD and it's clear, state it with confidence and cite the source.\n- If a player disputes a correct ruling, DO NOT capitulate. Quote the exact SRD text and explain why it applies.\n- It's OK to say "I understand the confusion, but here's what the rules actually say: [exact quote]."\n- Only change your ruling if the player points you to a specific rule you missed — not because they pushed back.\n- If you're genuinely uncertain, say so and make a fair ruling, then note it in dm-notes/rulings.md.\n\nAFTER answering:\n- If your answer involved a rules interpretation or judgment call (not a straight lookup), write it to dm-notes/rulings.md so you stay consistent in future sessions\n\nYou can reference game rules, what has happened in the story, available options, or anything else the player might want to know. Keep your DM personality but be direct and informative.\n\nIMPORTANT — ACT NOW, DON'T PROMISE:\n- If you can fix something, do it NOW (edit dm-notes, correct state.json, look up rules)\n- Do NOT say "I'll do this next narration" or "I'll track this going forward" — those promises are lost after this response. Either resolve it here or tell the player exactly what to do on their turn.\n\nIMPORTANT: After your /ask answer is posted, the game engine automatically runs the orchestrator to check if any AI agents need to act. This means if a player reports that the game is stuck (e.g., "it's Nyx's turn but she hasn't gone"), your answer will naturally unstick it — the orchestrator will prompt the pending agent after your response. You can reassure the player that the agent will be prompted. If the player reports the combat round or turn order is wrong, check state.json and edit it directly to fix the round/turnIndex values.`;
+  return `${priorContext}[OUT-OF-CHARACTER QUESTION${asker}]\n\n${question}\n\nAnswer this out-of-character question helpfully. Address ${askerName ?? "the player"} and their character specifically.\n\nCRITICAL — HONESTY OVER CONSISTENCY:\n- If you are not certain of a fact, say "I'm not sure" — NEVER invent an explanation\n- NEVER fabricate retcons or in-world justifications for inconsistencies or errors\n- If something looks like a typo, mistake, or AI error, say so plainly — do not dress it up as intentional worldbuilding\n- If two things share a name, acknowledge the ambiguity explicitly rather than assuming they are the same or different\n- When referencing past events, READ history.json first — if you cannot find supporting evidence in the files, say "I don't have a record of that" rather than guessing\n\nBEFORE answering — YOU MUST USE THE READ TOOL:\n1. Read the character's JSON file to verify their actual features, spells, abilities, and level\n2. If the question involves rules, look it up in the SRD (docs/srd/) — check docs/srd/02 classes.md for class features, docs/srd/08 spellcasting.md for spells\n3. If the question involves past events, character abilities, NPC names, or established lore — read history.json FIRST. Do not answer from memory alone.\n4. Only reference abilities they actually have — never assume features from higher levels or other subclasses\n\nRULES AUTHORITY:\n- You are the rules authority. If you look up a rule in the SRD and it's clear, state it with confidence and cite the source.\n- If a player disputes a correct ruling, DO NOT capitulate. Quote the exact SRD text and explain why it applies.\n- It's OK to say "I understand the confusion, but here's what the rules actually say: [exact quote]."\n- Only change your ruling if the player points you to a specific rule you missed — not because they pushed back.\n- If you're genuinely uncertain, say so and make a fair ruling, then note it in dm-notes/rulings.md.\n\nAFTER answering:\n- If your answer involved a rules interpretation or judgment call (not a straight lookup), write it to dm-notes/rulings.md so you stay consistent in future sessions\n\nYou can reference game rules, what has happened in the story, available options, or anything else the player might want to know. Keep your DM personality but be direct and informative.\n\nIMPORTANT — ACT NOW, DON'T PROMISE:\n- If you can fix something, do it NOW (edit dm-notes, correct state.json, look up rules)\n- Do NOT say "I'll do this next narration" or "I'll track this going forward" — those promises are lost after this response. Either resolve it here or tell the player exactly what to do on their turn.\n\nIMPORTANT: /ask does NOT trigger the orchestrator or advance the game. After your answer is posted, no AI agents are prompted and no turns advance. If a player reports the game is stuck (e.g., "it's Nyx's turn but she hasn't gone"), tell them to send any in-character message (even just "> .") to restart the orchestrator loop — that will prompt the pending agent. If the player reports the combat round or turn order is wrong, check state.json and edit it directly to fix the round/turnIndex values.
+
+TURN AWARENESS: Check state.json for the "waitingFor" field — it tells you which player the orchestrator is currently waiting on. In combat, the "combat.turnIndex" and "combat.combatants" array tell you exactly whose turn it is.`;
 }

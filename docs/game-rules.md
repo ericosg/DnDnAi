@@ -122,7 +122,7 @@ Players can ask the DM out-of-character questions without affecting game state:
 - `/ask What options do I have here?`
 - `/ask What happened to the merchant we met earlier?`
 
-The DM answers with full game context (party, history, narrative summary) but the question and answer are clearly marked as OOC. The response appears as a DM embed visible to everyone. No turn is consumed and the orchestrator is not triggered.
+The DM answers with full game context (party, history, narrative summary) but the question and answer are clearly marked as OOC. The response appears as a DM embed visible to everyone. No turn is consumed and the orchestrator is **not** triggered — `/ask` never causes AI agents to be prompted or turns to advance. If the game is stuck, the player should send an in-character message (even `> .`) to restart the orchestrator loop.
 
 **In-session memory**: `/ask` exchanges are stored in an in-memory FIFO buffer (5 entries per game). Consecutive `/ask` questions carry context from earlier asks, so the DM can reference prior Q&A. This memory clears on bot restart.
 
@@ -300,6 +300,39 @@ The DM tracks inventory changes and gold using directives. When characters gain,
 - `[[GOLD:-amount TARGET:name REASON:text]]` — character spends gold
 - `[[GOLD:+amount TARGET:party REASON:text]]` — split evenly among the party
 - Gold cannot go below 0
+
+## Dormant Agents
+
+AI agents can be loaded in a **dormant** state — present in the game data but not active in play. Dormant agents are not prompted by the orchestrator and are excluded from combat initiative.
+
+### Loading a Dormant Agent
+```
+/add-agent name dormant:true
+```
+
+The agent's character sheet and backstory are generated as normal, but the agent is marked dormant in the game state. The DM sees dormant agents listed in a separate "Dormant Agents" section of its prompt.
+
+### Activating a Dormant Agent
+The DM introduces dormant agents when the story calls for it by including an ACTIVATE directive in its narration:
+```
+[[ACTIVATE:AgentName]]
+```
+
+This sets the agent to active. Starting next round, they are prompted by the orchestrator like any other agent. If combat is already active, the agent is NOT automatically added to the current initiative — they'll join when the next combat starts.
+
+The DM has full visibility of dormant agents (their character reference, backstory, etc.) so it can plan when and how to introduce them naturally.
+
+## Turn Tracking
+
+### Who the Engine Is Waiting On
+The game state includes a `waitingFor` field that records which player the orchestrator is currently waiting on. This is set when the orchestrator decides `wait_for_human` and cleared when that player acts.
+
+- In **combat**: the DM prompt shows `CURRENT TURN: [name]` and the initiative order with `>>` marking the active combatant
+- In **exploration**: the DM prompt shows an `Orchestrator: Waiting For` section naming the player the engine expects to act next
+- The DM can also check `state.json` directly for `waitingFor.playerName` and `combat.turnIndex`
+
+### Pending Rolls
+When the DM requests a player roll via `[[REQUEST_ROLL:...]]`, the engine creates pending rolls and pauses until they're fulfilled. The DM prompt shows a `Waiting for Dice Rolls` section listing who needs to roll what.
 
 ## What's Not Implemented (Yet)
 - Hit Dice healing during short rests

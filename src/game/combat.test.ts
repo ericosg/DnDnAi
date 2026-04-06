@@ -302,6 +302,28 @@ describe("startCombat", () => {
       gs.combat.combatants[1].initiative,
     );
   });
+
+  test("excludes dormant players from initiative", () => {
+    const active = makePlayer({ id: "p1" });
+    const dormant = makePlayer({ id: "p2", dormant: true });
+    const gs = makeGameState([active, dormant]);
+
+    const results = startCombat(gs);
+    expect(results).toHaveLength(1);
+    expect(gs.combat.combatants).toHaveLength(1);
+    expect(gs.combat.combatants[0].playerId).toBe("p1");
+  });
+
+  test("all dormant players results in empty combat", () => {
+    const gs = makeGameState([
+      makePlayer({ id: "p1", dormant: true }),
+      makePlayer({ id: "p2", dormant: true }),
+    ]);
+
+    const results = startCombat(gs);
+    expect(results).toHaveLength(0);
+    expect(gs.combat.combatants).toHaveLength(0);
+  });
 });
 
 describe("peekNextCombatant", () => {

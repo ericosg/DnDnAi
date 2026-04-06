@@ -720,6 +720,175 @@ describe("buildDMPrompt — new features", () => {
   });
 });
 
+describe("buildDMPrompt — dormant agents", () => {
+  test("dormant agents are excluded from active party list", () => {
+    const gs = makeGameState();
+    gs.players.push({
+      id: "agent:sprocket",
+      name: "Sprocket",
+      isAgent: true,
+      dormant: true,
+      characterSheet: {
+        name: "Sprocket",
+        race: "Tiny Construct",
+        class: "None",
+        level: 1,
+        background: "Familiar",
+        alignment: "Neutral",
+        abilityScores: {
+          strength: 1,
+          dexterity: 14,
+          constitution: 1,
+          wisdom: 16,
+          intelligence: 18,
+          charisma: 6,
+        },
+        proficiencyBonus: 2,
+        savingThrows: [],
+        skills: [],
+        hp: { max: 1, current: 1, temp: 0 },
+        armorClass: 12,
+        initiative: 2,
+        speed: 20,
+        equipment: [],
+        features: [],
+        backstory: "",
+      },
+      agentFile: "sprocket.md",
+      joinedAt: new Date().toISOString(),
+    });
+    const { system } = buildDMPrompt(gs, [], "test");
+
+    // Active party section should not contain dormant agent
+    const partySection = system.split("## Party")[1].split("##")[0];
+    expect(partySection).not.toContain("Sprocket");
+  });
+
+  test("dormant agents appear in Dormant Agents section", () => {
+    const gs = makeGameState();
+    gs.players.push({
+      id: "agent:sprocket",
+      name: "Sprocket",
+      isAgent: true,
+      dormant: true,
+      characterSheet: {
+        name: "Sprocket",
+        race: "Tiny Construct",
+        class: "None",
+        level: 1,
+        background: "Familiar",
+        alignment: "Neutral",
+        abilityScores: {
+          strength: 1,
+          dexterity: 14,
+          constitution: 1,
+          wisdom: 16,
+          intelligence: 18,
+          charisma: 6,
+        },
+        proficiencyBonus: 2,
+        savingThrows: [],
+        skills: [],
+        hp: { max: 1, current: 1, temp: 0 },
+        armorClass: 12,
+        initiative: 2,
+        speed: 20,
+        equipment: [],
+        features: [],
+        backstory: "",
+      },
+      agentFile: "sprocket.md",
+      joinedAt: new Date().toISOString(),
+    });
+    const { system } = buildDMPrompt(gs, [], "test");
+
+    expect(system).toContain("Dormant Agents");
+    expect(system).toContain("Sprocket");
+    expect(system).toContain("waiting to be introduced");
+    expect(system).toContain("[[ACTIVATE:AgentName]]");
+  });
+
+  test("no dormant section when no dormant agents exist", () => {
+    const gs = makeGameState();
+    const { system } = buildDMPrompt(gs, [], "test");
+
+    expect(system).not.toContain("## Dormant Agents (Awaiting Introduction)");
+  });
+});
+
+describe("buildDMPrompt — waitingFor", () => {
+  test("shows waiting-for section in exploration mode", () => {
+    const gs = makeGameState({
+      waitingFor: { playerId: "human1", playerName: "Eric" },
+    });
+    const { system } = buildDMPrompt(gs, [], "test");
+
+    expect(system).toContain("Orchestrator: Waiting For");
+    expect(system).toContain("Eric");
+  });
+
+  test("omits waiting-for section when null", () => {
+    const gs = makeGameState({ waitingFor: null });
+    const { system } = buildDMPrompt(gs, [], "test");
+
+    expect(system).not.toContain("Orchestrator: Waiting For");
+  });
+
+  test("omits waiting-for section during combat", () => {
+    const gs = makeGameState({
+      waitingFor: { playerId: "human1", playerName: "Eric" },
+      combat: {
+        active: true,
+        round: 1,
+        turnIndex: 0,
+        combatants: [
+          {
+            playerId: "human1",
+            name: "Fūsetsu",
+            initiative: 18,
+            hp: { max: 24, current: 24, temp: 0 },
+            conditions: [],
+            deathSaves: { successes: 0, failures: 0 },
+          },
+        ],
+      },
+    });
+    const { system } = buildDMPrompt(gs, [], "test");
+
+    // Combat has its own CURRENT TURN section, so waitingFor is redundant
+    expect(system).not.toContain("Orchestrator: Waiting For");
+  });
+});
+
+describe("buildAskPrompt — /ask does not trigger orchestrator", () => {
+  test("does NOT claim orchestrator runs after /ask", () => {
+    const prompt = buildAskPrompt("test?", "Fūsetsu");
+
+    expect(prompt).not.toContain("automatically runs the orchestrator");
+    expect(prompt).not.toContain("naturally unstick it");
+  });
+
+  test("tells DM that /ask does not advance the game", () => {
+    const prompt = buildAskPrompt("test?", "Fūsetsu");
+
+    expect(prompt).toContain("does NOT trigger the orchestrator");
+  });
+
+  test("includes turn awareness instructions", () => {
+    const prompt = buildAskPrompt("whose turn is it?", "Fūsetsu");
+
+    expect(prompt).toContain("TURN AWARENESS");
+    expect(prompt).toContain("waitingFor");
+  });
+});
+
+describe("DM_IDENTITY — ACTIVATE directive", () => {
+  test("contains ACTIVATE directive instructions", () => {
+    expect(DM_IDENTITY).toContain("[[ACTIVATE:");
+    expect(DM_IDENTITY).toContain("dormant agent");
+  });
+});
+
 describe("buildPausePrompt", () => {
   test("instructs DM to save context to dm-notes/resume.md", () => {
     const prompt = buildPausePrompt();

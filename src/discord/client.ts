@@ -285,12 +285,15 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
           partyContext || "First member of the party",
         );
 
+        const isDormant = interaction.options.getBoolean("dormant") ?? false;
+
         const player: Player = {
           id: agentId,
           name: personality.name,
           isAgent: true,
           characterSheet: sheet,
           agentFile: `${agentName}.md`,
+          ...(isDormant && { dormant: true }),
           joinedAt: new Date().toISOString(),
         };
 
@@ -298,11 +301,15 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
         await saveCharacter(gameState.id, sheet);
         await saveGameState(gameState);
 
+        const dormantNote = isDormant
+          ? "\n\n*Dormant — will be introduced when the DM activates them.*"
+          : "";
+
         await interaction.editReply({
           embeds: [
             systemEmbed(
-              `${personality.name} Joins the Party`,
-              `**${personality.name}** — ${sheet.race} ${sheet.class} ${sheet.level}\n${personality.description}\n\n*${sheet.backstory.slice(0, 200)}...*`,
+              `${personality.name} Joins the Party${isDormant ? " [Dormant]" : ""}`,
+              `**${personality.name}** — ${sheet.race} ${sheet.class} ${sheet.level}\n${personality.description}\n\n*${sheet.backstory.slice(0, 200)}...*${dormantNote}`,
             ),
           ],
         });

@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```bash
 bun run src/index.ts           # Start the bot
 bun --watch run src/index.ts   # Start with auto-reload (dev mode)
-bun test                       # Run unit tests (767 tests)
+bun test                       # Run unit tests (787 tests)
 bunx tsc --noEmit              # Type-check without emitting
 bunx biome check src/          # Lint and format check
 bun install                    # Install dependencies
@@ -65,7 +65,7 @@ All AI calls are stateless — context is rebuilt from game state + sliding hist
 - **Resource reconciliation**: After spell/feature use, the engine appends a system history entry summarizing remaining spell slots and feature charges for all casters.
 - **IC vs OOC**: `>` prefix = in-character (advances game state). No prefix = out-of-character (orchestrator skips). Players can use `/ask` for OOC questions to the DM. `/ask` carries in-memory history across multiple questions in the same session (FIFO buffer of 5 exchanges in `ask-history.ts`), and exchanges are recorded as system history entries so the DM sees them in future narration context. The DM is instructed to act immediately on `/ask` requests rather than making promises for later. `/ask` responses are piped through `processDirectives()` so the DM can use ROLL, DAMAGE, HEAL, UPDATE_HP, REQUEST_ROLL, etc. in answers — state is saved if any directives were processed.
 - **Webhooks**: Each AI identity (agents + DM) gets a separate Discord webhook with custom name/avatar. DM narration uses rich plain text with visual separators (Discord markdown for formatting); system messages (combat status, dice, game events) use embeds. Agents use plain text.
-- **Agent personality files**: `agents/*.md` with gray-matter frontmatter + markdown body. The `characterSpec` field contains a character sheet in the same markdown format human players upload. 11 pre-built agents ship in `agents/` covering all 9 non-Fighter classes plus the original Fighter (Grimbold) and a second Bard (Pumpernickle). All are levels 1-3 with unique race+class combos.
+- **Agent personality files**: `agents/*.md` with gray-matter frontmatter + markdown body. The `characterSpec` field contains a character sheet in the same markdown format human players upload. 12 pre-built agents ship in `agents/` covering all 9 non-Fighter classes plus the original Fighter (Grimbold), a second Bard (Pumpernickle), and a non-combat familiar (Sprocket). All are levels 1-3 with unique race+class combos. Agents can be loaded dormant via `/add-agent name dormant:true` — they exist in game state but aren't prompted until the DM activates them with `[[ACTIVATE:Name]]`.
 - **Player IDs**: Humans = Discord user ID. Agents = `agent:<name>`.
 - **Round tracking**: In-memory `roundResponses` map in `game/engine.ts`. Cleared after DM resolves. Not persisted — on restart, `autoResume()` runs the orchestrator with an empty set, which correctly prompts pending AI agents. Stale entry detection (`roundStartTimes` map) prevents queued messages from stealing turns in new rounds — entries timestamped before the current round start are recorded in history but don't count as round actions.
 - **Player @mentions**: When the orchestrator decides `wait_for_human`, it sends a Discord message that @mentions the player (`<@userId>`). In combat: "it's your turn!". In exploration: "what do you do?". For pending rolls: includes dice notation and reason. Also pings human players when DM narration creates pending rolls via `[[REQUEST_ROLL:...]]`.

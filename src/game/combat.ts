@@ -22,7 +22,7 @@ export function startCombat(gameState: GameState): DiceResult[] {
   const results: DiceResult[] = [];
   const combatants: Combatant[] = [];
 
-  for (const player of gameState.players) {
+  for (const player of gameState.players.filter((p) => !p.dormant)) {
     const { combatant, roll: diceResult } = rollInitiative(player);
     combatants.push(combatant);
     results.push(diceResult);

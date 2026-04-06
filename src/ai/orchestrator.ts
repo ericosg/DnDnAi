@@ -62,7 +62,7 @@ export async function getNextAction(
 
   const _recentHistory = history.slice(-6);
   const humanPlayers = gameState.players.filter((p) => !p.isAgent);
-  const agentPlayers = gameState.players.filter((p) => p.isAgent);
+  const agentPlayers = gameState.players.filter((p) => p.isAgent && !p.dormant);
 
   // Check which agents haven't responded
   const unrespondedAgents = agentPlayers.filter((p) => !respondedThisRound.has(p.id));

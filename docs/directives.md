@@ -167,6 +167,17 @@ All directives are resolved **before** the message appears in Discord. The DM sh
 - Narration alone does NOT reset resources — this directive is required
 - Result appears as: `*[Long Rest: Grimbold HP restored; Nyx spell slots restored; ...]*`
 
+### ACTIVATE — Introduce a dormant agent
+
+```
+[[ACTIVATE:AgentName]]
+```
+
+- Activates a dormant agent (loaded via `/add-agent name dormant:true`)
+- The agent begins receiving turn prompts starting next round
+- Result appears as: `*AgentName joins the party!*`
+- Use when the story naturally calls for the character's introduction
+
 ### COMBAT — Start or end combat
 
 ```
@@ -174,7 +185,7 @@ All directives are resolved **before** the message appears in Discord. The DM sh
 [[COMBAT:END]]
 ```
 
-- **START**: Engine rolls initiative for all players, sorts by initiative (DEX breaks ties), enters combat mode
+- **START**: Engine rolls initiative for all active (non-dormant) players, sorts by initiative (DEX breaks ties), enters combat mode
 - **END**: Clears combat state, exits combat mode
 - START result appends the initiative order to the message
 

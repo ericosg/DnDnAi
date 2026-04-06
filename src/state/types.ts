@@ -41,6 +41,7 @@ export interface Player {
   isAgent: boolean;
   characterSheet: CharacterSheet;
   agentFile?: string; // path to agent .md for AI agents
+  dormant?: boolean; // true if agent is loaded but not yet active (DM activates via [[ACTIVATE:Name]])
   joinedAt: string; // ISO timestamp
 }
 
@@ -126,6 +127,7 @@ export interface GameState {
   lastActivity: string;
   pendingRolls?: PendingRoll[];
   sceneState?: SceneState;
+  waitingFor?: { playerId: string; playerName: string } | null; // who the orchestrator is waiting on
 }
 
 export interface OrchestratorDecision {

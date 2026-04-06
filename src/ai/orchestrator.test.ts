@@ -247,6 +247,45 @@ describe("getNextAction — pending rolls", () => {
   });
 });
 
+describe("getNextAction — dormant agents", () => {
+  test("dormant agents are not prompted", async () => {
+    const human = makePlayer();
+    const activeAgent = makeAgent({ id: "agent:a1", name: "Active" });
+    const dormantAgent = makeAgent({ id: "agent:a2", name: "Dormant", dormant: true });
+    const gs = makeGameState([human, activeAgent, dormantAgent]);
+    const entry = makeEntry();
+    const responded = new Set(["human1"]);
+
+    const decision = await getNextAction(gs, [entry], entry, responded);
+    expect(decision.action).toBe("prompt_agent");
+    expect(decision.targetPlayerId).toBe("agent:a1");
+  });
+
+  test("all-dormant agents skips to wait for human", async () => {
+    const human = makePlayer();
+    const dormantAgent = makeAgent({ id: "agent:a1", name: "Dormant", dormant: true });
+    const gs = makeGameState([human, dormantAgent]);
+    const entry = makeEntry();
+    const responded = new Set<string>();
+
+    const decision = await getNextAction(gs, [entry], entry, responded);
+    expect(decision.action).toBe("wait_for_human");
+    expect(decision.targetPlayerId).toBe("human1");
+  });
+
+  test("prompts DM when active agents and human all responded, dormant ignored", async () => {
+    const human = makePlayer();
+    const activeAgent = makeAgent({ id: "agent:a1", name: "Active" });
+    const dormantAgent = makeAgent({ id: "agent:a2", name: "Dormant", dormant: true });
+    const gs = makeGameState([human, activeAgent, dormantAgent]);
+    const entry = makeEntry();
+    const responded = new Set(["human1", "agent:a1"]);
+
+    const decision = await getNextAction(gs, [entry], entry, responded);
+    expect(decision.action).toBe("prompt_dm");
+  });
+});
+
 describe("getNextAction — combat mode", () => {
   test("prompts agent on their combat turn", async () => {
     const human = makePlayer();

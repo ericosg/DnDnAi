@@ -589,6 +589,29 @@ export function processDirectives(text: string, gameState: GameState): Directive
     }
   }
 
+  // === Activate dormant agents ===
+  const activateRegex = /\[\[ACTIVATE:(.+?)\]\]/g;
+  let activateMatch: RegExpExecArray | null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: regex exec loop
+  while ((activateMatch = activateRegex.exec(processedText)) !== null) {
+    const agentName = activateMatch[1].trim();
+    const player = gameState.players.find(
+      (p) =>
+        p.isAgent && p.dormant && p.characterSheet.name.toLowerCase() === agentName.toLowerCase(),
+    );
+    if (player) {
+      player.dormant = false;
+      log.info(`  Activate: ${player.characterSheet.name} is now active`);
+      processedText = processedText.replace(
+        activateMatch[0],
+        `*${player.characterSheet.name} joins the party!*`,
+      );
+    } else {
+      log.warn(`  Activate: dormant agent "${agentName}" not found`);
+      processedText = processedText.replace(activateMatch[0], "");
+    }
+  }
+
   // === Combat signals ===
   if (processedText.includes("[[COMBAT:START]]")) {
     log.info("COMBAT START signal detected");

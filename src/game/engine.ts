@@ -127,6 +127,11 @@ async function processTurnInner(
   // Mark this player as having responded
   markResponded(gameState.id, entry.playerId);
 
+  // Clear waitingFor now that someone has acted
+  if (gameState.waitingFor?.playerId === entry.playerId) {
+    gameState.waitingFor = null;
+  }
+
   // Run the orchestrator loop
   log.info("Orchestrator loop starting");
   await orchestratorLoop(gameState, channel);
@@ -289,8 +294,13 @@ async function orchestratorLoop(gameState: GameState, channel: TextChannel): Pro
       case "wait_for_human": {
         const waitPlayer = gameState.players.find((p) => p.id === decision.targetPlayerId);
         log.info(`Waiting for human: ${waitPlayer?.name ?? decision.targetPlayerId}`);
+        // Persist who we're waiting for so the DM can see it in /ask
+        gameState.waitingFor = waitPlayer
+          ? { playerId: waitPlayer.id, playerName: waitPlayer.name }
+          : null;
+        await saveGameState(gameState);
         // Ping the player in Discord so they get notified (even with channel muted)
-        // Skip if already pinged this round (prevents duplicates from /ask resumeOrchestrator)
+        // Skip if already pinged this round (prevents duplicates)
         if (decision.targetPlayerId && !hasPinged(gameState.id, decision.targetPlayerId)) {
           markPinged(gameState.id, decision.targetPlayerId);
           const mention = `<@${decision.targetPlayerId}>`;

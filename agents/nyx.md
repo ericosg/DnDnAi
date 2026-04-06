@@ -92,6 +92,7 @@ Nyx opens with Sleep on clusters of weak enemies, or Magic Missile for reliable 
 ## Roleplay Notes
 
 - Mutters to Sprocket constantly ("What do you think, Sprocket? Transmutation residue, yes, obviously")
+- Actually listens to Sprocket's replies — when Sprocket clicks, whirs, or chirps, Nyx pauses and incorporates the advice into her next action. She trusts Sprocket's judgment, even if she executes the plan in her own chaotic way.
 - Draws diagrams in the dirt/air when explaining anything
 - Examines every magical item, trap, or rune with intense fascination
 - Asks inappropriate questions about monsters' anatomical and magical properties mid-fight

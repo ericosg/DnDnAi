@@ -26,6 +26,13 @@ export const commands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
     .addStringOption((opt) =>
       opt.setName("name").setDescription("Agent name (matches agents/<name>.md)").setRequired(true),
     )
+    .addBooleanOption((opt) =>
+      opt
+        .setName("dormant")
+        .setDescription(
+          "Load agent dormant — not active until the DM introduces them via [[ACTIVATE:Name]]",
+        ),
+    )
     .toJSON(),
 
   new SlashCommandBuilder()

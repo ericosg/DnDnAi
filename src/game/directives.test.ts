@@ -804,3 +804,102 @@ describe("directives — REST", () => {
     expect(ctx.processedText).toContain("HP 10 → 24");
   });
 });
+
+describe("ACTIVATE directives", () => {
+  function makeDormantAgent(): Player {
+    return {
+      id: "agent:sprocket",
+      name: "Sprocket",
+      isAgent: true,
+      dormant: true,
+      characterSheet: {
+        name: "Sprocket",
+        race: "Tiny Construct",
+        class: "None",
+        level: 1,
+        background: "Familiar",
+        alignment: "Neutral",
+        abilityScores: {
+          strength: 1,
+          dexterity: 14,
+          constitution: 1,
+          wisdom: 16,
+          intelligence: 18,
+          charisma: 6,
+        },
+        proficiencyBonus: 2,
+        savingThrows: [],
+        skills: [],
+        hp: { max: 1, current: 1, temp: 0 },
+        armorClass: 12,
+        initiative: 2,
+        speed: 20,
+        equipment: [],
+        features: [],
+        backstory: "",
+      },
+      agentFile: "sprocket.md",
+      joinedAt: new Date().toISOString(),
+    };
+  }
+
+  test("activates a dormant agent by name", () => {
+    const gs = makeExplorationState();
+    gs.players.push(makeDormantAgent());
+    const text = "A clockwork mouse appears. [[ACTIVATE:Sprocket]]";
+    const ctx = processDirectives(text, gs);
+
+    const sprocket = gs.players.find((p) => p.id === "agent:sprocket");
+    expect(sprocket?.dormant).toBe(false);
+    expect(ctx.processedText).toContain("*Sprocket joins the party!*");
+    expect(ctx.processedText).not.toContain("[[ACTIVATE:");
+  });
+
+  test("case-insensitive name matching", () => {
+    const gs = makeExplorationState();
+    gs.players.push(makeDormantAgent());
+    const text = "[[ACTIVATE:sprocket]]";
+    processDirectives(text, gs);
+
+    const sprocket = gs.players.find((p) => p.id === "agent:sprocket");
+    expect(sprocket?.dormant).toBe(false);
+  });
+
+  test("non-existent agent is silently removed from text", () => {
+    const gs = makeExplorationState();
+    const text = "[[ACTIVATE:Nobody]]";
+    const ctx = processDirectives(text, gs);
+
+    expect(ctx.processedText).not.toContain("[[ACTIVATE:");
+    expect(ctx.processedText).not.toContain("joins the party");
+  });
+
+  test("already-active agent is not matched", () => {
+    const gs = makeExplorationState();
+    // Grimbold is already active (not dormant) in the default state
+    const text = "[[ACTIVATE:Grimbold Ironforge]]";
+    const ctx = processDirectives(text, gs);
+
+    // Should not match because Grimbold is not dormant
+    expect(ctx.processedText).not.toContain("joins the party");
+  });
+
+  test("multiple ACTIVATE directives in one message", () => {
+    const gs = makeExplorationState();
+    const dormant1 = makeDormantAgent();
+    const dormant2: Player = {
+      ...makeDormantAgent(),
+      id: "agent:whiskers",
+      name: "Whiskers",
+      characterSheet: { ...makeDormantAgent().characterSheet, name: "Whiskers" },
+    };
+    gs.players.push(dormant1, dormant2);
+    const text = "Two familiars arrive! [[ACTIVATE:Sprocket]] [[ACTIVATE:Whiskers]]";
+    const ctx = processDirectives(text, gs);
+
+    expect(gs.players.find((p) => p.id === "agent:sprocket")?.dormant).toBe(false);
+    expect(gs.players.find((p) => p.id === "agent:whiskers")?.dormant).toBe(false);
+    expect(ctx.processedText).toContain("*Sprocket joins the party!*");
+    expect(ctx.processedText).toContain("*Whiskers joins the party!*");
+  });
+});
