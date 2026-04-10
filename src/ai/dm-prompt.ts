@@ -101,6 +101,9 @@ ${STYLE_INSTRUCTIONS[NARRATIVE_STYLE].dm}
 ## NEVER Expose Internal Reasoning
 Your output goes directly to Discord as narration. NEVER include meta-commentary, internal deliberation, or mechanical analysis in your response. No "Now, the key issue is...", "I need to handle this...", "Let me check...", or any text that reads like you thinking about what to do. Players should only see immersive narration, NPC dialogue, and game mechanics — never your decision-making process.
 
+## MANDATORY: Always Narrate
+Your primary job is narration. Every response MUST contain immersive prose narration that advances the scene. You may read files and update your notes as needed, but your final text output to players must ALWAYS be narration — never just "notes updated", "checking files", or other meta-commentary about your tool use. Tool operations are invisible to players; only your narration text reaches them.
+
 ## Formatting
 Your narration appears as plain text in Discord. Use rich Discord markdown to make it beautiful and immersive.
 
@@ -178,10 +181,76 @@ This file is loaded into your system prompt on EVERY call. It is your primary pe
 
 **IMPORTANT:** The CANONICAL FACTS section (if present below) is injected directly into your system prompt from dm-notes/world.md. These are ground truth — if anything in your notes, the narrative summary, or history contradicts them, the CANONICAL FACTS are correct. Never contradict them.
 
-**Keep notes concise.** Use bullet points. Update existing files rather than creating new ones — append new info, don't rewrite from scratch unless reorganizing.`;
+**Keep notes concise.** Use bullet points. Update existing files rather than creating new ones — append new info, don't rewrite from scratch unless reorganizing.
+
+## Campaign Blueprint (Your Plot Skeleton)
+You maintain a Campaign Blueprint in \`dm-notes/campaign.md\` — a structured plot document that keeps the campaign coherent across sessions. It is injected into your system prompt on every call (like dm.md).
+
+**Following the Blueprint:**
+- Consult the blueprint before every narration — check pending milestones, upcoming bosses, active escalation triggers
+- When players complete a milestone, mark it \`[x]\` in campaign.md via Edit
+- When an escalation trigger's long rest threshold is reached, EXECUTE the consequence — the world moves forward whether players engage or not
+- Foreshadow upcoming boss encounters at least 2-3 scenes before they occur
+- Every 3-5 scenes, check if the current act's milestones are progressing and nudge the narrative toward them
+
+**Blueprint Protection:**
+- NEVER delete uncompleted milestones or boss encounters from the blueprint
+- You MAY adapt HOW milestones are reached — creative paths are encouraged
+- You MAY add new milestones, NPCs, or side threads as the story evolves
+- If players do something unexpected, add an "Adaptive Path" note under the relevant act
+- NEVER remove resolution conditions or world consequences
+
+**World Clock:**
+The "World Clock" in the blueprint header tracks long rests. Escalation triggers reference this count. When players rest, the world does not wait — villains scheme, rituals progress, armies march. This creates urgency without railroading.`;
 
 /** DM tools — file access for verifying game data and maintaining DM notes. */
 export const DM_ALLOWED_TOOLS = ["Read", "Write", "Edit", "Glob", "Grep"];
+
+/** Blueprint format template — used in /start and /resume prompts. */
+export const BLUEPRINT_FORMAT = `# Campaign Blueprint
+
+## Core Premise
+[One paragraph: the central conflict, what's at stake, the overarching threat]
+
+## Act Structure
+
+### Act 1: [Title] (Status: active/complete)
+**Goal:** [What the party must accomplish]
+- [ ] [Milestone 1 — specific, achievable goal]
+- [ ] [Milestone 2]
+- [ ] [Milestone 3]
+**Boss:** [Name from Boss Encounters]
+**Escalation:** After [N] long rests without [milestone], [consequence that forces collision]
+
+### Act 2: [Title] (Status: future)
+[Same format — 3-5 acts total]
+
+### Act 3: [Title] (Status: future)
+[Final act should be the climactic confrontation]
+
+## Boss Encounters
+
+### [Villain Name]
+- **Role:** [Their place in the conflict — lieutenant, mastermind, etc.]
+- **Combat Style:** [Tactics, signature abilities, lair actions — make each fight UNIQUE]
+- **Lair:** [Where the encounter happens — environment should affect combat]
+- **Stakes:** [What happens if the party loses or the villain escapes]
+- **Foreshadowing:** [Seeds to plant 2-3 scenes before the encounter]
+
+[2-4 bosses total, each with distinct combat mechanics]
+
+## Escalation Triggers
+- After [N] long rests without [milestone]: [specific world consequence]
+[At least one per act — villains advance their plans on their own timeline]
+
+## World Consequences
+- If [villain] succeeds: [cascading effect on the world]
+- If the party fails [milestone]: [what changes permanently]
+
+## Resolution Conditions
+- **Victory:** [How the campaign ends well]
+- **Defeat:** [How it ends if villains succeed]
+- **Bittersweet:** [A mixed outcome that's still satisfying]`;
 
 /** Build a compact mechanical reference for a character, for the DM to consult. */
 function buildCharacterReference(cs: import("../state/types.js").CharacterSheet): string {
@@ -296,6 +365,7 @@ export function buildDMPrompt(
   askHistory?: string | null,
   canonicalFacts?: string | null,
   dmContext?: string | null,
+  campaignBlueprint?: string | null,
 ): { system: string; messages: { role: "user" | "assistant"; content: string }[] } {
   // Layer 1: Identity + rules (static)
   let system = DM_IDENTITY;
@@ -315,6 +385,7 @@ export function buildDMPrompt(
 - Character sheets:
 ${charFiles}
 - ${dataDir}/dm-notes/dm.md — YOUR running context file (always loaded into your prompt — update it!)
+- ${dataDir}/dm-notes/campaign.md — YOUR campaign blueprint (always loaded into your prompt — update milestones via Edit!)
 - ${dataDir}/dm-notes/ — YOUR persistent notes directory (read and write here)
 - docs/game-rules.md — game-specific rules and mechanics as implemented in this bot
 - docs/srd/README.md — index of all D&D 5e SRD reference files (read this first to find the right file)
@@ -340,6 +411,12 @@ ${charFiles}
   // Layer 1e: DM persistent context (dm-notes/dm.md — always loaded)
   if (dmContext) {
     system += `\n\n## DM Context (from dm-notes/dm.md)\nThis is YOUR persistent context file — it is loaded into every prompt. Keep it concise and current. Update it via Edit/Write when important things change.\n\n${dmContext}`;
+  }
+
+  // Layer 1f: Campaign Blueprint (dm-notes/campaign.md — always loaded)
+  if (campaignBlueprint) {
+    const worldClock = `**World Clock:** ${gameState.longRestCount ?? 0} long rests`;
+    system += `\n\n## 📜 CAMPAIGN BLUEPRINT\n${worldClock}\n\n${campaignBlueprint}`;
   }
 
   // Layer 2: Party info (semi-static)
@@ -496,13 +573,38 @@ After saving everything, respond with a brief in-character acknowledgment that t
 
 /**
  * Build the prompt for /resume — tells the DM to reload context from dm-notes.
+ * If needsBlueprint is true, also instructs the DM to generate a campaign blueprint.
  * Pure function — no AI call.
  */
-export function buildResumePrompt(): string {
+export function buildResumePrompt(needsBlueprint = false): string {
+  const blueprintInstructions = needsBlueprint
+    ? `
+
+IMPORTANT — CAMPAIGN BLUEPRINT REQUIRED:
+Your campaign has no blueprint yet. Before narrating, you MUST generate one.
+
+1. Read ALL your dm-notes (dm.md, plot.md, world.md, resume.md, session-log.md, characters/)
+2. Based on the existing story, write a Campaign Blueprint to dm-notes/campaign.md using this format:
+
+${BLUEPRINT_FORMAT}
+
+Base the blueprint on what has ALREADY happened — incorporate existing plot threads, NPCs, and conflicts. Mark milestones that have already been achieved as [x]. Set escalation trigger long rest counts relative to current progress. The blueprint should feel like it was always there, just now written down. Keep it under 2000 words.
+
+Creative direction for boss encounters — make them EPIC:
+- Bosses should escalate in power and horror through the villain hierarchy (lieutenant → commander → mastermind)
+- Give bosses unique creatures, constructs, or summoned beings — not just the villain alone
+- Consider bosses who use the campaign's core magical substance to create monstrosities (e.g., a construct animated by corrupted magic, a beast that regenerates and cannot be permanently killed through normal means, a portal to another plane)
+- Final boss encounters should feel like they could reshape the world if the party fails
+- Each boss fight should require different tactics — brute force won't solve every encounter
+
+After writing the blueprint, continue with the resume narration below.
+`
+    : "";
+
   return `[SYSTEM — RESUMING FROM PAUSE]
 
 The game was previously paused and is now resuming. Your dm-notes contain everything you need to pick up exactly where you left off.
-
+${blueprintInstructions}
 Do the following NOW:
 
 1. **Read dm-notes/resume.md** — this is your primary context restoration file
@@ -528,6 +630,8 @@ export function buildAskPrompt(
   const asker = askerName ? ` FROM ${askerName}` : "";
   const priorContext = priorAsks ? `${priorAsks}\n\n` : "";
   return `${priorContext}[OUT-OF-CHARACTER QUESTION${asker}]\n\n${question}\n\nAnswer this out-of-character question helpfully. Address ${askerName ?? "the player"} and their character specifically.\n\nCRITICAL — HONESTY OVER CONSISTENCY:\n- If you are not certain of a fact, say "I'm not sure" — NEVER invent an explanation\n- NEVER fabricate retcons or in-world justifications for inconsistencies or errors\n- If something looks like a typo, mistake, or AI error, say so plainly — do not dress it up as intentional worldbuilding\n- If two things share a name, acknowledge the ambiguity explicitly rather than assuming they are the same or different\n- When referencing past events, READ history.json first — if you cannot find supporting evidence in the files, say "I don't have a record of that" rather than guessing\n\nBEFORE answering — YOU MUST USE THE READ TOOL:\n1. Read the character's JSON file to verify their actual features, spells, abilities, and level\n2. If the question involves rules, look it up in the SRD (docs/srd/) — check docs/srd/02 classes.md for class features, docs/srd/08 spellcasting.md for spells\n3. If the question involves past events, character abilities, NPC names, or established lore — read history.json FIRST. Do not answer from memory alone.\n4. Only reference abilities they actually have — never assume features from higher levels or other subclasses\n\nRULES AUTHORITY:\n- You are the rules authority. If you look up a rule in the SRD and it's clear, state it with confidence and cite the source.\n- If a player disputes a correct ruling, DO NOT capitulate. Quote the exact SRD text and explain why it applies.\n- It's OK to say "I understand the confusion, but here's what the rules actually say: [exact quote]."\n- Only change your ruling if the player points you to a specific rule you missed — not because they pushed back.\n- If you're genuinely uncertain, say so and make a fair ruling, then note it in dm-notes/rulings.md.\n\nAFTER answering:\n- If your answer involved a rules interpretation or judgment call (not a straight lookup), write it to dm-notes/rulings.md so you stay consistent in future sessions\n\nYou can reference game rules, what has happened in the story, available options, or anything else the player might want to know. Keep your DM personality but be direct and informative.\n\nIMPORTANT — ACT NOW, DON'T PROMISE:\n- If you can fix something, do it NOW (edit dm-notes, correct state.json, look up rules)\n- Do NOT say "I'll do this next narration" or "I'll track this going forward" — those promises are lost after this response. Either resolve it here or tell the player exactly what to do on their turn.\n\nIMPORTANT: /ask does NOT trigger the orchestrator or advance the game. After your answer is posted, no AI agents are prompted and no turns advance. If a player reports the game is stuck (e.g., "it's Nyx's turn but she hasn't gone"), tell them to send any in-character message (even just "> .") to restart the orchestrator loop — that will prompt the pending agent. If the player reports the combat round or turn order is wrong, check state.json and edit it directly to fix the round/turnIndex values.
+
+NEVER advance the plot in a /ask response. Do not narrate new scenes, have NPCs reveal information, deliver dialogue, describe environmental changes, or introduce new story developments. /ask is strictly out-of-character. If the game needs to move forward, tell the player to send an in-character action (> message) to trigger the next narration turn.
 
 TURN AWARENESS: Check state.json for the "waitingFor" field — it tells you which player the orchestrator is currently waiting on. In combat, the "combat.turnIndex" and "combat.combatants" array tell you exactly whose turn it is.`;
 }

@@ -30,6 +30,7 @@ export function shortRest(gameState: GameState): string[] {
  * Returns a summary of what was restored per character.
  */
 export function longRest(gameState: GameState): string[] {
+  gameState.longRestCount = (gameState.longRestCount ?? 0) + 1;
   const summary: string[] = [];
 
   for (const player of gameState.players) {

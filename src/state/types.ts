@@ -128,6 +128,7 @@ export interface GameState {
   pendingRolls?: PendingRoll[];
   sceneState?: SceneState;
   waitingFor?: { playerId: string; playerName: string } | null; // who the orchestrator is waiting on
+  longRestCount?: number; // tracks total long rests for campaign escalation triggers
 }
 
 export interface OrchestratorDecision {

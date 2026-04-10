@@ -803,6 +803,20 @@ describe("directives — REST", () => {
     expect(ctx.processedText).toContain("*[Long Rest:");
     expect(ctx.processedText).toContain("HP 10 → 24");
   });
+
+  test("long rest increments longRestCount", () => {
+    const gs = makeExplorationState();
+    expect(gs.longRestCount).toBeUndefined();
+    processDirectives("[[REST:long TARGET:party]]", gs);
+    expect(gs.longRestCount).toBe(1);
+  });
+
+  test("short rest does NOT increment longRestCount", () => {
+    const gs = makeExplorationState();
+    gs.longRestCount = 3;
+    processDirectives("[[REST:short TARGET:party]]", gs);
+    expect(gs.longRestCount).toBe(3);
+  });
 });
 
 describe("ACTIVATE directives", () => {

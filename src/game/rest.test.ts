@@ -140,4 +140,33 @@ describe("longRest", () => {
     const summary = longRest(gs);
     expect(summary).toEqual([]);
   });
+
+  test("increments longRestCount from 0", () => {
+    const gs = makeGameState();
+    longRest(gs);
+    expect(gs.longRestCount).toBe(1);
+  });
+
+  test("increments existing longRestCount", () => {
+    const gs = makeGameState();
+    gs.longRestCount = 5;
+    longRest(gs);
+    expect(gs.longRestCount).toBe(6);
+  });
+
+  test("handles undefined longRestCount (backward compat)", () => {
+    const gs = makeGameState();
+    expect(gs.longRestCount).toBeUndefined();
+    longRest(gs);
+    expect(gs.longRestCount).toBe(1);
+  });
+});
+
+describe("shortRest — longRestCount", () => {
+  test("does NOT increment longRestCount", () => {
+    const gs = makeGameState();
+    gs.longRestCount = 3;
+    shortRest(gs);
+    expect(gs.longRestCount).toBe(3);
+  });
 });

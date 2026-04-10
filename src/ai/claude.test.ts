@@ -407,6 +407,19 @@ describe("claude CLI subprocess", () => {
       expect(parsed.toolUses[1].name).toBe("Read");
       expect(parsed.toolUses[2].name).toBe("Write");
     });
+
+    test("returns brief result when DM only uses tools with no narration", () => {
+      // Edge case: DM does tool calls but never produces narration text blocks —
+      // parseStreamJson returns the brief result; the engine guardrail catches it downstream
+      const stdout = [
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"dm-notes/dm.md"}}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Edit","input":{"file_path":"dm-notes/dm.md","old_string":"pending","new_string":"done"}}]}}',
+        '{"type":"result","result":"Updated dm-notes.","num_turns":2}',
+      ].join("\n");
+      const parsed = parseStreamJson(stdout);
+      expect(parsed.resultText).toBe("Updated dm-notes.");
+      expect(parsed.toolUses).toHaveLength(2);
+    });
   });
 
   describe("extractFailureDiagnostics", () => {

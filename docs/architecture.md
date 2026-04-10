@@ -105,15 +105,19 @@ Round tracking is in-memory only (not persisted). It tracks which players have r
 
 Has an AI-powered `classifyMessage()` fallback for ambiguous IC/OOC detection, but the primary path uses the `>` prefix convention.
 
-**dm.ts** — Builds the DM's prompt using a 5-layer system:
+**dm.ts** — Builds the DM's prompt using a 7-layer system:
 
 | Layer | Content | Update Frequency |
 |-------|---------|-----------------|
-| 1. Identity | DM role, rules, formatting instructions, dice directive format | Static |
-| 2. Party | Character names, races, classes, HP, AC, human/AI tags | Per-call |
-| 3. Narrative | Compressed story summary | Every 10 turns |
+| 1. Identity | DM role, rules, formatting, directives, file paths, blueprint instructions | Static |
+| 1c. Canonical Facts | Ground truth from `dm-notes/world.md` | Per-call |
+| 1d. Scene State | Location, time, NPCs present, key facts | Every 6 turns |
+| 1e. DM Context | Running memory from `dm-notes/dm.md` | Per-call |
+| 1f. Campaign Blueprint | Plot skeleton from `dm-notes/campaign.md` + World Clock | Per-call |
+| 2. Party | Character names, races, classes, HP, AC, ability scores, features, spells | Per-call |
+| 3. Narrative | Compressed story summary | Every 6 turns |
 | 4. Combat | Round, initiative order, HP, conditions | Per-call (combat only) |
-| 5. History | Sliding window of last 8 turns | Per-call |
+| 5. History | Sliding window of last 12 turns | Per-call |
 
 The current player actions go in the user message, not the system prompt.
 

@@ -117,6 +117,7 @@ mock.module("../discord/webhooks.js", () => ({
 
 mock.module("../discord/formatter.js", () => ({
   formatDMNarration: (text: string) => `---\n${text}\n---`,
+  combatStatusEmbed: () => ({ data: {} }),
 }));
 
 let dmGuardrailResponses: { pass: boolean; violation?: string }[] = [];
@@ -145,8 +146,14 @@ mock.module("../ai/guardrail.js", () => ({
   },
 }));
 
-const { processTurn, resumeOrchestrator, markResponded, clearRound, getRoundStartTime } =
-  await import("./engine.js");
+const {
+  processTurn,
+  resumeOrchestrator,
+  markResponded,
+  clearRound,
+  getRoundStartTime,
+  isToolMetaOnly,
+} = await import("./engine.js");
 
 function makePlayer(overrides: Partial<Player> = {}): Player {
   return {
@@ -1373,6 +1380,112 @@ describe("engine — guardrail re-generation feedback", () => {
     expect(agentActionCalls[0].effort).toBeUndefined();
     // Re-gen call: effort escalated to medium
     expect(agentActionCalls[1].effort).toBe("medium");
+  });
+});
+
+describe("engine — isToolMetaOnly", () => {
+  test("detects short tool meta-commentary", () => {
+    expect(isToolMetaOnly("Updated dm-notes.")).toBe(true);
+    expect(isToolMetaOnly("Updated dm-notes with merchant transaction.")).toBe(true);
+    expect(isToolMetaOnly("Checked the character sheet.")).toBe(true);
+    expect(isToolMetaOnly("Read the history file.")).toBe(true);
+    expect(isToolMetaOnly("Noted the plot development.")).toBe(true);
+    expect(isToolMetaOnly("Wrote session log entry.")).toBe(true);
+  });
+
+  test("passes real narration through", () => {
+    expect(
+      isToolMetaOnly(
+        '*The merchant slides a leather pouch across the counter.* "Fifty gold, as promised."',
+      ),
+    ).toBe(false);
+    expect(
+      isToolMetaOnly("The dragon roars! [[DAMAGE:3d6 TARGET:Grimbold REASON:fire breath]]"),
+    ).toBe(false);
+    expect(isToolMetaOnly('> "You dare enter my domain?" the lich hisses.')).toBe(false);
+  });
+
+  test("passes long responses even with meta words", () => {
+    const longResponse =
+      "The party updated their plans and checked the map. " +
+      "Grimbold noted the strange markings on the wall while Nyx read the ancient inscriptions. " +
+      "The cave trembled as something massive stirred in the depths below.";
+    expect(isToolMetaOnly(longResponse)).toBe(false);
+  });
+
+  test("passes responses with narrative markers even if short", () => {
+    expect(isToolMetaOnly("*Updated the scene.*")).toBe(false);
+    expect(isToolMetaOnly("[[ROLL:d20+5 FOR:Fusetsu REASON:check]]")).toBe(false);
+    expect(isToolMetaOnly('> "Noted," she whispered.')).toBe(false);
+  });
+
+  test("passes empty and whitespace responses (handled by empty check)", () => {
+    expect(isToolMetaOnly("")).toBe(false);
+    expect(isToolMetaOnly("   ")).toBe(false);
+  });
+
+  test("passes normal short responses without meta patterns", () => {
+    expect(isToolMetaOnly("The door creaks open.")).toBe(false);
+    expect(isToolMetaOnly("Nothing happens.")).toBe(false);
+  });
+});
+
+describe("engine — narration guardrail retry", () => {
+  test("retries DM call when response is tool meta-commentary", async () => {
+    const origResponse = dmNarrateResponse;
+    // Set response to tool meta-commentary — triggers narration guardrail retry
+    dmNarrateResponse = "Updated dm-notes.";
+
+    const gs = makeGameState();
+    markResponded(gs.id, "agent:grimbold");
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I search the room.",
+    };
+
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
+
+    // Should have retried (at least 2 calls)
+    expect(dmNarrateCalls.length).toBeGreaterThanOrEqual(2);
+    // Retry call should contain narration feedback
+    const retryCall = dmNarrateCalls[1];
+    expect(retryCall.actions).toContain("meta-commentary");
+    expect(retryCall.actions).toContain("immersive prose narration");
+    expect(retryCall.effort).toBe("high");
+
+    dmNarrateResponse = origResponse;
+  });
+
+  test("posts retry response even if it is also meta-commentary (no infinite loop)", async () => {
+    const origResponse = dmNarrateResponse;
+    // Mock always returns meta-commentary — retry should still post (no infinite retry)
+    dmNarrateResponse = "Checked the notes.";
+
+    const gs = makeGameState();
+    markResponded(gs.id, "agent:grimbold");
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I look around.",
+    };
+
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
+
+    // Should have retried exactly once (2 calls total), not looped
+    expect(dmNarrateCalls.length).toBe(2);
+    // Response should still be posted to Discord (sentMessages includes it)
+    expect(sentMessages.length).toBeGreaterThan(0);
+
+    dmNarrateResponse = origResponse;
   });
 });
 

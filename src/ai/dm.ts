@@ -51,15 +51,34 @@ export async function loadCanonicalFacts(gameId: string): Promise<string | null>
   }
 }
 
-/** Load both canonical facts and DM context for a game. */
-async function loadDMPromptContext(
-  gameId: string,
-): Promise<{ canonicalFacts: string | null; dmContext: string | null }> {
-  const [canonicalFacts, dmContext] = await Promise.all([
+/**
+ * Load the campaign blueprint (dm-notes/campaign.md).
+ * Always injected into the DM prompt to keep the plot on track.
+ */
+export async function loadCampaignBlueprint(gameId: string): Promise<string | null> {
+  try {
+    const content = await readFile(`data/games/${gameId}/dm-notes/campaign.md`, "utf-8");
+    const trimmed = content.trim();
+    // Skip placeholder content
+    if (trimmed.length === 0 || trimmed.includes("will be generated")) return null;
+    return trimmed;
+  } catch {
+    return null;
+  }
+}
+
+/** Load canonical facts, DM context, and campaign blueprint for a game. */
+async function loadDMPromptContext(gameId: string): Promise<{
+  canonicalFacts: string | null;
+  dmContext: string | null;
+  campaignBlueprint: string | null;
+}> {
+  const [canonicalFacts, dmContext, campaignBlueprint] = await Promise.all([
     loadCanonicalFacts(gameId),
     loadDMContext(gameId),
+    loadCampaignBlueprint(gameId),
   ]);
-  return { canonicalFacts, dmContext };
+  return { canonicalFacts, dmContext, campaignBlueprint };
 }
 
 export async function dmNarrate(
@@ -69,7 +88,7 @@ export async function dmNarrate(
   askHistory?: string | null,
   effort?: "low" | "medium" | "high" | "max",
 ): Promise<string> {
-  const { canonicalFacts, dmContext } = await loadDMPromptContext(gameState.id);
+  const { canonicalFacts, dmContext, campaignBlueprint } = await loadDMPromptContext(gameState.id);
   const { system, messages } = buildDMPrompt(
     gameState,
     history,
@@ -77,12 +96,13 @@ export async function dmNarrate(
     askHistory,
     canonicalFacts,
     dmContext,
+    campaignBlueprint,
   );
   return chatAgentic(models.dm, system, messages, DM_ALLOWED_TOOLS, "DM", effort);
 }
 
 export async function dmRecap(gameState: GameState, history: TurnEntry[]): Promise<string> {
-  const { canonicalFacts, dmContext } = await loadDMPromptContext(gameState.id);
+  const { canonicalFacts, dmContext, campaignBlueprint } = await loadDMPromptContext(gameState.id);
   const { system, messages } = buildDMPrompt(
     gameState,
     history,
@@ -90,6 +110,7 @@ export async function dmRecap(gameState: GameState, history: TurnEntry[]): Promi
     null,
     canonicalFacts,
     dmContext,
+    campaignBlueprint,
   );
   return chatAgentic(models.dm, system, messages, DM_ALLOWED_TOOLS, "DM recap");
 }
@@ -103,7 +124,7 @@ export async function dmLook(
     ? `A player wants to examine: "${target}". Describe what they see, hear, and sense. Include any details that might be relevant for gameplay.`
     : `A player looks around. Describe the current environment in detail — sights, sounds, smells, and anything notable they might interact with.`;
 
-  const { canonicalFacts, dmContext } = await loadDMPromptContext(gameState.id);
+  const { canonicalFacts, dmContext, campaignBlueprint } = await loadDMPromptContext(gameState.id);
   const { system, messages } = buildDMPrompt(
     gameState,
     history,
@@ -111,6 +132,7 @@ export async function dmLook(
     null,
     canonicalFacts,
     dmContext,
+    campaignBlueprint,
   );
   return chatAgentic(models.dm, system, messages, DM_ALLOWED_TOOLS, "DM look");
 }
@@ -122,7 +144,7 @@ export async function dmAsk(
   askerName?: string,
   askHistory?: string | null,
 ): Promise<string> {
-  const { canonicalFacts, dmContext } = await loadDMPromptContext(gameState.id);
+  const { canonicalFacts, dmContext, campaignBlueprint } = await loadDMPromptContext(gameState.id);
   const { system, messages } = buildDMPrompt(
     gameState,
     history,
@@ -130,12 +152,13 @@ export async function dmAsk(
     askHistory,
     canonicalFacts,
     dmContext,
+    campaignBlueprint,
   );
   return chatAgentic(models.dm, system, messages, DM_ALLOWED_TOOLS, "DM ask");
 }
 
 export async function dmPause(gameState: GameState, history: TurnEntry[]): Promise<string> {
-  const { canonicalFacts, dmContext } = await loadDMPromptContext(gameState.id);
+  const { canonicalFacts, dmContext, campaignBlueprint } = await loadDMPromptContext(gameState.id);
   const { system, messages } = buildDMPrompt(
     gameState,
     history,
@@ -143,19 +166,22 @@ export async function dmPause(gameState: GameState, history: TurnEntry[]): Promi
     null,
     canonicalFacts,
     dmContext,
+    campaignBlueprint,
   );
   return chatAgentic(models.dm, system, messages, DM_ALLOWED_TOOLS, "DM pause");
 }
 
 export async function dmResume(gameState: GameState, history: TurnEntry[]): Promise<string> {
-  const { canonicalFacts, dmContext } = await loadDMPromptContext(gameState.id);
+  const { canonicalFacts, dmContext, campaignBlueprint } = await loadDMPromptContext(gameState.id);
+  const needsBlueprint = !campaignBlueprint;
   const { system, messages } = buildDMPrompt(
     gameState,
     history,
-    buildResumePrompt(),
+    buildResumePrompt(needsBlueprint),
     null,
     canonicalFacts,
     dmContext,
+    campaignBlueprint,
   );
   return chatAgentic(models.dm, system, messages, DM_ALLOWED_TOOLS, "DM resume");
 }

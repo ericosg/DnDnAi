@@ -880,6 +880,14 @@ describe("buildAskPrompt — /ask does not trigger orchestrator", () => {
     expect(prompt).toContain("TURN AWARENESS");
     expect(prompt).toContain("waitingFor");
   });
+
+  test("forbids advancing the plot in /ask responses", () => {
+    const prompt = buildAskPrompt("what happens next?", "Fūsetsu");
+
+    expect(prompt).toContain("NEVER advance the plot");
+    expect(prompt).toContain("Do not narrate new scenes");
+    expect(prompt).toContain("strictly out-of-character");
+  });
 });
 
 describe("DM_IDENTITY — ACTIVATE directive", () => {
@@ -950,6 +958,80 @@ describe("buildResumePrompt", () => {
   test("instructs DM not to summarize but to continue the scene", () => {
     const prompt = buildResumePrompt();
     expect(prompt).toContain("Do not summarize");
+  });
+
+  test("includes blueprint generation when needsBlueprint is true", () => {
+    const prompt = buildResumePrompt(true);
+    expect(prompt).toContain("CAMPAIGN BLUEPRINT REQUIRED");
+    expect(prompt).toContain("dm-notes/campaign.md");
+    expect(prompt).toContain("Core Premise");
+    expect(prompt).toContain("Boss Encounters");
+    expect(prompt).toContain("Escalation Triggers");
+  });
+
+  test("omits blueprint generation when needsBlueprint is false", () => {
+    const prompt = buildResumePrompt(false);
+    expect(prompt).not.toContain("CAMPAIGN BLUEPRINT REQUIRED");
+  });
+
+  test("omits blueprint generation by default", () => {
+    const prompt = buildResumePrompt();
+    expect(prompt).not.toContain("CAMPAIGN BLUEPRINT REQUIRED");
+  });
+});
+
+describe("Campaign Blueprint — prompt injection", () => {
+  test("injects blueprint section when provided", () => {
+    const gs = makeGameState();
+    const blueprint = "# Campaign Blueprint\n\n## Core Premise\nTest premise.";
+    const { system } = buildDMPrompt(gs, [], "test", null, null, null, blueprint);
+    expect(system).toContain("📜 CAMPAIGN BLUEPRINT");
+    expect(system).toContain("Test premise");
+  });
+
+  test("omits blueprint section when null", () => {
+    const gs = makeGameState();
+    const { system } = buildDMPrompt(gs, [], "test", null, null, null, null);
+    expect(system).not.toContain("📜 CAMPAIGN BLUEPRINT");
+  });
+
+  test("shows World Clock with longRestCount", () => {
+    const gs = makeGameState({ longRestCount: 7 });
+    const blueprint = "# Campaign Blueprint\n\nTest.";
+    const { system } = buildDMPrompt(gs, [], "test", null, null, null, blueprint);
+    expect(system).toContain("**World Clock:** 7 long rests");
+  });
+
+  test("shows World Clock as 0 when longRestCount undefined", () => {
+    const gs = makeGameState();
+    const blueprint = "# Campaign Blueprint\n\nTest.";
+    const { system } = buildDMPrompt(gs, [], "test", null, null, null, blueprint);
+    expect(system).toContain("**World Clock:** 0 long rests");
+  });
+
+  test("DM_IDENTITY contains Campaign Blueprint instructions", () => {
+    expect(DM_IDENTITY).toContain("Campaign Blueprint");
+    expect(DM_IDENTITY).toContain("campaign.md");
+    expect(DM_IDENTITY).toContain("NEVER delete uncompleted milestones");
+    expect(DM_IDENTITY).toContain("World Clock");
+  });
+
+  test("campaign.md appears in file paths", () => {
+    const gs = makeGameState();
+    const { system } = buildDMPrompt(gs, [], "test");
+    expect(system).toContain("dm-notes/campaign.md");
+  });
+
+  test("BLUEPRINT_FORMAT contains all required sections", () => {
+    const { BLUEPRINT_FORMAT } = require("./dm-prompt.js");
+    expect(BLUEPRINT_FORMAT).toContain("Core Premise");
+    expect(BLUEPRINT_FORMAT).toContain("Act Structure");
+    expect(BLUEPRINT_FORMAT).toContain("Boss Encounters");
+    expect(BLUEPRINT_FORMAT).toContain("Escalation Triggers");
+    expect(BLUEPRINT_FORMAT).toContain("World Consequences");
+    expect(BLUEPRINT_FORMAT).toContain("Resolution Conditions");
+    expect(BLUEPRINT_FORMAT).toContain("Combat Style");
+    expect(BLUEPRINT_FORMAT).toContain("Foreshadowing");
   });
 });
 

@@ -14,6 +14,21 @@ import { advanceTurn, peekNextCombatant, rollDeathSave } from "./combat.js";
 import { formatDiceResult } from "./dice.js";
 import { processDirectives } from "./directives.js";
 
+const NARRATION_MIN_LENGTH = 150;
+const TOOL_META_PATTERNS = /\b(updated|wrote|edited|checked|read|noted|recorded|saved|modified)\b/i;
+const NARRATIVE_MARKERS = /[*>]|\[\[/;
+
+/**
+ * Detect DM responses that are only meta-commentary about tool operations
+ * (e.g. "Updated dm-notes with merchant transaction.") rather than actual narration.
+ */
+export function isToolMetaOnly(response: string): boolean {
+  const trimmed = response.trim();
+  if (trimmed.length >= NARRATION_MIN_LENGTH) return false;
+  if (NARRATIVE_MARKERS.test(trimmed)) return false;
+  return TOOL_META_PATTERNS.test(trimmed);
+}
+
 // Per-game mutex: ensures only one processTurn runs at a time per game.
 // Concurrent calls are queued and execute sequentially.
 const gameLocks = new Map<string, Promise<void>>();
@@ -445,6 +460,25 @@ async function handleDMTurn(
       stopTyping();
       await channel.send("*The Dungeon Master pauses to gather their thoughts...*");
       return;
+    }
+
+    // Guardrail: check for narration quality — DM sometimes responds with only
+    // meta-commentary about tool use ("Updated dm-notes") instead of actual narration
+    if (isToolMetaOnly(dmResponse)) {
+      log.warn(
+        `DM returned tool meta-commentary instead of narration: "${dmResponse.trim().slice(0, 80)}"`,
+      );
+      log.info("DM turn: re-generating with narration feedback (effort: high)...");
+      const feedback = `${recentActions}\n\n[SYSTEM: Your previous response contained only meta-commentary about tool operations (e.g. "updated notes", "checked files") instead of actual narration. Players cannot see your tool use — they only see your text output. You MUST respond with immersive prose narration that advances the scene and resolves the player actions above. Narrate what happens in the world.]`;
+      dmResponse = await dmNarrate(gameState, history, feedback, askHistory, "high");
+      log.info(`DM turn: re-generated response ready (${dmResponse?.length ?? 0} chars)`);
+
+      if (!dmResponse || !dmResponse.trim()) {
+        log.warn("DM returned empty response on narration retry");
+        stopTyping();
+        await channel.send("*The Dungeon Master pauses to gather their thoughts...*");
+        return;
+      }
     }
 
     // Guardrail: check for player agency violations (ALL PCs — human and AI agent alike)

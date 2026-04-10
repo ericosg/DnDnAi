@@ -12,6 +12,7 @@ import {
 import { loadAgentPersonality } from "../ai/agent.js";
 import { chatAgentic } from "../ai/claude.js";
 import { dmAsk, dmLook, dmNarrate, dmPause, dmRecap, dmResume } from "../ai/dm.js";
+import { BLUEPRINT_FORMAT } from "../ai/dm-prompt.js";
 import { buildHelpPrompt, HELP_ALLOWED_TOOLS } from "../ai/help-prompt.js";
 import { config, models, VERSION } from "../config.js";
 import { addAskExchange, formatAskHistoryForPrompt } from "../game/ask-history.js";
@@ -354,7 +355,28 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
               `${p.characterSheet.name} the ${p.characterSheet.race} ${p.characterSheet.class}`,
           )
           .join(", ");
-        openingPrompt = `The campaign begins. The party consists of: ${partyDesc}. Narrate a compelling opening scene that brings these characters together and gives them a reason to adventure. End with a clear hook or prompt for action.`;
+        openingPrompt = `The campaign begins. The party consists of: ${partyDesc}.
+
+FIRST — Generate a Campaign Blueprint and write it to dm-notes/campaign.md using this exact format:
+
+${BLUEPRINT_FORMAT}
+
+Requirements for the blueprint:
+- 3-5 acts with clear progression toward a climactic finale
+- 2-4 boss encounters with UNIQUE combat mechanics (distinct tactics, lair actions, signature abilities — not just "attacks with sword")
+- Each boss should have a lair/environment that affects the encounter
+- Escalation triggers should feel natural — villains acting on their own agenda, not punishing players
+- Connect the premise to at least one party member's backstory if possible
+- Keep the ENTIRE blueprint under 2000 words
+
+Creative direction for boss encounters — make them EPIC:
+- Bosses should escalate in power and horror through the villain hierarchy (lieutenant → commander → mastermind)
+- Give bosses unique creatures, constructs, or summoned beings — not just the villain alone
+- Consider bosses who use the campaign's core magical substance to create monstrosities (e.g., a construct animated by corrupted magic, a beast that regenerates and cannot be permanently killed through normal means, a portal to another plane)
+- Final boss encounters should feel like they could reshape the world if the party fails
+- Each boss fight should require different tactics — brute force won't solve every encounter
+
+THEN — narrate a compelling opening scene that brings these characters together and gives them a reason to adventure. The opening should plant seeds for Act 1's first milestone. End with a clear hook or prompt for action.`;
       }
 
       const narration = await dmNarrate(gameState, history, openingPrompt);
