@@ -196,7 +196,7 @@ describe("directives — SPELL", () => {
 
   test("warns when no slots available", () => {
     const gs = makeCombatState();
-    // biome-ignore lint/style/noNonNullAssertion: test setup — spellSlots guaranteed in makeAgent
+    // biome-ignore lint/style/noNonNullAssertion: assignment target — optional chaining can't be used on the left side of assignment
     gs.players[1].characterSheet.spellSlots![0].current = 0;
     const text = "Cast! [[SPELL:1 TARGET:Grimbold Ironforge]]";
     const ctx = processDirectives(text, gs);
@@ -755,8 +755,8 @@ describe("directives — REST", () => {
     expect(ctx.hpChanged).toBe(true);
     expect(gs.players[0].characterSheet.hp.current).toBe(24); // restored to max
     expect(gs.players[1].characterSheet.hp.current).toBe(31); // restored to max
-    expect(gs.players[1].characterSheet.spellSlots![0].current).toBe(2); // slots restored
-    expect(gs.players[1].characterSheet.featureCharges![0].current).toBe(1); // charges restored
+    expect(gs.players[1].characterSheet.spellSlots?.[0].current).toBe(2); // slots restored
+    expect(gs.players[1].characterSheet.featureCharges?.[0].current).toBe(1); // charges restored
     expect(ctx.processedText).toContain("Long Rest");
     expect(ctx.processedText).not.toContain("[[REST:");
   });
@@ -776,9 +776,9 @@ describe("directives — REST", () => {
     // HP NOT restored on short rest (no Hit Die spending in directive)
     expect(gs.players[0].characterSheet.hp.current).toBe(15);
     // Short-rest features restored
-    expect(gs.players[1].characterSheet.featureCharges![0].current).toBe(1);
+    expect(gs.players[1].characterSheet.featureCharges?.[0].current).toBe(1);
     // Spell slots NOT restored on short rest (not warlock)
-    expect(gs.players[1].characterSheet.spellSlots![0].current).toBe(0);
+    expect(gs.players[1].characterSheet.spellSlots?.[0].current).toBe(0);
     expect(ctx.processedText).toContain("Short Rest");
   });
 

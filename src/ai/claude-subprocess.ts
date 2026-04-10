@@ -111,8 +111,13 @@ export function parseStreamJson(stdout: string): {
     }
   }
 
-  // Use result text if available, otherwise fall back to collected text blocks
-  const finalText = (resultText || textBlocks.join("\n\n")).trim();
+  // When the agentic session had tool uses, narration may have been produced
+  // in an earlier turn before the tools ran. textBlocks captures ALL text from
+  // ALL turns; resultText only has the final turn's text. Prefer textBlocks
+  // when they contain more content (the narration would otherwise be lost).
+  const allText = textBlocks.join("\n\n").trim();
+  const finalText =
+    toolUses.length > 0 && allText.length > resultText.length ? allText : resultText || allText;
   return { resultText: finalText, toolUses, numTurns };
 }
 

@@ -356,6 +356,45 @@ describe("claude CLI subprocess", () => {
       expect(parsed.numTurns).toBe(0);
     });
 
+    test("prefers text blocks over result when narration precedes tool use", () => {
+      // Bug case: DM narrates in turn 1, then uses tools to update dm-notes,
+      // and the final result only contains brief post-tool text — narration is lost
+      const stdout = [
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"*The merchant slides a leather pouch across the counter.* \\"Fifty gold, as promised.\\"\\n\\n[[GOLD:+50 TARGET:Fūsetsu REASON:merchant payment]]\\n[[INVENTORY:ADD Enchanted Compass TARGET:Fūsetsu]]"}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Edit","input":{"file_path":"dm-notes/dm.md","old_string":"pending payment","new_string":"payment complete"}}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"Updated dm-notes with merchant transaction."}]}}',
+        '{"type":"result","result":"Updated dm-notes with merchant transaction.","num_turns":3}',
+      ].join("\n");
+      const parsed = parseStreamJson(stdout);
+      // Should include the full narration with directives, not just the brief final text
+      expect(parsed.resultText).toContain("merchant slides a leather pouch");
+      expect(parsed.resultText).toContain("[[GOLD:+50");
+      expect(parsed.resultText).toContain("[[INVENTORY:ADD");
+    });
+
+    test("uses result text when no tool uses occurred", () => {
+      // Non-agentic call — result text should be preferred as before
+      const stdout = [
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"The cave is dark."}]}}',
+        '{"type":"result","result":"The cave is dark.","num_turns":1}',
+      ].join("\n");
+      const parsed = parseStreamJson(stdout);
+      expect(parsed.resultText).toBe("The cave is dark.");
+    });
+
+    test("uses result when tools precede narration (no lost text)", () => {
+      // DM reads files first, then narrates — result captures everything
+      const stdout = [
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Read","input":{"file_path":"dm-notes/world.md"}}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"The dragon roars! [[DAMAGE:3d6 TARGET:Grimbold REASON:fire breath]]"}]}}',
+        '{"type":"result","result":"The dragon roars! [[DAMAGE:3d6 TARGET:Grimbold REASON:fire breath]]","num_turns":2}',
+      ].join("\n");
+      const parsed = parseStreamJson(stdout);
+      expect(parsed.resultText).toBe(
+        "The dragon roars! [[DAMAGE:3d6 TARGET:Grimbold REASON:fire breath]]",
+      );
+    });
+
     test("handles multiple tool uses across turns", () => {
       const stdout = [
         '{"type":"assistant","message":{"content":[{"type":"tool_use","name":"Glob","input":{"pattern":"dm-notes/*"}},{"type":"tool_use","name":"Read","input":{"file_path":"dm-notes/world.md"}}]}}',
