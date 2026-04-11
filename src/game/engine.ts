@@ -148,6 +148,7 @@ async function processTurnInner(
   }
 
   // Run the orchestrator loop
+  const restCountBefore = gameState.longRestCount ?? 0;
   log.info("Orchestrator loop starting");
   await orchestratorLoop(gameState, channel);
   log.info("Orchestrator loop finished");
@@ -156,6 +157,7 @@ async function processTurnInner(
   await saveGameState(gameState);
 
   // Compress narrative if needed
+  let compressed = false;
   if (gameState.turnCount % COMPRESS_EVERY === 0) {
     log.info(`Compressing narrative (turn ${gameState.turnCount})`);
     const history = await loadHistory(gameState.id);
@@ -165,6 +167,20 @@ async function processTurnInner(
     gameState.sceneState = result.sceneState;
     await saveGameState(gameState);
     log.info("Narrative compressed");
+    compressed = true;
+  }
+
+  // Also compress after long rest — major time-of-day change that must update sceneState
+  const longRestOccurred = (gameState.longRestCount ?? 0) > restCountBefore;
+  if (longRestOccurred && !compressed) {
+    log.info("Compressing narrative after long rest");
+    const history = await loadHistory(gameState.id);
+    const canonicalFacts = await loadCanonicalFacts(gameState.id);
+    const result = await compressNarrative(gameState, history, canonicalFacts);
+    gameState.narrativeSummary = result.narrativeSummary;
+    gameState.sceneState = result.sceneState;
+    await saveGameState(gameState);
+    log.info("Narrative compressed after long rest");
   }
 }
 

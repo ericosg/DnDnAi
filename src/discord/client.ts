@@ -11,7 +11,16 @@ import {
 } from "discord.js";
 import { loadAgentPersonality } from "../ai/agent.js";
 import { chatAgentic } from "../ai/claude.js";
-import { dmAsk, dmLook, dmNarrate, dmPause, dmRecap, dmResume } from "../ai/dm.js";
+import {
+  compressNarrative,
+  dmAsk,
+  dmLook,
+  dmNarrate,
+  dmPause,
+  dmRecap,
+  dmResume,
+  loadCanonicalFacts,
+} from "../ai/dm.js";
 import { BLUEPRINT_FORMAT } from "../ai/dm-prompt.js";
 import { buildHelpPrompt, HELP_ALLOWED_TOOLS } from "../ai/help-prompt.js";
 import { config, models, VERSION } from "../config.js";
@@ -903,8 +912,16 @@ THEN — narrate a compelling opening scene that brings these characters togethe
         return;
       }
 
-      // Ask the DM to dump full context to dm-notes before pausing
+      // Refresh narrative context before pausing — ensures sceneState is current
       const history = await loadHistory(gameState.id);
+      const prePauseCanonical = await loadCanonicalFacts(gameState.id);
+      const prePauseCompressed = await compressNarrative(gameState, history, prePauseCanonical);
+      gameState.narrativeSummary = prePauseCompressed.narrativeSummary;
+      gameState.sceneState = prePauseCompressed.sceneState;
+      await saveGameState(gameState);
+      log.info("Narrative compressed before pause");
+
+      // Ask the DM to dump full context to dm-notes before pausing
       const rawResponse = await dmPause(gameState, history);
 
       // Process any directives (unlikely but consistent with other DM calls)
@@ -990,6 +1007,19 @@ THEN — narrate a compelling opening scene that brings these characters togethe
           systemEmbed("Game Resumed", `The adventure continues at turn ${gameState.turnCount}!`),
         ],
       });
+
+      // Refresh narrative context after resume — ensures sceneState reflects the resumed scene
+      const postResumeHistory = await loadHistory(gameState.id);
+      const postResumeCanonical = await loadCanonicalFacts(gameState.id);
+      const postResumeCompressed = await compressNarrative(
+        gameState,
+        postResumeHistory,
+        postResumeCanonical,
+      );
+      gameState.narrativeSummary = postResumeCompressed.narrativeSummary;
+      gameState.sceneState = postResumeCompressed.sceneState;
+      await saveGameState(gameState);
+      log.info("Narrative compressed after resume");
 
       // Resume the orchestrator to handle any pending AI turns
       resumeOrchestrator(gameState.id, channel);

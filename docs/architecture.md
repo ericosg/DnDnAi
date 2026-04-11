@@ -121,7 +121,7 @@ Has an AI-powered `classifyMessage()` fallback for ambiguous IC/OOC detection, b
 
 The current player actions go in the user message, not the system prompt.
 
-Separate functions for different DM tasks: `dmNarrate()` (main resolution), `dmRecap()` (story summary), `dmLook()` (environment description), `dmAsk()` (OOC player questions), `compressNarrative()` (periodic summarization).
+Separate functions for different DM tasks: `dmNarrate()` (main resolution), `dmRecap()` (story summary), `dmLook()` (environment description), `dmAsk()` (OOC player questions), `compressNarrative()` (periodic summarization — every 6 turns, plus on `/pause`, `/resume`, and after long rests).
 
 **guardrail.ts** / **guardrail-check.ts** — AI output enforcement via Haiku checks. Two guardrails run before any AI output reaches Discord:
 

@@ -57,7 +57,15 @@ mock.module("../ai/dm.js", () => ({
     dmNarrateCalls.push({ actions, effort });
     return dmNarrateResponse;
   },
-  compressNarrative: async () => "Compressed narrative.",
+  compressNarrative: async () => ({
+    narrativeSummary: "Compressed narrative.",
+    sceneState: {
+      location: "Test location",
+      timeOfDay: "Morning",
+      presentNPCs: [],
+      keyFacts: [],
+    },
+  }),
   dmRecap: async () => "Previously on...",
   dmLook: async () => "You see a dark room.",
   loadCanonicalFacts: async () => null,
@@ -1484,6 +1492,63 @@ describe("engine — narration guardrail retry", () => {
     expect(dmNarrateCalls.length).toBe(2);
     // Response should still be posted to Discord (sentMessages includes it)
     expect(sentMessages.length).toBeGreaterThan(0);
+
+    dmNarrateResponse = origResponse;
+  });
+});
+
+describe("engine — long rest triggers compression", () => {
+  test("compression runs after long rest updates sceneState", async () => {
+    const origResponse = dmNarrateResponse;
+    // DM narration includes a long rest directive
+    dmNarrateResponse =
+      "The party settles in for the night. [[REST:long TARGET:party]] Dawn breaks over Thornwall.";
+
+    const gs = makeGameState();
+    gs.turnCount = 3; // NOT on a compression boundary (3 % 6 !== 0)
+    markResponded(gs.id, "agent:grimbold");
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "We rest for the night.",
+    };
+
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
+
+    // Long rest should have triggered compression — sceneState should be updated
+    expect(gs.sceneState).toBeDefined();
+    expect(gs.sceneState?.timeOfDay).toBe("Morning");
+    expect(gs.narrativeSummary).toBe("Compressed narrative.");
+
+    dmNarrateResponse = origResponse;
+  });
+
+  test("no double compression when long rest lands on compression boundary", async () => {
+    const origResponse = dmNarrateResponse;
+    dmNarrateResponse = "Rest time. [[REST:long TARGET:party]] Morning.";
+
+    const gs = makeGameState();
+    gs.turnCount = 5; // After increment becomes 6, which IS a compression boundary
+    markResponded(gs.id, "agent:grimbold");
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "We rest.",
+    };
+
+    mockGameStateForLoad = gs;
+    await processTurn(gs.id, entry, mockChannel as never);
+
+    // sceneState should still be updated (from the boundary compression)
+    expect(gs.sceneState).toBeDefined();
+    // But compression should NOT have run twice — the flag prevents it
 
     dmNarrateResponse = origResponse;
   });

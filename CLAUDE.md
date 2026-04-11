@@ -39,7 +39,7 @@ TypeScript + Bun runtime, discord.js for Discord, Claude CLI for AI (uses Pro/Ma
 6. For agents: after generating, `ai/guardrail.ts` (Haiku) checks the response isn't inventing world facts. If it is, the agent re-generates with feedback.
 7. For DM: `ai/dm.ts` generates narration with a 7-layer prompt (identity, file paths, canonical facts, scene state, DM context, campaign blueprint, party info — plus combat/history layers), then checks for narration quality (rejects tool-meta-only responses like "Updated dm-notes."), then `ai/guardrail.ts` (Haiku) checks for player agency violations before posting. If the DM narrated/controlled a PC, it re-generates with feedback. The DM also pushes back on player overreach (humans or agents declaring world facts). `game/directives.ts` processes all directives as a pure function: dice (`[[ROLL:...]]`), damage/heal (`[[DAMAGE:...]]`, `[[HEAL:...]]`), state corrections (`[[UPDATE_HP:...]]`, `[[UPDATE_CONDITION:...]]`), tabletop dice (`[[REQUEST_ROLL:...]]`), resources (`[[SPELL:...]]`, `[[USE:...]]`, `[[CONCENTRATE:...]]`), conditions (`[[CONDITION:...]]`), XP (`[[XP:...]]`), inventory (`[[INVENTORY:ADD/REMOVE ...]]`), gold (`[[GOLD:...]]`), rest (`[[REST:long/short TARGET:party]]`), and combat signals (`[[COMBAT:START/END]]`). After combat HP/condition changes, an auto status embed is posted. The DM always narrates roll outcomes and prompts who goes next.
 8. After DM resolves, the round clears and the cycle restarts
-9. State auto-persists to JSON after every turn; narrative compresses every 6 turns using Sonnet
+9. State auto-persists to JSON after every turn; narrative compresses every 6 turns using Sonnet (also on `/pause`, `/resume`, and after long rests to keep sceneState fresh)
 
 ### AI Model Assignment
 
@@ -93,7 +93,7 @@ Configurable via `NARRATIVE_STYLE` env var (`concise`, `standard`, `elaborate`).
 
 The bot is fully resumable across restarts. All game state persists to JSON; AI calls are stateless. On startup, `autoResume()` in `discord/client.ts` scans for active games, posts a startup greeting embed in each game's channel, and runs the orchestrator loop via `resumeOrchestrator()` in `game/engine.ts` to prompt any pending AI agent turns. This prevents deadlocks where AI agents would never act after a restart mid-combat. No `/start` command is needed to resume — the bot auto-detects and continues.
 
-**Graceful pause/resume**: `/pause` asks the DM to dump full context (scene state, secret plans, foreshadowing, character arcs) to `dm-notes/resume.md` before setting `status = "paused"`. Paused games are excluded from `autoResume()`. `/resume` reactivates the game, asks the DM to reload context from dm-notes, and resumes the orchestrator. The DM prompt builders (`buildPausePrompt`, `buildResumePrompt` in `dm-prompt.ts`) instruct the DM to read/write specific note files.
+**Graceful pause/resume**: `/pause` compresses the narrative (refreshing sceneState), then asks the DM to dump full context (scene state, secret plans, foreshadowing, character arcs) to `dm-notes/resume.md` before setting `status = "paused"`. Paused games are excluded from `autoResume()`. `/resume` reactivates the game, asks the DM to reload context from dm-notes (generating a campaign blueprint if none exists), narrates the resumption, then compresses again to ensure sceneState is current. The DM prompt builders (`buildPausePrompt`, `buildResumePrompt` in `dm-prompt.ts`) instruct the DM to read/write specific note files.
 
 ### Persistence
 
