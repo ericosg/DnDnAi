@@ -85,16 +85,20 @@ export function createBot(): Client {
       await handleCommand(interaction);
     } catch (err) {
       log.error("Command error:", err);
-      if (interaction.replied || interaction.deferred) {
-        await interaction.followUp({
-          content: "Something went wrong.",
-          flags: MessageFlags.Ephemeral,
-        });
-      } else {
-        await interaction.reply({
-          content: "Something went wrong.",
-          flags: MessageFlags.Ephemeral,
-        });
+      try {
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp({
+            content: "Something went wrong.",
+            flags: MessageFlags.Ephemeral,
+          });
+        } else {
+          await interaction.reply({
+            content: "Something went wrong.",
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      } catch (discordErr) {
+        log.error("Failed to send error response to Discord:", discordErr);
       }
     }
   });
@@ -376,7 +380,9 @@ Requirements for the blueprint:
 - Each boss should have a lair/environment that affects the encounter
 - Escalation triggers should feel natural — villains acting on their own agenda, not punishing players
 - Connect the premise to at least one party member's backstory if possible
-- Keep the ENTIRE blueprint under 2000 words
+- Every milestone must have an XP reward (amount per player) — scale XP so players advance ~1 level per act
+- Include 3-6 side quests with hooks, objectives, and XP rewards — optional content that enriches the world
+- Keep the ENTIRE blueprint under 2500 words
 
 Creative direction for boss encounters — make them EPIC:
 - Bosses should escalate in power and horror through the villain hierarchy (lieutenant → commander → mastermind)

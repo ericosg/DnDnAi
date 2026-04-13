@@ -15,37 +15,6 @@ interface ChatMessage {
 
 const MAX_RETRIES = 3;
 const BASE_DELAY = 1000;
-const TIMEOUT_SIMPLE_MS = 2 * 60 * 1000; // 2 min
-const TIMEOUT_AGENTIC_MS = 5 * 60 * 1000; // 5 min
-
-interface WaitResult {
-  exitCode: number;
-  timedOut: boolean;
-}
-
-/** Race proc.exited against a timeout. On timeout, kills the process. */
-async function waitWithTimeout(
-  proc: { exited: Promise<number>; kill: (signal?: number) => void },
-  timeoutMs: number,
-): Promise<WaitResult> {
-  let killed = false;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-
-  const timeoutPromise = new Promise<WaitResult>((resolve) => {
-    timer = setTimeout(() => {
-      killed = true;
-      proc.kill();
-      resolve({ exitCode: -1, timedOut: true });
-    }, timeoutMs);
-  });
-
-  const exitPromise = proc.exited.then((code) => {
-    clearTimeout(timer);
-    return { exitCode: code, timedOut: killed } as WaitResult;
-  });
-
-  return Promise.race([exitPromise, timeoutPromise]);
-}
 
 export async function chat(
   model: string,
@@ -70,15 +39,9 @@ export async function chat(
         env,
       });
 
-      const { exitCode, timedOut } = await waitWithTimeout(proc, TIMEOUT_SIMPLE_MS);
+      const exitCode = await proc.exited;
       const stdout = await new Response(proc.stdout).text();
       const stderr = await new Response(proc.stderr).text();
-
-      if (timedOut) {
-        const msg = `Claude CLI timeout after ${TIMEOUT_SIMPLE_MS / 1000}s`;
-        log.error(msg);
-        throw new RetryableError(msg);
-      }
 
       if (exitCode !== 0) {
         const msg = extractFailureDiagnostics(stdout, stderr, exitCode, false);
@@ -134,16 +97,9 @@ export async function chatAgentic(
         env,
       });
 
-      const { exitCode, timedOut } = await waitWithTimeout(proc, TIMEOUT_AGENTIC_MS);
+      const exitCode = await proc.exited;
       const stdout = await new Response(proc.stdout).text();
       const stderr = await new Response(proc.stderr).text();
-
-      if (timedOut) {
-        const diag = extractFailureDiagnostics(stdout, stderr, exitCode, true);
-        const msg = `Claude CLI timeout after ${TIMEOUT_AGENTIC_MS / 1000}s | ${diag}`;
-        log.error(msg);
-        throw new RetryableError(msg);
-      }
 
       if (exitCode !== 0) {
         const msg = extractFailureDiagnostics(stdout, stderr, exitCode, true);
