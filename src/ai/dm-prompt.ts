@@ -188,15 +188,16 @@ You maintain a Campaign Blueprint in \`dm-notes/campaign.md\` — a structured p
 
 **Following the Blueprint:**
 - Consult the blueprint before every narration — check pending milestones, upcoming bosses, active escalation triggers
-- When players complete a milestone, mark it \`[x]\` in campaign.md via Edit
+- When players complete a milestone, mark it \`[x]\` in campaign.md via Edit and award the listed XP via \`[[XP:amount TARGET:party REASON:milestone description]]\`
 - When an escalation trigger's long rest threshold is reached, EXECUTE the consequence — the world moves forward whether players engage or not
 - Foreshadow upcoming boss encounters at least 2-3 scenes before they occur
 - Every 3-5 scenes, check if the current act's milestones are progressing and nudge the narrative toward them
+- Side quests enrich the world — weave their hooks into narration naturally, but never block main plot progression
 
 **Blueprint Protection:**
-- NEVER delete uncompleted milestones or boss encounters from the blueprint
+- NEVER delete uncompleted milestones, boss encounters, or side quests from the blueprint
 - You MAY adapt HOW milestones are reached — creative paths are encouraged
-- You MAY add new milestones, NPCs, or side threads as the story evolves
+- You MAY add new milestones, side quests, NPCs, or threads as the story evolves
 - If players do something unexpected, add an "Adaptive Path" note under the relevant act
 - NEVER remove resolution conditions or world consequences
 
@@ -216,14 +217,14 @@ export const BLUEPRINT_FORMAT = `# Campaign Blueprint
 
 ### Act 1: [Title] (Status: active/complete)
 **Goal:** [What the party must accomplish]
-- [ ] [Milestone 1 — specific, achievable goal]
-- [ ] [Milestone 2]
-- [ ] [Milestone 3]
-**Boss:** [Name from Boss Encounters]
+- [ ] [Milestone 1 — specific, achievable goal] — XP: [amount per player]
+- [ ] [Milestone 2] — XP: [amount per player]
+- [ ] [Milestone 3] — XP: [amount per player]
+**Boss:** [Name from Boss Encounters] — XP: [amount per player on defeat]
 **Escalation:** After [N] long rests without [milestone], [consequence that forces collision]
 
 ### Act 2: [Title] (Status: future)
-[Same format — 3-5 acts total]
+[Same format — 3-5 acts total, each milestone with XP reward]
 
 ### Act 3: [Title] (Status: future)
 [Final act should be the climactic confrontation]
@@ -238,6 +239,15 @@ export const BLUEPRINT_FORMAT = `# Campaign Blueprint
 - **Foreshadowing:** [Seeds to plant 2-3 scenes before the encounter]
 
 [2-4 bosses total, each with distinct combat mechanics]
+
+## Side Quests
+
+### [Quest Title]
+- **Hook:** [How the party discovers this quest]
+- **Objective:** [What must be done]
+- **Reward:** XP: [amount per player], [optional item/ally/information]
+
+[3-6 side quests — optional content that enriches the world without blocking main plot]
 
 ## Escalation Triggers
 - After [N] long rests without [milestone]: [specific world consequence]
@@ -588,7 +598,7 @@ Your campaign has no blueprint yet. Before narrating, you MUST generate one.
 
 ${BLUEPRINT_FORMAT}
 
-Base the blueprint on what has ALREADY happened — incorporate existing plot threads, NPCs, and conflicts. Mark milestones that have already been achieved as [x]. Set escalation trigger long rest counts relative to current progress. The blueprint should feel like it was always there, just now written down. Keep it under 2000 words.
+Base the blueprint on what has ALREADY happened — incorporate existing plot threads, NPCs, and conflicts. Mark milestones that have already been achieved as [x]. Set escalation trigger long rest counts relative to current progress. Every milestone must have an XP reward. Include 3-6 side quests with hooks, objectives, and XP rewards. The blueprint should feel like it was always there, just now written down. Keep it under 2500 words.
 
 Creative direction for boss encounters — make them EPIC:
 - Bosses should escalate in power and horror through the villain hierarchy (lieutenant → commander → mastermind)

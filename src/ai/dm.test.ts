@@ -1033,6 +1033,21 @@ describe("Campaign Blueprint — prompt injection", () => {
     expect(BLUEPRINT_FORMAT).toContain("Combat Style");
     expect(BLUEPRINT_FORMAT).toContain("Foreshadowing");
   });
+
+  test("BLUEPRINT_FORMAT contains XP rewards and side quests", () => {
+    const { BLUEPRINT_FORMAT } = require("./dm-prompt.js");
+    expect(BLUEPRINT_FORMAT).toContain("XP:");
+    expect(BLUEPRINT_FORMAT).toContain("Side Quests");
+    expect(BLUEPRINT_FORMAT).toContain("Hook:");
+    expect(BLUEPRINT_FORMAT).toContain("Objective:");
+    expect(BLUEPRINT_FORMAT).toContain("Reward:");
+  });
+
+  test("DM_IDENTITY mentions XP awards for milestones", () => {
+    expect(DM_IDENTITY).toContain("[[XP:");
+    expect(DM_IDENTITY).toContain("award the listed XP");
+    expect(DM_IDENTITY).toContain("Side quests enrich");
+  });
 });
 
 describe("parseSceneState", () => {
