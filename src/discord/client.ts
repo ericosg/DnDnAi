@@ -179,6 +179,21 @@ async function autoResume(client: Client): Promise<void> {
         `Posted startup greeting for game ${gameState.id} in channel ${gameState.channelId}`,
       );
 
+      // Retrofit agent memory for in-flight games that predate the memory module.
+      // Must complete BEFORE resumeOrchestrator prompts any agent, otherwise
+      // agents act without memory on the first post-restart turn.
+      if (!agentNotesDirExists(gameState.id)) {
+        log.info(
+          `Agent notes directory missing for ${gameState.id} — running one-time retrofit seed`,
+        );
+        try {
+          const history = await loadHistory(gameState.id);
+          await seedAllAgentMemories(gameState, history);
+        } catch (err) {
+          log.error(`Retrofit seed failed on auto-resume for ${gameState.id}:`, err);
+        }
+      }
+
       // Kick off the orchestrator to resume pending AI turns
       resumeOrchestrator(gameState.id, textChannel);
     } catch (err) {
