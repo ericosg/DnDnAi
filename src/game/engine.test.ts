@@ -14,6 +14,7 @@ mock.module("../config.js", () => ({
   AGENT_DELAY_MS: 0,
   DATA_DIR: "data/games",
   AGENTS_DIR: "agents",
+  AGENT_NOTES_DIR: "agent-notes",
   NARRATIVE_STYLE: "concise",
   STYLE_INSTRUCTIONS: {
     concise: { dm: "", agent: "" },
@@ -24,6 +25,7 @@ mock.module("../config.js", () => ({
 
 mock.module("../ai/claude.js", () => ({
   chat: async () => "mocked",
+  chatAgentic: async () => "mocked",
 }));
 
 // Mock external dependencies
@@ -68,6 +70,7 @@ mock.module("../ai/dm.js", () => ({
   }),
   dmRecap: async () => "Previously on...",
   dmLook: async () => "You see a dark room.",
+  dmAsk: async () => "The DM answers.",
   loadCanonicalFacts: async () => null,
 }));
 
@@ -126,6 +129,9 @@ mock.module("../discord/webhooks.js", () => ({
 mock.module("../discord/formatter.js", () => ({
   formatDMNarration: (text: string) => `---\n${text}\n---`,
   combatStatusEmbed: () => ({ data: {} }),
+  whisperEmbed: (from: string, to: string, msg: string) => ({
+    data: { from, to, msg },
+  }),
 }));
 
 let dmGuardrailResponses: { pass: boolean; violation?: string }[] = [];
@@ -1805,5 +1811,183 @@ describe("engine — stale entry edge cases", () => {
     // Should have triggered the orchestrator (agent + DM calls)
     expect(agentActionCalls.length).toBeGreaterThanOrEqual(1);
     expect(dmNarrateCalls.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe("engine — agent action directives (PASS, ASK, LOOK, WHISPER)", () => {
+  test("agent [[PASS]] posts the holds-action placeholder", async () => {
+    agentResponse = "[[PASS]]";
+    const gs = makeGameState();
+    mockGameStateForLoad = gs;
+
+    const entry: TurnEntry = {
+      id: 1,
+      timestamp: new Date().toISOString(),
+      playerId: "human1",
+      playerName: "Fusetsu",
+      type: "ic",
+      content: "I wait.",
+    };
+    await processTurn(gs.id, entry, mockChannel as never);
+
+    // Agent webhook posted the placeholder (NOT the raw "[[PASS]]")
+    const grimboldMessages = sentMessages.filter((m) => m.name === "Grimbold");
+    expect(grimboldMessages.length).toBe(1);
+    expect(grimboldMessages[0].content).toContain("holds their action");
+    expect(grimboldMessages[0].content).not.toContain("[[PASS]]");
+
+    // The recorded history entry for the agent uses the passed placeholder
+    const agentEntries = appendedHistory.filter((e) => e.playerId === "agent:grimbold");
+    expect(agentEntries.length).toBeGreaterThanOrEqual(1);
+    expect(agentEntries[0].content).not.toContain("[[PASS]]");
+  });
+
+  test("agent [[PASS]] with surrounding IC keeps the IC flavor only", async () => {
+    agentResponse = "*Grimbold keeps watch.* [[PASS]]";
+    const gs = makeGameState();
+    mockGameStateForLoad = gs;
+
+    await processTurn(
+      gs.id,
+      {
+        id: 1,
+        timestamp: new Date().toISOString(),
+        playerId: "human1",
+        playerName: "Fusetsu",
+        type: "ic",
+        content: "I wait.",
+      },
+      mockChannel as never,
+    );
+
+    const agentMsg = sentMessages.find((m) => m.name === "Grimbold");
+    expect(agentMsg?.content).toBe("*Grimbold keeps watch.*");
+  });
+
+  test("agent [[ASK:...]] posts DM answer and records system history entry", async () => {
+    agentResponse = "I pause to think. [[ASK:can I use Second Wind right now?]]";
+    const gs = makeGameState();
+    mockGameStateForLoad = gs;
+
+    await processTurn(
+      gs.id,
+      {
+        id: 1,
+        timestamp: new Date().toISOString(),
+        playerId: "human1",
+        playerName: "Fusetsu",
+        type: "ic",
+        content: "I wait.",
+      },
+      mockChannel as never,
+    );
+
+    // IC text stripped of directive
+    const agentMsg = sentMessages.find((m) => m.name === "Grimbold");
+    expect(agentMsg?.content).toBe("I pause to think.");
+
+    // DM webhook posted an OOC answer
+    const dmMessages = sentMessages.filter((m) => m.name === "Dungeon Master");
+    const askAnswer = dmMessages.find((m) => m.content.includes("OOC —"));
+    expect(askAnswer).toBeTruthy();
+    expect(askAnswer?.content).toContain("can I use Second Wind");
+    expect(askAnswer?.content).toContain("The DM answers.");
+
+    // System history captures the exchange
+    const sysEntry = appendedHistory.find(
+      (e) => e.type === "system" && e.content.includes("/ask from"),
+    );
+    expect(sysEntry).toBeTruthy();
+  });
+
+  test("agent [[LOOK:target]] posts DM description as narration", async () => {
+    agentResponse = "[[LOOK:the stone altar]]";
+    const gs = makeGameState();
+    mockGameStateForLoad = gs;
+
+    await processTurn(
+      gs.id,
+      {
+        id: 1,
+        timestamp: new Date().toISOString(),
+        playerId: "human1",
+        playerName: "Fusetsu",
+        type: "ic",
+        content: "I wait.",
+      },
+      mockChannel as never,
+    );
+
+    // Agent had no residual IC content, so no agent message posted (no PASS fallback)
+    const agentMessages = sentMessages.filter((m) => m.name === "Grimbold");
+    expect(agentMessages.length).toBe(0);
+
+    // DM description posted
+    const lookMsg = sentMessages.find(
+      (m) => m.name === "Dungeon Master" && m.content.includes("dark room"),
+    );
+    expect(lookMsg).toBeTruthy();
+
+    // System history captures the look
+    const sysEntry = appendedHistory.find(
+      (e) => e.type === "system" && e.content.includes("/look from"),
+    );
+    expect(sysEntry).toBeTruthy();
+    expect(sysEntry?.content).toContain("stone altar");
+  });
+
+  test("agent [[WHISPER:]] to human target records whisper entry with whisperTo", async () => {
+    agentResponse = "[[WHISPER:Fusetsu TEXT:hold position, I'll flank left]]";
+    const gs = makeGameState();
+    mockGameStateForLoad = gs;
+
+    // channel.client.users.fetch is not on mockChannel — the handler catches the
+    // failure and still writes history (best-effort Discord delivery).
+    await processTurn(
+      gs.id,
+      {
+        id: 1,
+        timestamp: new Date().toISOString(),
+        playerId: "human1",
+        playerName: "Fusetsu",
+        type: "ic",
+        content: "I wait.",
+      },
+      mockChannel as never,
+    );
+
+    const whisperEntry = appendedHistory.find((e) => e.type === "whisper");
+    expect(whisperEntry).toBeTruthy();
+    expect(whisperEntry?.playerId).toBe("agent:grimbold");
+    expect(whisperEntry?.content).toBe("hold position, I'll flank left");
+    expect(whisperEntry?.whisperTo).toBe("human1");
+  });
+
+  test("agent with plain IC response (no directives) still posts IC", async () => {
+    agentResponse = "I draw my warhammer and step forward.";
+    const gs = makeGameState();
+    mockGameStateForLoad = gs;
+
+    await processTurn(
+      gs.id,
+      {
+        id: 1,
+        timestamp: new Date().toISOString(),
+        playerId: "human1",
+        playerName: "Fusetsu",
+        type: "ic",
+        content: "I wait.",
+      },
+      mockChannel as never,
+    );
+
+    const agentMsg = sentMessages.find((m) => m.name === "Grimbold");
+    expect(agentMsg?.content).toBe("I draw my warhammer and step forward.");
+
+    // No whisper or ask history entries
+    expect(appendedHistory.filter((e) => e.type === "whisper")).toHaveLength(0);
+    expect(
+      appendedHistory.filter((e) => e.type === "system" && e.content.includes("/ask from")),
+    ).toHaveLength(0);
   });
 });

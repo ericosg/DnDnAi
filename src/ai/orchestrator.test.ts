@@ -4,6 +4,7 @@ import type { GameState, Player, TurnEntry } from "../state/types.js";
 // Mock the claude module to avoid config/API dependency
 mock.module("./claude.js", () => ({
   chat: async () => '{"action":"skip","reason":"mocked","isIC":false}',
+  chatAgentic: async () => "mocked",
 }));
 
 // Mock config to avoid env var requirement
@@ -22,6 +23,7 @@ mock.module("../config.js", () => ({
   AGENT_DELAY_MS: 0,
   DATA_DIR: "data/games",
   AGENTS_DIR: "agents",
+  AGENT_NOTES_DIR: "agent-notes",
   NARRATIVE_STYLE: "concise",
   STYLE_INSTRUCTIONS: {
     concise: { dm: "", agent: "" },

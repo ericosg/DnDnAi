@@ -263,7 +263,7 @@ export const BLUEPRINT_FORMAT = `# Campaign Blueprint
 - **Bittersweet:** [A mixed outcome that's still satisfying]`;
 
 /** Build a compact mechanical reference for a character, for the DM to consult. */
-function buildCharacterReference(cs: import("../state/types.js").CharacterSheet): string {
+export function buildCharacterReference(cs: import("../state/types.js").CharacterSheet): string {
   const mod = (score: number) => {
     const m = Math.floor((score - 10) / 2);
     return m >= 0 ? `+${m}` : `${m}`;

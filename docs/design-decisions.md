@@ -66,6 +66,24 @@ Every AI call (DM, agent, orchestrator) is a fresh API call with no conversation
 
 The narrative compression system (every 6 turns, Sonnet summarizes recent events) mitigates the memory loss. The full history is always saved to disk for potential future retrieval-augmented approaches.
 
+## Why Persistent Per-Agent Memory?
+
+Stateless calls apply to the DM and orchestrator cleanly — the DM has the full `dm-notes/` directory to compensate. Agents originally had nothing equivalent, so after a dozen turns they genuinely forgot who they are, what they carry, and what they've done. Over a multi-session campaign the drift was severe: Nyx kept trying to cast a cantrip she doesn't have; Grimbold lost track of gifts he had been given.
+
+The fix is `data/games/<id>/agent-notes/<slug>.md` — a first-person memory file per AI agent, auto-seeded when they join (or retrofit-seeded from full history + DM's character notes on `/resume` of an in-flight game). Each agent runs agentically with Read+Edit tools scoped to its own memory file and updates it after meaningful events. The DM can also force-commit entries mid-turn via `[[REMEMBER:Name TEXT:...]]` for corrections or key beats.
+
+This preserves the stateless call model — the memory is rebuilt from disk each turn, not retained in a conversation — while giving agents durable continuity across sessions.
+
+## Why Agent Player-Parity?
+
+Human players have `/pass`, `/ask`, `/look`, `/whisper`, `/character`, `/inventory`, `/status`, `/recap`. Agents originally had none of these — they could only produce IC narration. This was functionally sub-par: an AI agent couldn't pass cleanly, couldn't ask the DM a rules question, couldn't whisper a tactical idea to a party member, and never knew their own inventory beyond what the prompt happened to include.
+
+The resolution uses two mechanisms:
+- **Directives for active commands**: `[[PASS]]`, `[[ASK:q]]`, `[[LOOK:target]]`, `[[WHISPER:Name TEXT:msg]]`. The agent emits these inline; the engine strips them and executes the side effects (call `dmAsk`, post answer, DM whisper targets, etc.).
+- **Prompt enrichment for passive queries**: `/character`, `/inventory`, `/status`, `/recap` don't need directives — the agent's turn prompt includes its own full character sheet, party HP/conditions, narrative summary, and scene state on every call.
+
+Agents stay restricted from DM-only directives (HP, XP, rest, combat signals, REMEMBER, ACTIVATE). The same trust model as the DM applies to agents, but with an explicit "Information Boundaries" block forbidding reads of `src/`, `docs/`, `dm-notes/`, and other characters' files.
+
 ## Why JSON Files Instead of a Database?
 
 - Human-readable — you can open `state.json` and see exactly what the game state is

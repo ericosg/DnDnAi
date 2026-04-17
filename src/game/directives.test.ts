@@ -916,4 +916,78 @@ describe("ACTIVATE directives", () => {
     expect(ctx.processedText).toContain("*Sprocket joins the party!*");
     expect(ctx.processedText).toContain("*Whiskers joins the party!*");
   });
+
+  test("activatedAgents records newly activated names", () => {
+    const gs = makeExplorationState();
+    gs.players.push(makeDormantAgent());
+    const ctx = processDirectives("[[ACTIVATE:Sprocket]]", gs);
+    expect(ctx.activatedAgents).toEqual(["Sprocket"]);
+  });
+
+  test("activatedAgents empty when no activation happened", () => {
+    const gs = makeExplorationState();
+    const ctx = processDirectives("no directives here", gs);
+    expect(ctx.activatedAgents).toEqual([]);
+  });
+});
+
+describe("directives — REMEMBER", () => {
+  test("parses a single REMEMBER directive for a known agent", () => {
+    const gs = makeExplorationState();
+    const ctx = processDirectives(
+      "[[REMEMBER:Grimbold Ironforge TEXT:I forged the blades at the stone altar.]]",
+      gs,
+    );
+    expect(ctx.memoryAppends).toEqual([
+      { name: "Grimbold Ironforge", text: "I forged the blades at the stone altar." },
+    ]);
+    expect(ctx.processedText).not.toContain("[[REMEMBER:");
+  });
+
+  test("matches agent name case-insensitively", () => {
+    const gs = makeExplorationState();
+    const ctx = processDirectives("[[REMEMBER:grimbold ironforge TEXT:Testing.]]", gs);
+    expect(ctx.memoryAppends).toHaveLength(1);
+    expect(ctx.memoryAppends[0].name).toBe("Grimbold Ironforge");
+  });
+
+  test("multi-line TEXT payloads are captured", () => {
+    const gs = makeExplorationState();
+    const ctx = processDirectives(
+      "[[REMEMBER:Grimbold Ironforge TEXT:First line.\nSecond line.]]",
+      gs,
+    );
+    expect(ctx.memoryAppends[0].text).toBe("First line.\nSecond line.");
+  });
+
+  test("unknown agent logs warning and is stripped (no append)", () => {
+    const gs = makeExplorationState();
+    const ctx = processDirectives("[[REMEMBER:Nobody TEXT:ghost entry]]", gs);
+    expect(ctx.memoryAppends).toEqual([]);
+    expect(ctx.processedText).not.toContain("[[REMEMBER:");
+  });
+
+  test("human player is not a valid target (agents only)", () => {
+    const gs = makeExplorationState();
+    const ctx = processDirectives("[[REMEMBER:Fusetsu TEXT:humans don't have memory files]]", gs);
+    expect(ctx.memoryAppends).toEqual([]);
+  });
+
+  test("multiple REMEMBER directives in one message", () => {
+    const gs = makeExplorationState();
+    // Add a second agent
+    gs.players.push({
+      ...makeAgent(),
+      id: "agent:nyx",
+      name: "Nyx",
+      characterSheet: { ...makeAgent().characterSheet, name: "Nyx Namfoodle" },
+      agentFile: "nyx.md",
+    });
+    const ctx = processDirectives(
+      "[[REMEMBER:Grimbold Ironforge TEXT:entry one]] and [[REMEMBER:Nyx Namfoodle TEXT:entry two]]",
+      gs,
+    );
+    expect(ctx.memoryAppends).toHaveLength(2);
+    expect(ctx.memoryAppends.map((m) => m.name)).toEqual(["Grimbold Ironforge", "Nyx Namfoodle"]);
+  });
 });

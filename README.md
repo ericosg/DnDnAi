@@ -151,6 +151,8 @@ A ready-to-use sample is included at [`characters/sample-character.md`](characte
 
 ## Available AI Agents
 
+AI agents run agentically — they have persistent first-person memory across sessions (saved to `data/games/<id>/agent-notes/<slug>.md`) and the same abilities human players do (pass, ask the DM, look, whisper).
+
 Add any of these to your game with `/add-agent <name>`:
 
 | Agent File | Name | Race | Class | Level | Personality |
@@ -187,7 +189,7 @@ flaws:
 goals:
   - Goal one
 avatarUrl: https://example.com/avatar.png  # optional
-model: claude-sonnet-4-20250514             # optional override
+model: claude-sonnet-4-6                    # optional override
 characterSpec: |
   **Name:** Agent Name
   **Strength:** 16

@@ -32,7 +32,7 @@ goals:                         # Character motivations (list)
   - Find the lost forge
   - Protect the party
 avatarUrl: https://...         # Optional Discord avatar URL
-model: claude-sonnet-4-20250514 # Optional model override
+model: claude-sonnet-4-6        # Optional model override
 characterSpec: |               # Full character sheet in markdown
   **Name:** Character Name
   **Strength:** 16
@@ -161,12 +161,43 @@ When someone runs `/add-agent grimbold`:
 Each round, the orchestrator prompts agents in order. For each agent:
 
 1. Engine waits 2.5 seconds (pacing delay)
-2. Loads the agent's personality file
-3. Builds a system prompt with the agent's full personality
-4. Sends recent history + current situation as a user message
-5. Claude generates an in-character response
-6. Response is posted to Discord via the agent's webhook identity
-7. Recorded in game history as an IC turn entry
+2. Loads the agent's personality file + memory file (`data/games/<id>/agent-notes/<slug>.md`)
+3. Builds a system prompt with the agent's full personality + the absolute path to its memory file
+4. Sends recent history + current situation + current memory contents as a user message
+5. Claude runs agentically (Read + Edit tools scoped to its own memory file) and generates an in-character response
+6. If something noteworthy happened, the agent edits its memory file to append a bullet
+7. Response is posted to Discord via the agent's webhook identity
+8. Recorded in game history as an IC turn entry
+
+## Agent Capabilities (Player Parity)
+
+AI agents have the same abilities human players do, exposed as directives:
+
+| Human command | Agent equivalent | Notes |
+|---------------|------------------|-------|
+| `/pass` | `[[PASS]]` | Skip a turn. Optional IC flavor before the directive. |
+| `/ask` | `[[ASK:question]]` | OOC question to the DM, answered publicly. |
+| `/look` | `[[LOOK:target]]` / `[[LOOK]]` | Ask DM to describe a thing or the environment. |
+| `/whisper` | `[[WHISPER:Name TEXT:msg]]` | Private IC message to one party member. |
+| `/character` | (not needed) | Full character sheet is always in the agent's prompt. |
+| `/inventory` | (not needed) | Equipment + gold are in the agent's prompt. |
+| `/status` | (not needed) | Party HP/conditions are in the agent's prompt. |
+| `/recap` | (not needed) | Narrative summary is in the agent's prompt. |
+| `/roll` | (not needed) | When the DM emits `[[REQUEST_ROLL:]]` for an agent, it auto-rolls. |
+| `/rest` | (not available) | Rest is a party-wide decision the DM initiates. |
+
+See `docs/directives.md` for the full syntax reference.
+
+## Agent Memory
+
+Agents have persistent memory across sessions — you don't need to write or maintain it. The engine handles everything automatically:
+
+- **On `/add-agent`**: a starter memory file is created from the character sheet (equipment → "What I Carry", spells/features → "What I Know About Myself", goals → "Bonds & Relationships").
+- **On `[[ACTIVATE:]]`** (dormant agents): same starter template, seeded when the DM brings them into the fiction.
+- **On `/resume`** of a pre-memory-module game: a one-time retrofit runs a Sonnet call per agent, reading the full turn history + the DM's character notes + the character sheet to produce a rich initial memory file.
+- **During play**: the agent edits its own memory file after meaningful events. The DM can also force-commit entries via `[[REMEMBER:AgentName TEXT:first-person bullet]]` — useful for correcting mechanical mistakes or locking in key beats.
+
+Memory files follow a fixed five-section structure: `## What I Remember`, `## What I Carry`, `## What I Know About Myself`, `## Bonds & Relationships`, `## Open Threads`. Written in first person. You can edit them directly in the filesystem if you need to correct something manually — the agent will see the changes on its next turn.
 
 ## Example: Grimbold Ironforge
 

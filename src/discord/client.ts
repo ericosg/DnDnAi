@@ -10,6 +10,7 @@ import {
   type TextChannel,
 } from "discord.js";
 import { loadAgentPersonality } from "../ai/agent.js";
+import { seedAllAgentMemories } from "../ai/agent-memory-seed.js";
 import { chatAgentic } from "../ai/claude.js";
 import {
   compressNarrative,
@@ -24,6 +25,8 @@ import {
 import { BLUEPRINT_FORMAT } from "../ai/dm-prompt.js";
 import { buildHelpPrompt, HELP_ALLOWED_TOOLS } from "../ai/help-prompt.js";
 import { config, models, VERSION } from "../config.js";
+import { applyAgentMemoryEffects } from "../game/agent-memory-effects.js";
+import { agentNotesDirExists, seedAgentNotes } from "../game/agent-notes.js";
 import { addAskExchange, formatAskHistoryForPrompt } from "../game/ask-history.js";
 import { buildAgentCharacter, parseCharacterSheet } from "../game/characters.js";
 import { roll as rollDice } from "../game/dice.js";
@@ -314,6 +317,11 @@ async function handleCommand(interaction: ChatInputCommandInteraction): Promise<
         gameState.players.push(player);
         await saveCharacter(gameState.id, sheet);
         await saveGameState(gameState);
+
+        // Seed agent memory file (dormant agents get seeded on [[ACTIVATE:]] instead)
+        if (!isDormant) {
+          await seedAgentNotes(gameState.id, personality, sheet);
+        }
 
         const dormantNote = isDormant
           ? "\n\n*Dormant — will be introduced when the DM activates them.*"
@@ -666,6 +674,7 @@ THEN — narrate a compelling opening scene that brings these characters togethe
       // Process any directives in the DM's answer (ROLL, DAMAGE, HEAL, etc.)
       const ctx = processDirectives(rawAnswer, gameState);
       const answer = ctx.processedText;
+      await applyAgentMemoryEffects(gameState, ctx);
 
       // Store pending rolls if the DM requested player dice
       if (ctx.pendingRolls.length > 0) {
@@ -933,6 +942,7 @@ THEN — narrate a compelling opening scene that brings these characters togethe
       // Process any directives (unlikely but consistent with other DM calls)
       const ctx = processDirectives(rawResponse, gameState);
       const response = ctx.processedText;
+      await applyAgentMemoryEffects(gameState, ctx);
 
       // Post the DM's farewell/acknowledgment in the channel
       await sendAsIdentity(channel, "Dungeon Master", formatDMNarration(response));
@@ -983,13 +993,22 @@ THEN — narrate a compelling opening scene that brings these characters togethe
       gameState.status = "active";
       await saveGameState(gameState);
 
-      // Ask the DM to reload context from dm-notes and narrate the resumption
+      // Retrofit agent memory for in-flight games that predate the memory module.
+      // Runs once: if the agent-notes/ directory is missing, seed each active AI
+      // agent from full history + DM's character notes + the character sheet.
       const history = await loadHistory(gameState.id);
+      if (!agentNotesDirExists(gameState.id)) {
+        log.info("Agent notes directory missing — running one-time retrofit seed");
+        await seedAllAgentMemories(gameState, history);
+      }
+
+      // Ask the DM to reload context from dm-notes and narrate the resumption
       const rawResponse = await dmResume(gameState, history);
 
       // Process any directives
       const ctx = processDirectives(rawResponse, gameState);
       const response = ctx.processedText;
+      await applyAgentMemoryEffects(gameState, ctx);
       if (response !== rawResponse) {
         await saveGameState(gameState);
       }

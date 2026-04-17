@@ -6,6 +6,7 @@ mock.module("../config.js", () => ({
   models: { dm: "test", agent: "test", orchestrator: "test" },
   DATA_DIR: "data/games",
   AGENTS_DIR: "agents",
+  AGENT_NOTES_DIR: "agent-notes",
   HISTORY_WINDOW: 8,
   COMPRESS_EVERY: 10,
   AGENT_DELAY_MS: 0,
@@ -18,6 +19,7 @@ mock.module("../config.js", () => ({
 }));
 mock.module("../ai/claude.js", () => ({
   chat: async () => "A mocked backstory.",
+  chatAgentic: async () => "A mocked backstory.",
 }));
 
 const { parseCharacterSheet } = await import("./characters.js");

@@ -9,6 +9,9 @@ import type { GameState, TurnEntry } from "../state/types.js";
 mock.module("../config.js", () => ({
   config: { discordToken: "test", guildId: "test" },
   models: { dm: "test-model", agent: "test-model", orchestrator: "test-model" },
+  DATA_DIR: "data/games",
+  AGENTS_DIR: "agents",
+  AGENT_NOTES_DIR: "agent-notes",
   HISTORY_WINDOW: 12,
   COMPRESS_EVERY: 10,
   NARRATIVE_STYLE: "concise",

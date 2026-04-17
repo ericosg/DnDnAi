@@ -12,13 +12,14 @@ export const config = {
 } as const;
 
 export const models = {
-  dm: "claude-opus-4-20250514" as const,
-  agent: "claude-sonnet-4-20250514" as const,
+  dm: "claude-opus-4-7" as const,
+  agent: "claude-sonnet-4-6" as const,
   orchestrator: "claude-haiku-4-5-20251001" as const,
 } as const;
 
 export const DATA_DIR = "data/games";
 export const AGENTS_DIR = "agents";
+export const AGENT_NOTES_DIR = "agent-notes";
 export const HISTORY_WINDOW = 12;
 export const COMPRESS_EVERY = 6;
 export const AGENT_DELAY_MS = 2500;

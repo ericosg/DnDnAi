@@ -10,7 +10,7 @@ import {
 
 describe("claude CLI subprocess", () => {
   describe("buildSpawnArgs", () => {
-    const args = buildSpawnArgs("claude-opus-4-20250514", "You are a DM.", "Describe the room.");
+    const args = buildSpawnArgs("claude-opus-4-7", "You are a DM.", "Describe the room.");
 
     test("starts with claude binary", () => {
       expect(args[0]).toBe("claude");
@@ -25,7 +25,7 @@ describe("claude CLI subprocess", () => {
     test("passes model via --model", () => {
       const idx = args.indexOf("--model");
       expect(idx).toBeGreaterThan(-1);
-      expect(args[idx + 1]).toBe("claude-opus-4-20250514");
+      expect(args[idx + 1]).toBe("claude-opus-4-7");
     });
 
     test("passes system prompt via --system-prompt", () => {

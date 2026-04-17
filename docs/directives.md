@@ -177,6 +177,70 @@ All directives are resolved **before** the message appears in Discord. The DM sh
 - The agent begins receiving turn prompts starting next round
 - Result appears as: `*AgentName joins the party!*`
 - Use when the story naturally calls for the character's introduction
+- **Side effect:** creates the agent's starter memory file at `agent-notes/<slug>.md` if it doesn't already exist
+
+## Agent Action Directives
+
+AI agents (not humans) can emit a small set of directives in their own responses. These mirror the slash commands human players use and are parsed/executed after the agent's response is generated but before it's posted to Discord.
+
+### PASS — Skip a turn
+
+```
+[[PASS]]
+```
+
+- Agent skips its turn (equivalent to human `/pass`)
+- If the agent's IC text is empty after the directive is stripped, the engine posts `*CharacterName holds their action and observes.*` on their behalf
+- Can be combined with brief IC flavor, e.g., `*Grimbold watches the door.* [[PASS]]`
+
+### ASK — OOC question to the DM (agent equivalent of `/ask`)
+
+```
+[[ASK:what does a clockwork puzzle look like in 5e?]]
+```
+
+- Calls `dmAsk()`, posts the DM's answer publicly as OOC, records both in history
+- Can appear alongside an IC action in the same response — the engine posts the IC text first, then the Q&A
+- Multi-line questions are supported
+
+### LOOK — Ask the DM for environmental detail (agent equivalent of `/look`)
+
+```
+[[LOOK:the stone altar]]
+[[LOOK]]
+```
+
+- With a target: DM describes that specific thing. Without: general environment
+- Calls `dmLook()`, posts description as DM narration, records in history
+
+### WHISPER — Private IC message to one party member (agent equivalent of `/whisper`)
+
+```
+[[WHISPER:Fusetsu TEXT:I think the lock is trapped — don't touch it yet.]]
+```
+
+- Target must be another PC (human or agent) — by character-sheet name, case-insensitive
+- If the target is a human, the bot DMs them the whisper
+- If the target is an agent, the whisper lands in history and the target sees it on their next turn
+- Sending to yourself, an unknown name, or with an empty message → dropped silently with a warning
+
+Agents cannot use DM-only directives (ROLL, DAMAGE, HEAL, XP, INVENTORY, REST, COMBAT, ACTIVATE, REMEMBER, etc.). Only the DM authors those.
+
+### REMEMBER — Append to an AI agent's persistent memory
+
+```
+[[REMEMBER:AgentName TEXT:first-person bullet describing what the agent should remember]]
+```
+
+- Appends a bullet under `## What I Remember` in `data/games/<id>/agent-notes/<slug>.md`
+- Only targets AI agents (humans don't have memory files) — the directive is silently dropped for unknown or human targets
+- Write the TEXT in FIRST PERSON, from the agent's voice (e.g. `TEXT:I took a blow for Fusetsu and he nodded at me.`)
+- Use this for:
+  - **Correcting mechanics** the agent keeps getting wrong (`[[REMEMBER:Nyx Namfoodle TEXT:I do NOT have the Light cantrip. I tried once and embarrassed myself.]]`)
+  - **Pushing key beats** the agent should not forget across sessions (`[[REMEMBER:Grimbold Ironforge TEXT:Fusetsu entrusted me with his twin shortswords for the forging. I treated them with reverence.]]`)
+  - **Relationships** cemented in play
+- The directive is invisible in the posted narration (replaced with empty string)
+- Agents see their memory file on every turn — use this directive when the compressor-style self-updates from the agent itself aren't enough
 
 ### COMBAT — Start or end combat
 

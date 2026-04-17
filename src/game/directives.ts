@@ -65,6 +65,10 @@ export interface DirectiveContext {
     notation: string;
     reason: string;
   }[];
+  /** Agents the DM brought off dormant this turn (by character-sheet name). */
+  activatedAgents: string[];
+  /** Mid-turn memory appends requested by the DM via [[REMEMBER:...]]. */
+  memoryAppends: { name: string; text: string }[];
 }
 
 /**
@@ -590,6 +594,7 @@ export function processDirectives(text: string, gameState: GameState): Directive
   }
 
   // === Activate dormant agents ===
+  const activatedAgents: string[] = [];
   const activateRegex = /\[\[ACTIVATE:(.+?)\]\]/g;
   let activateMatch: RegExpExecArray | null;
   // biome-ignore lint/suspicious/noAssignInExpressions: regex exec loop
@@ -601,6 +606,7 @@ export function processDirectives(text: string, gameState: GameState): Directive
     );
     if (player) {
       player.dormant = false;
+      activatedAgents.push(player.characterSheet.name);
       log.info(`  Activate: ${player.characterSheet.name} is now active`);
       processedText = processedText.replace(
         activateMatch[0],
@@ -610,6 +616,31 @@ export function processDirectives(text: string, gameState: GameState): Directive
       log.warn(`  Activate: dormant agent "${agentName}" not found`);
       processedText = processedText.replace(activateMatch[0], "");
     }
+  }
+
+  // === REMEMBER directives (DM-driven memory appends) ===
+  // Syntax: [[REMEMBER:<agentName> TEXT:<first-person bullet>]]
+  // The actual file write happens in the caller (engine.ts) so this function stays pure.
+  // Collect matches first (matchAll avoids lastIndex issues when we then mutate the string).
+  const memoryAppends: { name: string; text: string }[] = [];
+  const rememberMatches = Array.from(
+    processedText.matchAll(/\[\[REMEMBER:(.+?) TEXT:([\s\S]+?)\]\]/g),
+  );
+  for (const m of rememberMatches) {
+    const name = m[1].trim();
+    const text = m[2].trim();
+    const player = gameState.players.find(
+      (p) => p.isAgent && p.characterSheet.name.toLowerCase() === name.toLowerCase(),
+    );
+    if (player) {
+      memoryAppends.push({ name: player.characterSheet.name, text });
+      log.info(
+        `  Remember: queueing append for ${player.characterSheet.name}: ${text.slice(0, 80)}`,
+      );
+    } else {
+      log.warn(`  Remember: agent "${name}" not found (or not an AI agent)`);
+    }
+    processedText = processedText.replace(m[0], "");
   }
 
   // === Combat signals ===
@@ -659,5 +690,7 @@ export function processDirectives(text: string, gameState: GameState): Directive
     hpSummary,
     resourceSummary,
     pendingRolls,
+    activatedAgents,
+    memoryAppends,
   };
 }

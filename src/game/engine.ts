@@ -1,15 +1,17 @@
 import type { TextChannel } from "discord.js";
 import { generateAgentAction, loadAgentPersonality } from "../ai/agent.js";
-import { compressNarrative, dmNarrate, loadCanonicalFacts } from "../ai/dm.js";
+import { compressNarrative, dmAsk, dmLook, dmNarrate, loadCanonicalFacts } from "../ai/dm.js";
 import { checkAgentResponse, checkDMResponse } from "../ai/guardrail.js";
 import { getNextAction } from "../ai/orchestrator.js";
 import { AGENT_DELAY_MS, COMPRESS_EVERY, HISTORY_WINDOW } from "../config.js";
-import { combatStatusEmbed, formatDMNarration } from "../discord/formatter.js";
+import { combatStatusEmbed, formatDMNarration, whisperEmbed } from "../discord/formatter.js";
 import { sendAsIdentity, startTyping } from "../discord/webhooks.js";
 import { log } from "../logger.js";
 import { appendHistory, loadGameState, loadHistory, saveGameState } from "../state/store.js";
 import type { GameState, PendingRoll, TurnEntry } from "../state/types.js";
-import { formatAskHistoryForPrompt } from "./ask-history.js";
+import { type AgentAction, processAgentDirectives } from "./agent-directives.js";
+import { applyAgentMemoryEffects } from "./agent-memory-effects.js";
+import { addAskExchange, formatAskHistoryForPrompt } from "./ask-history.js";
 import { advanceTurn, peekNextCombatant, rollDeathSave } from "./combat.js";
 import { formatDiceResult } from "./dice.js";
 import { processDirectives } from "./directives.js";
@@ -423,28 +425,152 @@ async function handleAgentTurn(
 
     stopTyping();
 
-    // Post as agent identity via webhook
-    await sendAsIdentity(channel, player.name, response, {
-      avatarUrl: personality.avatarUrl,
-    });
-    log.info(`Agent ${player.name}: posted to Discord`);
+    // Process agent action directives (PASS, ASK, LOOK, WHISPER)
+    const agentCtx = processAgentDirectives(response, gameState, player.id);
+    let icText = agentCtx.processedText;
+    // If the agent only emitted [[PASS]] with no IC content, use a placeholder
+    // consistent with the human /pass command.
+    if (!icText && agentCtx.passed) {
+      icText = `*${player.characterSheet.name} holds their action and observes.*`;
+    }
 
-    // Record in history
-    const entry: TurnEntry = {
+    // Post the agent's IC response (if any)
+    if (icText) {
+      await sendAsIdentity(channel, player.name, icText, {
+        avatarUrl: personality.avatarUrl,
+      });
+      log.info(`Agent ${player.name}: IC response posted`);
+    }
+
+    // Record the agent's turn entry (the in-character content only — directive side effects
+    // get their own history entries below)
+    const icEntry: TurnEntry = {
       id: history.length + 1,
       timestamp: new Date().toISOString(),
       playerId: player.id,
       playerName: player.name,
       type: "ic",
-      content: response,
+      content: icText || "*(no action — passed)*",
     };
+    await appendHistory(gameState.id, icEntry);
 
-    await appendHistory(gameState.id, entry);
+    // Execute each agent-initiated action in order
+    for (const action of agentCtx.actions) {
+      await applyAgentAction(action, player, gameState, channel, personality.name);
+    }
+
     markResponded(gameState.id, player.id);
     gameState.turnCount++;
   } catch (err) {
     stopTyping();
     log.error(`Agent ${player.name}: failed to generate action:`, err);
+  }
+}
+
+/**
+ * Execute a single agent-initiated action (PASS/ASK/LOOK/WHISPER). PASS is a no-op here
+ * (already reflected in the IC placeholder); ASK and LOOK call the DM; WHISPER
+ * routes a private message to a party member.
+ */
+async function applyAgentAction(
+  action: AgentAction,
+  agent: { id: string; name: string; characterSheet: { name: string } },
+  gameState: GameState,
+  channel: TextChannel,
+  askerName: string,
+): Promise<void> {
+  switch (action.kind) {
+    case "pass":
+      return;
+
+    case "ask": {
+      log.info(`Agent ${agent.name}: ASK "${action.question.slice(0, 80)}"`);
+      const hist = await loadHistory(gameState.id);
+      const askHistoryStr = formatAskHistoryForPrompt(gameState.id);
+      const rawAnswer = await dmAsk(gameState, hist, action.question, askerName, askHistoryStr);
+
+      // Process any directives the DM included in its answer (ROLL, DAMAGE, REQUEST_ROLL, etc.)
+      const ctx = processDirectives(rawAnswer, gameState);
+      const answer = ctx.processedText;
+      await applyAgentMemoryEffects(gameState, ctx);
+      if (answer !== rawAnswer) {
+        await saveGameState(gameState);
+      }
+
+      addAskExchange(gameState.id, {
+        question: action.question,
+        answer,
+        askerName,
+        timestamp: new Date().toISOString(),
+      });
+
+      await sendAsIdentity(
+        channel,
+        "Dungeon Master",
+        formatDMNarration(`**OOC — ${askerName} asks:**\n> ${action.question}\n\n${answer}`),
+      );
+
+      await appendHistory(gameState.id, {
+        id: 0,
+        timestamp: new Date().toISOString(),
+        playerId: "system",
+        playerName: "System",
+        type: "system",
+        content: `[/ask from ${askerName}]: ${action.question}\n[DM answered]: ${answer.slice(0, 500)}`,
+      });
+      return;
+    }
+
+    case "look": {
+      log.info(`Agent ${agent.name}: LOOK ${action.target ? `"${action.target}"` : "(general)"}`);
+      const hist = await loadHistory(gameState.id);
+      const description = await dmLook(gameState, hist, action.target ?? undefined);
+
+      await sendAsIdentity(channel, "Dungeon Master", formatDMNarration(description));
+
+      await appendHistory(gameState.id, {
+        id: 0,
+        timestamp: new Date().toISOString(),
+        playerId: "system",
+        playerName: "System",
+        type: "system",
+        content: `[/look from ${askerName}${action.target ? ` — target: ${action.target}` : ""}]\n${description.slice(0, 500)}`,
+      });
+      return;
+    }
+
+    case "whisper": {
+      log.info(`Agent ${agent.name}: WHISPER → ${action.target.characterSheet.name}`);
+      const embed = whisperEmbed(
+        agent.characterSheet.name,
+        action.target.characterSheet.name,
+        action.message,
+      );
+
+      if (!action.target.isAgent) {
+        // Human recipient — DM them privately
+        try {
+          const user = await channel.client.users.fetch(action.target.id);
+          const dmChannel = await user.createDM();
+          await dmChannel.send({ embeds: [embed] });
+        } catch (err) {
+          log.warn(`Agent ${agent.name}: could not DM ${action.target.characterSheet.name}:`, err);
+        }
+      }
+      // Agent recipient — the whisper entry in history is all they need; it'll show up
+      // in their next prompt context (whisper type, with whisperTo set).
+
+      await appendHistory(gameState.id, {
+        id: 0,
+        timestamp: new Date().toISOString(),
+        playerId: agent.id,
+        playerName: agent.characterSheet.name,
+        type: "whisper",
+        content: action.message,
+        whisperTo: action.target.id,
+      });
+      return;
+    }
   }
 }
 
@@ -522,6 +648,7 @@ async function handleDMTurn(
     // Process all directives
     const ctx = processDirectives(dmResponse, gameState);
     dmResponse = ctx.processedText;
+    await applyAgentMemoryEffects(gameState, ctx);
 
     // HP reconciliation: append system entries so DM sees HP state next turn
     if (gameState.combat.active) {
@@ -658,6 +785,7 @@ async function handleDMResolution(
     // Process directives in resolution response
     const ctx = processDirectives(dmResponse, gameState);
     dmResponse = ctx.processedText;
+    await applyAgentMemoryEffects(gameState, ctx);
 
     // Safety net for next combatant
     if (gameState.combat.active && !ctx.combatEnded) {

@@ -86,7 +86,11 @@ Round tracking is in-memory only (not persisted). It tracks which players have r
 
 **dice.ts** — Parses dice notation (`2d6+3`, `d20`, `4d6kh3`), rolls real random dice, formats results. Parses all DM directive types from AI output: `ROLL`, `DAMAGE`, `HEAL`, `SPELL`, `USE`, `CONCENTRATE`, `CONDITION`, `XP`, `INVENTORY`, `GOLD`, `UPDATE_HP`, `UPDATE_CONDITION`, and `REQUEST_ROLL`.
 
-**directives.ts** — Pure function `processDirectives()` that takes DM response text and game state, processes all directives in sequence, mutates game state, and returns a `DirectiveContext` with processed text and metadata (dice results, HP changes, pending rolls, misuse warnings, etc.). Extracted from `engine.ts` for testability.
+**directives.ts** — Pure function `processDirectives()` that takes DM response text and game state, processes all directives in sequence, mutates game state, and returns a `DirectiveContext` with processed text and metadata (dice results, HP changes, pending rolls, misuse warnings, `activatedAgents`, `memoryAppends`, etc.). Extracted from `engine.ts` for testability.
+
+**agent-notes.ts** — Pure file I/O for agent memory files at `data/games/<id>/agent-notes/<slug>.md`. Provides `seedAgentNotes()` (starter template from character sheet), `readAgentNotes()`, `appendAgentMemory()` (used by `[[REMEMBER:]]`), `agentNotesDirExists()`, and `listAgentNoteFiles()`. Complements `dm-notes/` but serves a different purpose: agent notes are in-character first-person memory; DM notes are out-of-character DM tracking.
+
+**agent-memory-effects.ts** — Side-effect applier. After every `processDirectives()` call, iterates `ctx.activatedAgents` and `ctx.memoryAppends` to perform the actual I/O (seeding memory files on activate, appending bullets on remember). Keeps `directives.ts` pure.
 
 **ask-history.ts** — In-memory FIFO buffer (5 entries per game) of `/ask` Q&A exchanges. Provides context to the DM across consecutive `/ask` questions within a session. Clears on bot restart (intentional — these are ephemeral).
 
@@ -130,7 +134,9 @@ Separate functions for different DM tasks: `dmNarrate()` (main resolution), `dmR
 
 If a violation is detected, the offending AI re-generates with explicit feedback about what it did wrong. Pure helper functions (prompt building, response parsing) are in `guardrail-check.ts` for testability. Both guardrails are fail-safe — if they error or return unparseable output, the response is allowed through.
 
-**agent.ts** — Loads personality from `agents/*.md` via gray-matter. Builds a system prompt from the personality data (name, race, class, voice, traits, flaws, goals, full markdown body). Generates in-character actions given game state and recent history. Also generates AI backstories for new agents joining the party.
+**agent.ts** — Loads personality from `agents/*.md` via gray-matter. Builds a system prompt from the personality data (name, race, class, voice, traits, flaws, goals, full markdown body) plus the agent's memory file path + instructions on how to maintain it. Injects current memory contents into the user message so the agent starts with its memory already loaded. Runs agentically via `chatAgentic()` with `AGENT_ALLOWED_TOOLS = ["Read", "Edit"]` so the agent can refresh/edit its memory file mid-turn. Also generates AI backstories for new agents joining the party.
+
+**agent-memory-seed.ts** — Retrofit seeder for in-flight games. When `/resume` detects a missing `agent-notes/` directory, this module runs one Sonnet call per active AI agent that distills a first-person memory file from: the character's personality file, character sheet, DM's per-character notes (`dm-notes/characters/<name>.md`), and the full turn history. The prompt-building function (`buildSeedPrompt()`) is separated from the CLI call so it can be unit-tested. Falls back to the starter template if the seeder response is malformed.
 
 ### State Layer (`src/state/`)
 
@@ -156,6 +162,8 @@ At `info` level, logs show the full turn lifecycle: turn received → orchestrat
 - `state.json` — core game state
 - `history.json` — append-only turn log
 - `characters/<name>.json` — parsed character sheets
+- `dm-notes/` — DM's out-of-character persistent memory (see `dm-notes.ts` discussion above)
+- `agent-notes/<slug>.md` — each AI agent's first-person memory file (see `agent-notes.ts` above)
 
 Game lookup is by scanning all game directories for a matching channel ID.
 
@@ -203,11 +211,22 @@ AI agents wait 2.5 seconds before posting to feel more natural in Discord. This 
 ```
 data/games/
 └── <uuid>/
-    ├── state.json         # GameState — players, combat, narrative summary
-    ├── history.json       # TurnEntry[] — append-only, complete game log
-    └── characters/
-        ├── grimbold.json  # Parsed CharacterSheet
-        └── fusetsu.json
+    ├── state.json                    # GameState — players, combat, narrative summary
+    ├── history.json                  # TurnEntry[] — append-only, complete game log
+    ├── characters/
+    │   ├── grimbold-ironforge.json   # Parsed CharacterSheet (human and agent)
+    │   └── fusetsu.json
+    ├── dm-notes/                     # DM's out-of-character persistent memory (seeded on /start)
+    │   ├── dm.md                     # Running context, always loaded into DM prompt
+    │   ├── campaign.md               # Campaign blueprint, always loaded
+    │   ├── world.md                  # Canonical facts + NPCs / lore
+    │   ├── plot.md                   # Active plot threads
+    │   ├── rulings.md                # Rules interpretations
+    │   ├── session-log.md            # Per-session notes
+    │   └── characters/<name>.md      # Per-character DM observations
+    └── agent-notes/                  # AI agents' in-character memory (seeded on /add-agent or retrofit /resume)
+        ├── grimbold-ironforge.md
+        └── nyx-namfoodle.md
 ```
 
 - State saves after every turn (crash-safe)
