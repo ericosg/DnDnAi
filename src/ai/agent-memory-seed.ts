@@ -72,13 +72,36 @@ export interface SeedContext {
   sheet: CharacterSheet;
   dmCharacterNotes: string | null;
   history: TurnEntry[];
+  narrativeSummary?: string | null;
 }
 
 /**
+ * Maximum number of recent history entries to include in the seed prompt.
+ * At ~500 chars/entry, 150 entries ≈ 75KB — well under the ~1MB OS ARG_MAX
+ * for CLI-passed prompts. Older context is provided via `narrativeSummary`
+ * (the compressed story summary).
+ */
+export const SEED_HISTORY_WINDOW = 150;
+
+/**
+ * Hard prompt-size safety cap. macOS ARG_MAX is ~1MB and the env is also
+ * part of the limit, so we bail well below that and fall back to the starter
+ * template rather than crashing with E2BIG.
+ */
+export const SEED_PROMPT_MAX_BYTES = 500_000;
+
+/**
  * Build the user-message prompt for the seeder. Pure function — no I/O.
+ *
+ * History is capped at SEED_HISTORY_WINDOW most-recent entries; the
+ * `narrativeSummary` (if provided) captures earlier context in compressed form,
+ * mirroring how the DM is given long-history context elsewhere in the bot.
  */
 export function buildSeedPrompt(ctx: SeedContext): string {
-  const historyText = ctx.history
+  const recentHistory = ctx.history.slice(-SEED_HISTORY_WINDOW);
+  const olderCount = Math.max(0, ctx.history.length - recentHistory.length);
+
+  const historyText = recentHistory
     .map((t) => {
       const prefix = t.type === "ic" ? "> " : t.type === "dm-narration" ? "" : `[${t.type}] `;
       return `[${t.playerName}] ${prefix}${t.content}`;
@@ -105,9 +128,22 @@ export function buildSeedPrompt(ctx: SeedContext): string {
     parts.push("", "### DM's Notes About This Character", ctx.dmCharacterNotes.trim());
   }
 
+  if (ctx.narrativeSummary?.trim()) {
+    parts.push(
+      "",
+      "### Story So Far (compressed summary of earlier sessions)",
+      ctx.narrativeSummary.trim(),
+    );
+  }
+
+  const historyHeader =
+    olderCount > 0
+      ? `### Recent Play History (last ${recentHistory.length} of ${ctx.history.length} entries — older events are in the summary above)`
+      : "### Play History";
+
   parts.push(
     "",
-    "### Play History",
+    historyHeader,
     historyText || "(no history yet)",
     "",
     `Produce the memory file for ${ctx.sheet.name} now.`,
@@ -166,10 +202,24 @@ export async function seedAgentMemoryFromHistory(
       sheet: player.characterSheet,
       dmCharacterNotes,
       history,
+      narrativeSummary: gameState.narrativeSummary,
     });
 
+    // Safety cap: the claude CLI takes the prompt via posix_spawn args, which
+    // are capped at ~1MB on macOS (ARG_MAX). If the prompt is still too large
+    // after history-window trimming, fall back to the starter template instead
+    // of crashing with E2BIG.
+    if (prompt.length > SEED_PROMPT_MAX_BYTES) {
+      log.warn(
+        `Agent notes: seed prompt for ${agentPlayerCharacterName} is ${prompt.length} bytes (over ${SEED_PROMPT_MAX_BYTES} cap) — falling back to starter template`,
+      );
+      await seedAgentNotes(gameState.id, personality, player.characterSheet);
+      return;
+    }
+
+    const effectiveHistoryCount = Math.min(history.length, SEED_HISTORY_WINDOW);
     log.info(
-      `Agent notes: seeding ${agentPlayerCharacterName} from ${history.length} history entries${dmCharacterNotes ? " + DM notes" : ""}...`,
+      `Agent notes: seeding ${agentPlayerCharacterName} from ${effectiveHistoryCount}/${history.length} history entries${dmCharacterNotes ? " + DM notes" : ""}${gameState.narrativeSummary ? " + story summary" : ""}...`,
     );
     const response = await chat(
       models.agent,

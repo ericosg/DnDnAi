@@ -21,7 +21,9 @@ mock.module("./claude.js", () => ({
   chatAgentic: async () => "mocked",
 }));
 
-const { buildSeedPrompt } = await import("./agent-memory-seed.js");
+const { buildSeedPrompt, SEED_HISTORY_WINDOW, SEED_PROMPT_MAX_BYTES } = await import(
+  "./agent-memory-seed.js"
+);
 
 import type { AgentPersonality, CharacterSheet, TurnEntry } from "../state/types.js";
 
@@ -187,5 +189,74 @@ describe("buildSeedPrompt", () => {
       history: [],
     });
     expect(prompt.trim().endsWith("Produce the memory file for Nyx Namfoodle now.")).toBe(true);
+  });
+
+  test("caps history at SEED_HISTORY_WINDOW most-recent entries", () => {
+    const extra = 50;
+    const total = SEED_HISTORY_WINDOW + extra;
+    const longHistory: TurnEntry[] = [];
+    for (let i = 0; i < total; i++) {
+      // Use word-boundary-safe names: "xentry-1" won't match "xentry-11"
+      longHistory.push(historyEntry({ content: `x${i}x` }));
+    }
+    const prompt = buildSeedPrompt({
+      personality: personality(),
+      sheet: sheet(),
+      dmCharacterNotes: null,
+      history: longHistory,
+    });
+
+    // Only the last SEED_HISTORY_WINDOW entries should be present.
+    // With total=200 and window=150, kept indices are 50..199 inclusive;
+    // dropped indices are 0..49.
+    expect(prompt).not.toContain(" x0x"); // oldest dropped
+    expect(prompt).not.toContain(` x${extra - 1}x`); // last dropped index (49)
+    expect(prompt).toContain(` x${extra}x`); // first kept index (50)
+    expect(prompt).toContain(` x${total - 1}x`); // most recent kept (199)
+    // Header notes the truncation with total-count visibility
+    expect(prompt).toContain(
+      `Recent Play History (last ${SEED_HISTORY_WINDOW} of ${longHistory.length}`,
+    );
+  });
+
+  test("uses the plain Play History header when no truncation happens", () => {
+    const prompt = buildSeedPrompt({
+      personality: personality(),
+      sheet: sheet(),
+      dmCharacterNotes: null,
+      history: [historyEntry({ content: "only entry" })],
+    });
+    expect(prompt).toContain("### Play History");
+    expect(prompt).not.toContain("Recent Play History (last");
+  });
+
+  test("includes narrativeSummary when provided", () => {
+    const prompt = buildSeedPrompt({
+      personality: personality(),
+      sheet: sheet(),
+      dmCharacterNotes: null,
+      history: [],
+      narrativeSummary: "The party restored R1 and R2 in the mines.",
+    });
+    expect(prompt).toContain("### Story So Far");
+    expect(prompt).toContain("restored R1 and R2");
+  });
+
+  test("omits narrativeSummary section when null/empty", () => {
+    const prompt = buildSeedPrompt({
+      personality: personality(),
+      sheet: sheet(),
+      dmCharacterNotes: null,
+      history: [],
+      narrativeSummary: null,
+    });
+    expect(prompt).not.toContain("Story So Far");
+  });
+
+  test("SEED_PROMPT_MAX_BYTES is reasonable vs the OS ARG_MAX (~1MB on macOS)", () => {
+    // Sanity check: the cap must be well under 1MB to leave room for env + other args
+    expect(SEED_PROMPT_MAX_BYTES).toBeLessThan(1_000_000);
+    // And large enough to fit a typical capped history + summary + DM notes
+    expect(SEED_PROMPT_MAX_BYTES).toBeGreaterThan(100_000);
   });
 });
