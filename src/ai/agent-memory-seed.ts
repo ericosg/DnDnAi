@@ -11,7 +11,7 @@
  */
 
 import { existsSync } from "node:fs";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { DATA_DIR, models } from "../config.js";
 import {
@@ -275,6 +275,10 @@ export async function seedAllAgentMemories(
   log.info(
     `Agent notes: retrofitting memory for ${targets.length} agent(s): ${targets.map((t) => t.characterSheet.name).join(", ")}`,
   );
+  // Create the agent-notes directory up front. Without this, concurrent seeders
+  // in the Promise.all below race on the first mkdir — whichever writer completes
+  // before any ensureDir call crashes with ENOENT.
+  await mkdir(getAgentNotesDir(gameState.id), { recursive: true });
   await Promise.all(
     targets.map((p) =>
       seedAgentMemoryFromHistory(

@@ -26,7 +26,7 @@ import { BLUEPRINT_FORMAT } from "../ai/dm-prompt.js";
 import { buildHelpPrompt, HELP_ALLOWED_TOOLS } from "../ai/help-prompt.js";
 import { config, models, VERSION } from "../config.js";
 import { applyAgentMemoryEffects } from "../game/agent-memory-effects.js";
-import { agentNotesDirExists, seedAgentNotes } from "../game/agent-notes.js";
+import { agentNotesExist, seedAgentNotes } from "../game/agent-notes.js";
 import { addAskExchange, formatAskHistoryForPrompt } from "../game/ask-history.js";
 import { buildAgentCharacter, parseCharacterSheet } from "../game/characters.js";
 import { roll as rollDice } from "../game/dice.js";
@@ -179,12 +179,18 @@ async function autoResume(client: Client): Promise<void> {
         `Posted startup greeting for game ${gameState.id} in channel ${gameState.channelId}`,
       );
 
-      // Retrofit agent memory for in-flight games that predate the memory module.
-      // Must complete BEFORE resumeOrchestrator prompts any agent, otherwise
-      // agents act without memory on the first post-restart turn.
-      if (!agentNotesDirExists(gameState.id)) {
+      // Retrofit agent memory for in-flight games that predate the memory module,
+      // or for any active AI agent whose memory file went missing (e.g. a prior
+      // partial-seed failure left one agent without a file). seedAllAgentMemories
+      // already skips agents whose file exists, so this is a safe no-op for agents
+      // already retrofit. Must run BEFORE resumeOrchestrator prompts any agent.
+      const activeAgents = gameState.players.filter((p) => p.isAgent && !p.dormant);
+      const missingMemory = activeAgents.some(
+        (p) => !agentNotesExist(gameState.id, p.characterSheet.name),
+      );
+      if (missingMemory) {
         log.info(
-          `Agent notes directory missing for ${gameState.id} — running one-time retrofit seed`,
+          `Agent notes missing for at least one active agent in ${gameState.id} — running retrofit seed`,
         );
         try {
           const history = await loadHistory(gameState.id);
@@ -1008,12 +1014,16 @@ THEN — narrate a compelling opening scene that brings these characters togethe
       gameState.status = "active";
       await saveGameState(gameState);
 
-      // Retrofit agent memory for in-flight games that predate the memory module.
-      // Runs once: if the agent-notes/ directory is missing, seed each active AI
-      // agent from full history + DM's character notes + the character sheet.
+      // Retrofit agent memory for in-flight games that predate the memory module,
+      // or for any active AI agent whose memory file is missing (e.g. a partial
+      // prior seed). seedAllAgentMemories skips agents whose file already exists.
       const history = await loadHistory(gameState.id);
-      if (!agentNotesDirExists(gameState.id)) {
-        log.info("Agent notes directory missing — running one-time retrofit seed");
+      const activeAgents = gameState.players.filter((p) => p.isAgent && !p.dormant);
+      const missingMemory = activeAgents.some(
+        (p) => !agentNotesExist(gameState.id, p.characterSheet.name),
+      );
+      if (missingMemory) {
+        log.info("Agent notes missing for at least one active agent — running retrofit seed");
         await seedAllAgentMemories(gameState, history);
       }
 
