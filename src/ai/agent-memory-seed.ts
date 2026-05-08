@@ -77,16 +77,16 @@ export interface SeedContext {
 
 /**
  * Maximum number of recent history entries to include in the seed prompt.
- * At ~500 chars/entry, 150 entries ≈ 75KB — well under the ~1MB OS ARG_MAX
- * for CLI-passed prompts. Older context is provided via `narrativeSummary`
- * (the compressed story summary).
+ * At ~500 chars/entry, 150 entries ≈ 75KB. Older context is provided via
+ * `narrativeSummary` (the compressed story summary).
  */
 export const SEED_HISTORY_WINDOW = 150;
 
 /**
- * Hard prompt-size safety cap. macOS ARG_MAX is ~1MB and the env is also
- * part of the limit, so we bail well below that and fall back to the starter
- * template rather than crashing with E2BIG.
+ * Hard prompt-size sanity cap. The prompt is now piped via stdin (not argv),
+ * so kernel `ARG_MAX` no longer applies — but a runaway prompt is still a
+ * cost / latency / context-window concern, so we bail well before that and
+ * fall back to the starter template instead.
  */
 export const SEED_PROMPT_MAX_BYTES = 500_000;
 
@@ -205,10 +205,8 @@ export async function seedAgentMemoryFromHistory(
       narrativeSummary: gameState.narrativeSummary,
     });
 
-    // Safety cap: the claude CLI takes the prompt via posix_spawn args, which
-    // are capped at ~1MB on macOS (ARG_MAX). If the prompt is still too large
-    // after history-window trimming, fall back to the starter template instead
-    // of crashing with E2BIG.
+    // Sanity cap: bail on pathologically large prompts (cost / context-window
+    // concern; argv limits no longer apply since the prompt goes via stdin).
     if (prompt.length > SEED_PROMPT_MAX_BYTES) {
       log.warn(
         `Agent notes: seed prompt for ${agentPlayerCharacterName} is ${prompt.length} bytes (over ${SEED_PROMPT_MAX_BYTES} cap) — falling back to starter template`,

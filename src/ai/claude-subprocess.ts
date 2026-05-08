@@ -1,13 +1,23 @@
 /**
- * Pure helper functions for building Claude CLI subprocess arguments.
- * Separated from claude.ts so they can be unit-tested without cross-file mock pollution.
+ * Helper functions for the Claude CLI subprocess. Separated from claude.ts so
+ * they can be unit-tested without cross-file mock pollution — multiple test
+ * files mock claude.js at the module level, which would otherwise short-circuit
+ * any integration test that imports chat()/chatAgentic() directly.
  */
+import { unlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
-/** Build the CLI argument array for a `claude -p` subprocess call. */
+/**
+ * Build the CLI argument array for a `claude -p` subprocess call.
+ *
+ * The user prompt is piped via stdin and the system prompt is loaded from
+ * `systemPromptFile` so neither hits the kernel's `MAX_ARG_STRLEN` (128 KB
+ * per argument on Linux).
+ */
 export function buildSpawnArgs(
   model: string,
-  system: string,
-  prompt: string,
+  systemPromptFile: string,
   allowedTools?: string[],
   outputFormat: "text" | "stream-json" = "text",
   effort?: "low" | "medium" | "high" | "max",
@@ -15,11 +25,10 @@ export function buildSpawnArgs(
   const args = [
     "claude",
     "-p",
-    prompt,
     "--model",
     model,
-    "--system-prompt",
-    system,
+    "--system-prompt-file",
+    systemPromptFile,
     "--output-format",
     outputFormat,
     "--no-session-persistence",
@@ -190,4 +199,52 @@ export function extractFailureDiagnostics(
   }
 
   return parts.join(" | ");
+}
+
+/**
+ * Spawn a `claude` subprocess, write `prompt` to its stdin, close stdin,
+ * await completion, and capture stdout/stderr. No retry, no temp-file
+ * management, no result parsing — those layers live in claude.ts.
+ */
+export async function spawnAndCommunicate(
+  args: string[],
+  env: Record<string, string | undefined>,
+  prompt: string,
+): Promise<{ exitCode: number; stdout: string; stderr: string }> {
+  const proc = Bun.spawn(args, {
+    stdin: "pipe",
+    stdout: "pipe",
+    stderr: "pipe",
+    env,
+  });
+  proc.stdin.write(prompt);
+  await proc.stdin.end();
+  const exitCode = await proc.exited;
+  const stdout = await new Response(proc.stdout).text();
+  const stderr = await new Response(proc.stderr).text();
+  return { exitCode, stdout, stderr };
+}
+
+/**
+ * Write `content` to a unique temp file, run `fn(path)`, then unlink the
+ * file (best-effort). The path is stable for the duration of `fn()`, so a
+ * retry loop inside the callback reuses the same file.
+ *
+ * The file (and stdin for the user prompt) keep both large strings out of
+ * argv — Linux caps a single argument at 128 KB (`MAX_ARG_STRLEN`) and
+ * crashes posix_spawn with E2BIG when exceeded.
+ */
+export async function withSystemPromptFile<T>(
+  content: string,
+  fn: (path: string) => Promise<T>,
+): Promise<T> {
+  const path = join(tmpdir(), `dndnai-sysprompt-${crypto.randomUUID()}.txt`);
+  await Bun.write(path, content);
+  try {
+    return await fn(path);
+  } finally {
+    await unlink(path).catch(() => {
+      /* best-effort cleanup */
+    });
+  }
 }

@@ -253,10 +253,10 @@ describe("buildSeedPrompt", () => {
     expect(prompt).not.toContain("Story So Far");
   });
 
-  test("SEED_PROMPT_MAX_BYTES is reasonable vs the OS ARG_MAX (~1MB on macOS)", () => {
-    // Sanity check: the cap must be well under 1MB to leave room for env + other args
+  test("SEED_PROMPT_MAX_BYTES is a reasonable sanity cap", () => {
+    // Bails well before runaway-prompt territory but stays well above a
+    // typical capped history + summary + DM notes payload.
     expect(SEED_PROMPT_MAX_BYTES).toBeLessThan(1_000_000);
-    // And large enough to fit a typical capped history + summary + DM notes
     expect(SEED_PROMPT_MAX_BYTES).toBeGreaterThan(100_000);
   });
 });
