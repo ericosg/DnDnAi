@@ -1,4 +1,4 @@
-export const VERSION = "0.41";
+export const VERSION = "0.42";
 
 const required = (name: string): string => {
   const val = process.env[name];
