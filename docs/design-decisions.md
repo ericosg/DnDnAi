@@ -196,3 +196,25 @@ The game never auto-advances without human input. If it's a human's turn and the
 - Feeling pressured to respond immediately
 
 This is a deliberate choice for asynchronous play in Discord — players can respond hours or days later.
+
+## Why Reactive Admin OOC Instead of Structural Scene Fixes?
+
+When the DM itself flagged a class of bugs (scene-scope leaks, agents contradicting their own memory, NPC drift) the obvious-but-heavy fix was to introduce `scenes[]` schema, per-player `sceneId`, `[[SCENE:CREATE/MERGE]]` directives, scene-scoped history filtering, and migration code. Instead the choice was a single admin `/correct` slash command that lets the bot owner inject OOC corrections to any AI live (DM / agent / all / a specific human), pinned at the top of the next prompt under a `## ⚠️ Admin Correction (READ FIRST)` block.
+
+Reasoning:
+- **The DM is the source of truth.** Trying to make every agent know which scene they're in moves authority away from the DM and into per-player schema. Admin OOC keeps the DM as the canonical narrator and lets the human at the table override anything in any direction at any time.
+- **Failure modes are not stationary.** A schema fix targets the specific shape of bug that's already happened. An admin override handles arbitrary new failure modes (including ones we haven't seen yet) without code changes.
+- **The system self-heals through existing guardrails.** Admin OOC injects info → agent tries to declare it as fact → world-fact guardrail blocks → re-gen refactors into IC question → DM ratifies on next turn. Information naturally becomes canonical through layered checks, not by bypassing them. Tested live in Session 7+ smoke test.
+- **One human, one table.** For a single-table hobby game where the admin is also at the table, a reactive override is faster and more flexible than any heuristic.
+
+The trade-off: admin OOC is reactive — it can't prevent a bug, only correct one already in flight. For drift the admin can pre-arm with `!! ` hard-fact bullets in agent memory (Layer A guardrail-free prompt-recency defense) instead. Both mechanisms layer.
+
+## Why Hard Facts at the END of the Agent Prompt?
+
+Bullets prefixed `- !! ` in an agent's memory file are pinned at the very END of the agent system prompt under `## CRITICAL — Hard Facts From Your Memory`. Three reasons:
+
+- **Long-context attention favors recency.** A load-bearing bullet ("Harken is alive") buried in section 2 of a 20k-char memory file competes for attention with every vivid recent narration block. At the END of the system prompt, it's the last instruction the model reads before generating.
+- **No guardrail layer required.** The doc proposed a Haiku check for hard-fact contradiction. Layer A (prompt placement) alone proved sufficient in live testing — Grimbold refused to capitulate when Fūsetsu tried to gaslight him about Harken being dead. Skipping the guardrail saves cost and latency.
+- **Author-controlled.** The `!! ` prefix is explicit and easy to grep. The DM's `[[REMEMBER:...]]` directive doesn't auto-prefix because not every remembered bullet is load-bearing — the author (human admin or agent itself) decides which facts are hard.
+
+Trade-off: hard facts can only encode what's already in memory. They don't prevent the DM from misgendering an NPC — that's what canonical-facts injection + pre-read rules are for.

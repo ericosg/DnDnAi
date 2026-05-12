@@ -180,4 +180,40 @@ export const commands: RESTPostAPIChatInputApplicationCommandsJSONBody[] = [
         .addChoices({ name: "Roll", value: "roll" }, { name: "Fixed (average)", value: "fixed" }),
     )
     .toJSON(),
+
+  // ADMIN ONLY — bot owner OOC corrections (Ticket 1).
+  // Authorized by ADMIN_USER_ID env var; non-admins get an ephemeral "not authorized" reply.
+  new SlashCommandBuilder()
+    .setName("correct")
+    .setDescription("[admin] Send an OOC correction to the DM, an agent, all, or a specific user")
+    .addStringOption((opt) =>
+      opt
+        .setName("target")
+        .setDescription("'dm' | 'all' | an agent character name (e.g. 'grimbold')")
+        .setRequired(true),
+    )
+    .addStringOption((opt) =>
+      opt
+        .setName("message")
+        .setDescription("The OOC correction (will appear in the target's next prompt)")
+        .setRequired(true),
+    )
+    .addBooleanOption((opt) =>
+      opt
+        .setName("remember")
+        .setDescription("If target is an agent, also append this to their memory file")
+        .setRequired(false),
+    )
+    .addUserOption((opt) =>
+      opt
+        .setName("user")
+        .setDescription("Override target — direct the OOC at a specific human player")
+        .setRequired(false),
+    )
+    .toJSON(),
+
+  new SlashCommandBuilder()
+    .setName("clear-corrections")
+    .setDescription("[admin] Clear all pending admin OOC corrections in this game")
+    .toJSON(),
 ];

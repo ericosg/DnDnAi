@@ -94,6 +94,10 @@ Round tracking is in-memory only (not persisted). It tracks which players have r
 
 **ask-history.ts** — In-memory FIFO buffer (5 entries per game) of `/ask` Q&A exchanges. Provides context to the DM across consecutive `/ask` questions within a session. Clears on bot restart (intentional — these are ephemeral).
 
+**admin-corrections.ts** — In-memory FIFO buffer (10 entries per game) of admin OOC corrections issued via `/correct`. Mirrors `ask-history.ts` in shape. Pure `formatAdminCorrectionsForPrompt(gameId, recipient, currentTurn)` filters by recipient (DM / agent / all) and by age (auto-expires after 5 turns), then renders as a high-salience `## ⚠️ Admin Correction (READ FIRST — overrides anything below)` block. Persisted to history as a system `TurnEntry` at issuance time for durable audit; in-memory store is for prompt injection.
+
+**agent-memory-audit.ts** — Append-only audit log for agent memory writes. Whenever an agent's `Edit` or `Write` tool-use targets its own memory file (detected via the `onToolUse` callback wired into `chatAgentic`), a one-line record is appended to `data/games/<id>/agent-notes/.audit/<slug>.log`. Pure observability — no enforcement, no blocking. Best-effort: filesystem failures are logged but never thrown.
+
 **characters.ts** — Flexible markdown-to-JSON parser for character sheets. Handles multiple formatting conventions (bold keys, headings, list items, comma-separated values). Also builds character sheets for AI agents from their personality files + AI-generated backstories.
 
 **combat.ts** — State machine for D&D 5e combat. Handles initiative rolls and ordering, turn advancement (skipping dead/incapacitated), damage/healing with temp HP, death saves (including nat 1/20 special cases), combat end detection, and direct HP/condition manipulation via `setHP()` and `setConditions()` for state corrections.

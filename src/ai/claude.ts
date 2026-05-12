@@ -70,6 +70,8 @@ export async function chat(
  * Agentic chat — uses stream-json output to log tool use in real time.
  * The DM uses this so we can see when it reads files, writes notes, etc.
  */
+export type ToolUseEvent = { name: string; input: Record<string, unknown> };
+
 export async function chatAgentic(
   model: string,
   system: string,
@@ -77,6 +79,7 @@ export async function chatAgentic(
   allowedTools: string[],
   label: string,
   effort?: "low" | "medium" | "high" | "max",
+  onToolUse?: (event: ToolUseEvent) => void | Promise<void>,
 ): Promise<string> {
   const prompt = messages.map((m) => m.content).join("\n\n");
 
@@ -106,6 +109,13 @@ export async function chatAgentic(
         for (const tool of parsed.toolUses) {
           const summary = summarizeToolInput(tool.name, tool.input);
           log.info(`  ${label} tool: ${tool.name} → ${summary}`);
+          if (onToolUse) {
+            try {
+              await onToolUse({ name: tool.name, input: tool.input });
+            } catch (e) {
+              log.warn(`onToolUse callback failed for ${tool.name}: ${(e as Error).message}`);
+            }
+          }
         }
 
         if (parsed.toolUses.length > 0 && parsed.numTurns > 1) {

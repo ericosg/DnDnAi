@@ -167,6 +167,7 @@ const {
   clearRound,
   getRoundStartTime,
   isToolMetaOnly,
+  autoResolveStalePendingRolls,
 } = await import("./engine.js");
 
 function makePlayer(overrides: Partial<Player> = {}): Player {
@@ -1419,18 +1420,34 @@ describe("engine — isToolMetaOnly", () => {
     expect(isToolMetaOnly('> "You dare enter my domain?" the lich hisses.')).toBe(false);
   });
 
-  test("passes long responses even with meta words", () => {
+  test("passes long responses with narrative markers even with meta words", () => {
     const longResponse =
-      "The party updated their plans and checked the map. " +
+      "*The party updated their plans* and checked the map. " +
       "Grimbold noted the strange markings on the wall while Nyx read the ancient inscriptions. " +
       "The cave trembled as something massive stirred in the depths below.";
     expect(isToolMetaOnly(longResponse)).toBe(false);
   });
 
-  test("passes responses with narrative markers even if short", () => {
-    expect(isToolMetaOnly("*Updated the scene.*")).toBe(false);
+  test("flags short marker-bypassed tool-meta (the bug 6a fixes)", () => {
+    // Pre-fix: a stray *italic* or > around tool-meta verbs let it slip through.
+    // Post-fix: short responses must be both long AND marked to bypass the meta check.
+    expect(isToolMetaOnly("*Updated the scene.*")).toBe(true);
+    expect(isToolMetaOnly('> "Noted," she whispered.')).toBe(true);
+  });
+
+  test("passes short responses with markers and no meta verbs", () => {
     expect(isToolMetaOnly("[[ROLL:d20+5 FOR:Fusetsu REASON:check]]")).toBe(false);
-    expect(isToolMetaOnly('> "Noted," she whispered.')).toBe(false);
+  });
+
+  test("flags long responses without narrative markers if they contain meta verbs", () => {
+    // Stricter behavior introduced by 6a: real DM narration is virtually always marked
+    // with at least one *italic*, > blockquote, or [[directive]]. Plain prose containing
+    // tool-meta verbs is treated as suspicious until proven otherwise.
+    const longUnmarkedMeta =
+      "The party updated their plans and checked the map. " +
+      "Grimbold noted the strange markings on the wall while Nyx read the ancient inscriptions. " +
+      "The cave trembled as something massive stirred in the depths below.";
+    expect(isToolMetaOnly(longUnmarkedMeta)).toBe(true);
   });
 
   test("passes empty and whitespace responses (handled by empty check)", () => {
@@ -1441,6 +1458,94 @@ describe("engine — isToolMetaOnly", () => {
   test("passes normal short responses without meta patterns", () => {
     expect(isToolMetaOnly("The door creaks open.")).toBe(false);
     expect(isToolMetaOnly("Nothing happens.")).toBe(false);
+  });
+});
+
+describe("engine — autoResolveStalePendingRolls (Ticket 6d)", () => {
+  beforeEach(() => {
+    appendedHistory = [];
+    savedStates = [];
+  });
+
+  test("auto-resolves an agent-owed roll older than the threshold", async () => {
+    const gs = makeGameState();
+    const agent = makePlayer({ id: "agent:grimbold", name: "Grimbold", isAgent: true });
+    gs.players.push(agent);
+    gs.pendingRolls = [
+      {
+        id: "pr-1",
+        playerId: agent.id,
+        playerName: "Grimbold",
+        notation: "d20+5",
+        reason: "Athletics check",
+        createdAt: new Date(Date.now() - 11 * 60 * 1000).toISOString(), // 11 min ago
+      },
+    ];
+
+    const resolved = await autoResolveStalePendingRolls(gs);
+    expect(resolved).toBe(true);
+    expect(gs.pendingRolls?.[0].result).toBeDefined();
+    expect(appendedHistory.length).toBeGreaterThan(0);
+    const sysEntry = appendedHistory.find((e) => e.type === "system");
+    expect(sysEntry?.content).toContain("Stale roll auto-resolved");
+  });
+
+  test("does NOT auto-resolve a fresh roll", async () => {
+    const gs = makeGameState();
+    const agent = makePlayer({ id: "agent:grimbold", name: "Grimbold", isAgent: true });
+    gs.players.push(agent);
+    gs.pendingRolls = [
+      {
+        id: "pr-1",
+        playerId: agent.id,
+        playerName: "Grimbold",
+        notation: "d20+5",
+        reason: "Athletics check",
+        createdAt: new Date(Date.now() - 60 * 1000).toISOString(), // 1 min ago
+      },
+    ];
+
+    const resolved = await autoResolveStalePendingRolls(gs);
+    expect(resolved).toBe(false);
+    expect(gs.pendingRolls?.[0].result).toBeUndefined();
+  });
+
+  test("does NOT auto-resolve a stale HUMAN-owed roll (humans must roll themselves)", async () => {
+    const gs = makeGameState();
+    // gs default has Fusetsu as human player at index 0
+    gs.pendingRolls = [
+      {
+        id: "pr-1",
+        playerId: gs.players[0].id,
+        playerName: gs.players[0].name,
+        notation: "d20+5",
+        reason: "Athletics check",
+        createdAt: new Date(Date.now() - 11 * 60 * 1000).toISOString(),
+      },
+    ];
+
+    const resolved = await autoResolveStalePendingRolls(gs);
+    expect(resolved).toBe(false);
+    expect(gs.pendingRolls?.[0].result).toBeUndefined();
+  });
+
+  test("ignores rolls with no createdAt (legacy rolls from before 6d)", async () => {
+    const gs = makeGameState();
+    const agent = makePlayer({ id: "agent:grimbold", name: "Grimbold", isAgent: true });
+    gs.players.push(agent);
+    gs.pendingRolls = [
+      {
+        id: "pr-1",
+        playerId: agent.id,
+        playerName: "Grimbold",
+        notation: "d20+5",
+        reason: "Athletics check",
+        // no createdAt
+      },
+    ];
+
+    const resolved = await autoResolveStalePendingRolls(gs);
+    expect(resolved).toBe(false);
   });
 });
 

@@ -334,6 +334,20 @@ describe("directives — REQUEST_ROLL", () => {
     expect(ctx.processedText).toContain("/roll d20+5");
   });
 
+  test("pending roll has createdAt timestamp (Ticket 6d)", () => {
+    const gs = makeCombatState();
+    const before = Date.now();
+    const text = "[[REQUEST_ROLL:d20+5 FOR:Fusetsu REASON:Perception check]]";
+    const ctx = processDirectives(text, gs);
+    const after = Date.now();
+    expect(ctx.pendingRolls).toHaveLength(1);
+    const createdAt = ctx.pendingRolls[0].createdAt;
+    expect(typeof createdAt).toBe("string");
+    const t = new Date(createdAt).getTime();
+    expect(t).toBeGreaterThanOrEqual(before);
+    expect(t).toBeLessThanOrEqual(after);
+  });
+
   test("auto-rolls for AI agent", () => {
     const gs = makeCombatState();
     const text =

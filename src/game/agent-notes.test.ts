@@ -32,6 +32,7 @@ const {
   agentSlug,
   appendAgentMemory,
   buildStarterMemory,
+  extractHardFacts,
   getAgentNotesDir,
   getAgentNotesPath,
   listAgentNoteFiles,
@@ -305,5 +306,68 @@ describe("listAgentNoteFiles and agentNotesExist", () => {
     await seedAgentNotes(g, personality(), sheet());
     expect(agentNotesExist(g, "Grimbold Ironforge")).toBe(true);
     expect(agentNotesExist(g, "Nyx Namfoodle")).toBe(false);
+  });
+});
+
+describe("extractHardFacts (Ticket 2)", () => {
+  test("extracts `- !! ` bullets from any section", () => {
+    const memory = `# Grimbold — Memory
+
+## What I Remember
+- We escaped the mines.
+- !! Harken is alive — the whole plan is to take him alive tomorrow.
+- We met Hierophantis in town.
+
+## What I Carry
+- Warhammer
+- !! The signet ring of Halverton — never give it up.
+
+## What I Know About Myself
+- I am a dwarf cleric of Moradin.
+- !! I cannot cast Fireball — it is not on my spell list.
+`;
+    const facts = extractHardFacts(memory);
+    expect(facts).toEqual([
+      "Harken is alive — the whole plan is to take him alive tomorrow.",
+      "The signet ring of Halverton — never give it up.",
+      "I cannot cast Fireball — it is not on my spell list.",
+    ]);
+  });
+
+  test("returns empty array for memory with no hard facts", () => {
+    const memory = `## What I Remember
+- We escaped the mines.
+- We met Hierophantis in town.
+`;
+    expect(extractHardFacts(memory)).toEqual([]);
+  });
+
+  test("ignores malformed prefixes", () => {
+    const memory = `## What I Remember
+- !!Harken is alive (no space)
+- ! Harken is alive (single bang)
+!! Harken is alive (no bullet marker)
+- !!! Harken is alive (extra bang)
+- !!  Harken is alive (extra space — still valid)
+`;
+    // Only the "extra space" variant matches: bullet, space, !!, space, content.
+    expect(extractHardFacts(memory)).toEqual(["Harken is alive (extra space — still valid)"]);
+  });
+
+  test("trims trailing whitespace and ignores empty fact bodies", () => {
+    const memory = `## Section
+- !! fact one
+- !!
+- !! fact two
+`;
+    expect(extractHardFacts(memory)).toEqual(["fact one", "fact two"]);
+  });
+
+  test("supports * and + bullet markers in addition to -", () => {
+    const memory = `* !! star bullet
++ !! plus bullet
+- !! dash bullet
+`;
+    expect(extractHardFacts(memory)).toEqual(["star bullet", "plus bullet", "dash bullet"]);
   });
 });

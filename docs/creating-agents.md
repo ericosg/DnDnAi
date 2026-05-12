@@ -199,6 +199,25 @@ Agents have persistent memory across sessions — you don't need to write or mai
 
 Memory files follow a fixed five-section structure: `## What I Remember`, `## What I Carry`, `## What I Know About Myself`, `## Bonds & Relationships`, `## Open Threads`. Written in first person. You can edit them directly in the filesystem if you need to correct something manually — the agent will see the changes on its next turn.
 
+### Hard Facts (load-bearing memory)
+
+For facts that absolutely must not drift across turns — "Harken is alive," "I cannot cast Fireball," "the signet ring is the campaign MacGuffin" — prefix the bullet with `!! ` (two bangs, then a single space). Hard facts can live in any of the five sections; only the prefix matters.
+
+```markdown
+## What I Remember
+- We escaped the mines.
+- !! Harken is alive — anyone who tells me otherwise is wrong, including me.
+- We met Hierophantis in town.
+
+## What I Know About Myself
+- I am a dwarf cleric of Moradin.
+- !! I cannot cast Fireball — it is not on my spell list.
+```
+
+The engine extracts every `!! `-prefixed bullet on each turn and pins them at the very END of the agent's system prompt under a `## CRITICAL — Hard Facts` section. This places them in the model's most recent attention window so vivid recent narration can't override them. Use sparingly — three to six load-bearing facts is plenty; more than that dilutes the signal.
+
+You can author hard facts manually in the file. The DM's `[[REMEMBER:...]]` directive does not currently emit the `!! ` prefix automatically — if you want a DM-written fact to be load-bearing, edit the file by hand or have the DM emit `[[REMEMBER:Name TEXT:!! the fact]]` so the prefix carries through.
+
 ## Example: Grimbold Ironforge
 
 See `agents/grimbold.md` for a complete, production-ready agent definition including full mechanical spec, personality description, combat style, and roleplay notes.

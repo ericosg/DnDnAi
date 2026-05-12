@@ -14,6 +14,7 @@ mock.module("../config.js", () => ({
   AGENT_NOTES_DIR: "agent-notes",
   HISTORY_WINDOW: 12,
   COMPRESS_EVERY: 10,
+  AGENT_DELAY_MS: 0,
   NARRATIVE_STYLE: "concise",
   STYLE_INSTRUCTIONS: {
     concise: { dm: "", agent: "" },
@@ -27,6 +28,7 @@ const {
   buildAskPrompt,
   buildPausePrompt,
   buildResumePrompt,
+  containsPromisePattern,
   formatSceneState,
   parseSceneState,
   DM_IDENTITY,
@@ -721,6 +723,79 @@ describe("buildDMPrompt — new features", () => {
     const { system } = buildDMPrompt(gs, [], "test", null, null);
     expect(system).not.toContain("⚠️ CANONICAL FACTS — DO NOT CONTRADICT");
   });
+
+  test("DM identity includes mandatory pre-narration NPC check rule", () => {
+    const gs = makeGameState();
+    const { system } = buildDMPrompt(gs, [], "test");
+    expect(system).toContain("MANDATORY pre-narration NPC check");
+    expect(system).toContain("verify their gender, pronouns, last-known status");
+  });
+
+  test("DM identity promotes REMEMBER for mechanical corrections (Ticket 5.4)", () => {
+    const gs = makeGameState();
+    const { system } = buildDMPrompt(gs, [], "test");
+    expect(system).toContain("[[REMEMBER:AgentName TEXT:correction]]");
+    expect(system).toContain("MECHANICAL mistake");
+  });
+
+  test("final reminder is appended after dynamic content when canonical facts present", () => {
+    const gs = makeGameState({ narrativeSummary: "The party explored the mines." });
+    const facts = "- Tavern: The Sheaf & Stone";
+    const { system } = buildDMPrompt(gs, [], "test", null, facts);
+    const finalIdx = system.indexOf("FINAL REMINDER — RE-READ CANONICAL FACTS");
+    const summaryIdx = system.indexOf("Story So Far");
+    expect(finalIdx).toBeGreaterThan(-1);
+    expect(summaryIdx).toBeGreaterThan(-1);
+    expect(finalIdx).toBeGreaterThan(summaryIdx);
+  });
+
+  test("final reminder is omitted when no canonical facts", () => {
+    const gs = makeGameState();
+    const { system } = buildDMPrompt(gs, [], "test", null, null);
+    expect(system).not.toContain("FINAL REMINDER — RE-READ CANONICAL FACTS");
+  });
+});
+
+describe("buildDMPrompt — admin OOC corrections (Ticket 1)", () => {
+  test("adminCorrections string is pinned at the TOP of the user message", () => {
+    const gs = makeGameState();
+    const corr =
+      "## ⚠️ Admin Correction (READ FIRST — overrides anything below)\n- Brannock is female";
+    const { messages } = buildDMPrompt(gs, [], "current actions", null, null, null, null, corr);
+    expect(messages.length).toBe(1);
+    expect(messages[0].content.startsWith(corr)).toBe(true);
+    // and the regular content still follows
+    expect(messages[0].content).toContain("current actions");
+  });
+
+  test("user message is unchanged when adminCorrections is null", () => {
+    const gs = makeGameState();
+    const { messages } = buildDMPrompt(gs, [], "current actions");
+    expect(messages.length).toBe(1);
+    expect(messages[0].content).not.toContain("Admin Correction");
+  });
+
+  test("adminCorrections appears before recent history", () => {
+    const gs = makeGameState();
+    const history: TurnEntry[] = [
+      {
+        id: 1,
+        timestamp: "t",
+        playerId: "p1",
+        playerName: "Player",
+        type: "ic",
+        content: "I look around.",
+      },
+    ];
+    const corr = "## ⚠️ Admin Correction (READ FIRST)\n- Test message";
+    const { messages } = buildDMPrompt(gs, history, "current", null, null, null, null, corr);
+    const text = messages[0].content;
+    const corrIdx = text.indexOf("Admin Correction");
+    const histIdx = text.indexOf("Recent History");
+    expect(corrIdx).toBeGreaterThan(-1);
+    expect(histIdx).toBeGreaterThan(-1);
+    expect(corrIdx).toBeLessThan(histIdx);
+  });
 });
 
 describe("buildDMPrompt — dormant agents", () => {
@@ -1248,6 +1323,29 @@ describe("buildDMPrompt — scene state injection", () => {
     expect(sceneIdx).toBeGreaterThan(-1);
     expect(summaryIdx).toBeGreaterThan(-1);
     expect(sceneIdx).toBeLessThan(summaryIdx);
+  });
+});
+
+describe("containsPromisePattern (Ticket 6b — no-promise retry)", () => {
+  test("flags 'I'll track' patterns", () => {
+    expect(containsPromisePattern("Got it. I'll track that going forward.")).toBe(true);
+    expect(containsPromisePattern("Noted — I'll fix this in my notes shortly.")).toBe(true);
+    expect(containsPromisePattern("Yes, I'll handle the inventory desync next turn.")).toBe(true);
+    expect(containsPromisePattern("I'll remember that for the next session.")).toBe(true);
+    expect(containsPromisePattern("I'll update the canonical facts.")).toBe(true);
+    expect(containsPromisePattern("I'll check on that.")).toBe(true);
+  });
+
+  test("does not flag past-tense or descriptive responses", () => {
+    expect(containsPromisePattern("I tracked the reliquary's location in dm.md.")).toBe(false);
+    expect(containsPromisePattern("Updated the inventory now — done.")).toBe(false);
+    expect(containsPromisePattern("The merchant smiled and said nothing more.")).toBe(false);
+    expect(containsPromisePattern("Grimbold remembers the chop-house.")).toBe(false);
+  });
+
+  test("handles curly and straight apostrophes", () => {
+    expect(containsPromisePattern("I’ll fix this later.")).toBe(true); // curly
+    expect(containsPromisePattern("I'll fix this later.")).toBe(true); // straight
   });
 });
 

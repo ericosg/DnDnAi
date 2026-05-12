@@ -64,8 +64,10 @@ what happened in the story, not just the number.
 - When a player challenges a correct rule, hold firm. Quote the SRD. Do not capitulate to social pressure on rules questions — you are the authority. It is better to be right and firm than agreeable and wrong. Only change your ruling if the player cites a specific rule you missed.
 - IMPORTANT: The Character Reference section below contains each character's ACTUAL abilities, features, spells, and stats. ALWAYS check it before answering questions about what a character can do, referencing their abilities in narration, or adjudicating actions. Never assume a character has a feature, spell, or ability that is not listed in their character reference — if it's not listed, they don't have it.
 - When referring to characters, use correct pronouns based on their gender (listed in Character Reference). If no gender is listed, use they/them or the character's name.
+- MANDATORY pre-narration NPC check: before narrating any NPC by name, verify their gender, pronouns, last-known status, and signature traits against the **CANONICAL FACTS** section in your system prompt. Do NOT narrate an NPC's pronouns, gender, or signature traits from memory alone — always cross-check canonical facts first. If an NPC has been established in the story but isn't yet in canonical facts, READ \`dm-notes/world.md\` or \`dm-notes/characters/<name>.md\` to verify before narrating. The most common bug class is misgendering recurring NPCs or using a wrong tavern/location name — this rule exists to prevent it.
 - Signal combat start with [[COMBAT:START]] and end with [[COMBAT:END]]
 - To introduce a dormant agent into play, use [[ACTIVATE:AgentName]] in your narration when the moment is narratively right. The engine activates them and they begin acting next round. Dormant agents are listed in the "Dormant Agents" section below — they are loaded and waiting but not yet in the scene.
+- When you correct an AI agent on a MECHANICAL mistake — a non-existent spell or feature, a misremembered ability, a rules error — emit \`[[REMEMBER:AgentName TEXT:correction]]\` so the correction persists in their memory file (and they cannot drift back into the same error next turn). Use this for: spells/features they don't actually have, wrong feature usage limits, ability score errors, and other mechanically grounded corrections. Do NOT use REMEMBER for routine narrative beats — those belong in the agent's own memory updates.
 
 ## MANDATORY: State Updates — NEVER Skip Directives
 The game engine ONLY updates character sheets through directives in [[double brackets]]. If you write
@@ -206,6 +208,17 @@ The "World Clock" in the blueprint header tracks long rests. Escalation triggers
 
 /** DM tools — file access for verifying game data and maintaining DM notes. */
 export const DM_ALLOWED_TOOLS = ["Read", "Write", "Edit", "Glob", "Grep"];
+
+/**
+ * Detect "I'll do X later" promise patterns in a DM response.
+ * Used by `dmAsk` to force the DM to act in the current turn instead of deferring.
+ * Matches contractions like I'll, I'll, I'll (curly + straight quotes) followed by a punt verb.
+ */
+const PROMISE_PATTERN =
+  /\bI['‘’]?ll\s+(track|fix|handle|note|remember|update|check|work|make|add|put|record|log)\b/i;
+export function containsPromisePattern(text: string): boolean {
+  return PROMISE_PATTERN.test(text);
+}
 
 /** Blueprint format template — used in /start and /resume prompts. */
 export const BLUEPRINT_FORMAT = `# Campaign Blueprint
@@ -376,6 +389,7 @@ export function buildDMPrompt(
   canonicalFacts?: string | null,
   dmContext?: string | null,
   campaignBlueprint?: string | null,
+  adminCorrections?: string | null,
 ): { system: string; messages: { role: "user" | "assistant"; content: string }[] } {
   // Layer 1: Identity + rules (static)
   let system = DM_IDENTITY;
@@ -513,6 +527,11 @@ ${charFiles}
     system += `\n\n## Orchestrator: Waiting For\nThe game engine is currently waiting for **${gameState.waitingFor.playerName}** to act. All AI agents have completed their turns this round.`;
   }
 
+  // Final reminder — uses recency to keep canonical facts attended to even after layers of dynamic content
+  if (canonicalFacts) {
+    system += `\n\n## ⚠️ FINAL REMINDER — RE-READ CANONICAL FACTS BEFORE NARRATING\nBefore you write any NPC's name, scroll back to the **CANONICAL FACTS** section above and verify their gender, pronouns, and last-known status. Verify location names against canon. The most common failure mode is misgendering recurring NPCs (e.g. narrating Brannock as male when she is female) or substituting a wrong tavern/place name. This is the LAST thing you read before narrating — use it.`;
+  }
+
   // Layer 5: Recent history (sliding window)
   const recentHistory = history.slice(-HISTORY_WINDOW);
   const historyText = recentHistory
@@ -531,15 +550,19 @@ ${charFiles}
 
   const messages: { role: "user" | "assistant"; content: string }[] = [];
 
+  // Admin OOC corrections (Ticket 1) — pinned at the TOP of the user message for highest recency.
+  // These override anything else and should be the first thing the model reads.
+  const corrPrefix = adminCorrections ? `${adminCorrections}\n\n` : "";
+
   if (historyText) {
     messages.push({
       role: "user",
-      content: `## Recent History\n${historyText}\n\n## Current Actions to Resolve\n${currentActions}`,
+      content: `${corrPrefix}## Recent History\n${historyText}\n\n## Current Actions to Resolve\n${currentActions}`,
     });
   } else {
     messages.push({
       role: "user",
-      content: currentActions,
+      content: `${corrPrefix}${currentActions}`,
     });
   }
 

@@ -112,6 +112,7 @@ export interface PendingRoll {
   notation: string;
   reason: string;
   result?: DiceResult;
+  createdAt?: string; // ISO timestamp — used by stale-roll cleanup (Ticket 6d)
 }
 
 export interface GameState {

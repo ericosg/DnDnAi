@@ -13,8 +13,10 @@ import { type AgentAction, processAgentDirectives } from "./agent-directives.js"
 import { applyAgentMemoryEffects } from "./agent-memory-effects.js";
 import { addAskExchange, formatAskHistoryForPrompt } from "./ask-history.js";
 import { advanceTurn, peekNextCombatant, rollDeathSave } from "./combat.js";
-import { formatDiceResult } from "./dice.js";
+import { formatDiceResult, roll } from "./dice.js";
 import { processDirectives } from "./directives.js";
+
+const STALE_PENDING_ROLL_MS = 10 * 60 * 1000; // 10 minutes
 
 const NARRATION_MIN_LENGTH = 150;
 const TOOL_META_PATTERNS = /\b(updated|wrote|edited|checked|read|noted|recorded|saved|modified)\b/i;
@@ -23,11 +25,13 @@ const NARRATIVE_MARKERS = /[*>]|\[\[/;
 /**
  * Detect DM responses that are only meta-commentary about tool operations
  * (e.g. "Updated dm-notes with merchant transaction.") rather than actual narration.
+ *
+ * Real narration requires BOTH minimum length AND a narrative marker — a single
+ * decorative `*italic*` around tool-meta prose is not enough to count as narration.
  */
 export function isToolMetaOnly(response: string): boolean {
   const trimmed = response.trim();
-  if (trimmed.length >= NARRATION_MIN_LENGTH) return false;
-  if (NARRATIVE_MARKERS.test(trimmed)) return false;
+  if (trimmed.length >= NARRATION_MIN_LENGTH && NARRATIVE_MARKERS.test(trimmed)) return false;
   return TOOL_META_PATTERNS.test(trimmed);
 }
 
@@ -246,12 +250,60 @@ async function handleDeathSaveIfNeeded(
   return true;
 }
 
+/**
+ * Auto-resolve pendingRolls that are stuck because they were owed by an AI agent
+ * (which should have auto-rolled but somehow didn't) AND have aged past the threshold.
+ * Returns true if any were resolved (caller may want to persist state).
+ */
+export async function autoResolveStalePendingRolls(
+  gameState: GameState,
+  now: number = Date.now(),
+  thresholdMs: number = STALE_PENDING_ROLL_MS,
+): Promise<boolean> {
+  const pending = gameState.pendingRolls;
+  if (!pending?.length) return false;
+
+  let resolvedAny = false;
+  for (const pr of pending) {
+    if (pr.result) continue;
+    if (!pr.createdAt) continue;
+    const age = now - new Date(pr.createdAt).getTime();
+    if (age < thresholdMs) continue;
+    const player = gameState.players.find((p) => p.id === pr.playerId);
+    if (!player?.isAgent) continue; // only auto-resolve agent-owed rolls
+
+    // Auto-roll
+    const result = roll(pr.notation, `${pr.playerName}: ${pr.reason}`);
+    pr.result = result;
+    resolvedAny = true;
+    log.warn(
+      `Stale pendingRoll auto-resolved for AI agent ${pr.playerName} (age ${Math.round(age / 1000)}s): ${pr.notation} = ${result.total}`,
+    );
+
+    const entry: TurnEntry = {
+      id: 0, // placeholder, appendHistory assigns real id
+      timestamp: new Date().toISOString(),
+      playerId: pr.playerId,
+      playerName: pr.playerName,
+      type: "system",
+      content: `[Stale roll auto-resolved] ${pr.playerName} rolled \`${pr.notation}\` for ${pr.reason}: **${result.total}**`,
+      diceResults: [result],
+    };
+    await appendHistory(gameState.id, entry);
+  }
+  if (resolvedAny) await saveGameState(gameState);
+  return resolvedAny;
+}
+
 async function orchestratorLoop(gameState: GameState, channel: TextChannel): Promise<void> {
   const maxIterations = gameState.players.length * 2 + 2; // prevent infinite loops
   let iterations = 0;
 
   while (iterations < maxIterations) {
     iterations++;
+    // Auto-resolve agent-owed pending rolls that have aged out
+    await autoResolveStalePendingRolls(gameState);
+
     const history = await loadHistory(gameState.id);
     const lastEntry = history[history.length - 1];
     if (!lastEntry) break;
@@ -706,6 +758,7 @@ async function handleDMTurn(
         playerName: pr.playerName,
         notation: pr.notation,
         reason: pr.reason,
+        createdAt: pr.createdAt ?? new Date().toISOString(),
       }));
       gameState.pendingRolls = pendingRolls;
       log.info(

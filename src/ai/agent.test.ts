@@ -204,7 +204,7 @@ describe("agent prompt — memory injection", () => {
   });
 
   test("system prompt includes memory file path when memory exists", () => {
-    const system = buildAgentSystemPrompt(baseP, "/abs/path/nyx.md", true);
+    const system = buildAgentSystemPrompt(baseP, "/abs/path/nyx.md", "");
     expect(system).toContain("Your Memory (PERSISTENT)");
     expect(system).toContain("/abs/path/nyx.md");
     expect(system).toContain("Edit the file to append");
@@ -212,7 +212,7 @@ describe("agent prompt — memory injection", () => {
   });
 
   test("system prompt falls back gracefully when memory file is missing", () => {
-    const system = buildAgentSystemPrompt(baseP, "/abs/path/nyx.md", false);
+    const system = buildAgentSystemPrompt(baseP, "/abs/path/nyx.md", null);
     expect(system).toContain("No memory file found");
     expect(system).not.toContain("Your Memory (PERSISTENT)");
   });
@@ -295,6 +295,43 @@ describe("agent prompt — memory injection", () => {
     expect(messages[0].content).not.toContain("Your Memory");
     expect(messages[0].content).toContain("## Party Status");
   });
+
+  test("admin OOC corrections (Ticket 1) appear at the very TOP of the user message", () => {
+    const gs = {
+      id: "g",
+      channelId: "c",
+      guildId: "gu",
+      status: "active" as const,
+      players: [],
+      combat: { active: false, round: 0, turnIndex: 0, combatants: [] },
+      narrativeSummary: "",
+      turnCount: 0,
+      createdAt: new Date().toISOString(),
+      lastActivity: new Date().toISOString(),
+    };
+    const corr = "## ⚠️ Admin Correction (READ FIRST)\n- You weren't at Vellum & Verge.";
+    const messages = buildAgentMessages(baseP, gs, [], "situation", null, corr);
+    expect(messages[0].content.startsWith(corr)).toBe(true);
+    // and Party Status etc still follow
+    expect(messages[0].content).toContain("## Party Status");
+  });
+
+  test("admin OOC section is omitted when null", () => {
+    const gs = {
+      id: "g",
+      channelId: "c",
+      guildId: "gu",
+      status: "active" as const,
+      players: [],
+      combat: { active: false, round: 0, turnIndex: 0, combatants: [] },
+      narrativeSummary: "",
+      turnCount: 0,
+      createdAt: new Date().toISOString(),
+      lastActivity: new Date().toISOString(),
+    };
+    const messages = buildAgentMessages(baseP, gs, [], "situation", null, null);
+    expect(messages[0].content).not.toContain("Admin Correction");
+  });
 });
 
 describe("agent prompt — action directives + security", () => {
@@ -313,7 +350,7 @@ describe("agent prompt — action directives + security", () => {
   };
 
   test("system prompt documents all four action directives", () => {
-    const system = buildAgentSystemPrompt(baseP, "/abs/nyx.md", true);
+    const system = buildAgentSystemPrompt(baseP, "/abs/nyx.md", "");
     expect(system).toContain("[[PASS]]");
     expect(system).toContain("[[ASK:");
     expect(system).toContain("[[LOOK:");
@@ -322,7 +359,7 @@ describe("agent prompt — action directives + security", () => {
   });
 
   test("system prompt lists forbidden file locations", () => {
-    const system = buildAgentSystemPrompt(baseP, "/abs/nyx.md", true);
+    const system = buildAgentSystemPrompt(baseP, "/abs/nyx.md", "");
     expect(system).toContain("src/");
     expect(system).toContain("dm-notes/");
     expect(system).toContain("history.json");
@@ -331,14 +368,59 @@ describe("agent prompt — action directives + security", () => {
   });
 
   test("system prompt names the one allowed file path when memory exists", () => {
-    const system = buildAgentSystemPrompt(baseP, "/my/path/nyx.md", true);
+    const system = buildAgentSystemPrompt(baseP, "/my/path/nyx.md", "");
     // The allowed-file anchor appears inside the Information Boundaries block
     expect(system).toMatch(/The only file you should ever Read or Edit[\s\S]+\/my\/path\/nyx\.md/);
   });
 
   test("system prompt says no file is readable when memory file is missing", () => {
-    const system = buildAgentSystemPrompt(baseP, "/my/path/nyx.md", false);
+    const system = buildAgentSystemPrompt(baseP, "/my/path/nyx.md", null);
     expect(system).toContain("no memory file yet — do not use Read or Edit this turn");
+  });
+});
+
+describe("agent prompt — hard facts (Ticket 2)", () => {
+  const baseP = {
+    name: "Grimbold Ironforge",
+    race: "Mountain Dwarf",
+    class: "Fighter",
+    level: 3,
+    description: "stoic",
+    voice: "",
+    traits: [],
+    flaws: [],
+    goals: [],
+    characterSpec: "",
+    rawContent: "",
+  };
+
+  test("hard facts section is appended at end of system prompt when present", () => {
+    const memory = `## What I Remember
+- We escaped the mines.
+- !! Harken is alive — anyone who tells me otherwise is wrong, including me.
+`;
+    const system = buildAgentSystemPrompt(baseP, "/abs/grimbold.md", memory);
+    expect(system).toContain("## CRITICAL — Hard Facts From Your Memory");
+    expect(system).toContain("Harken is alive — anyone who tells me otherwise is wrong");
+    // It must come AFTER the Rules section (highest recency)
+    const rulesIdx = system.indexOf("## Rules");
+    const factsIdx = system.indexOf("## CRITICAL — Hard Facts");
+    expect(rulesIdx).toBeGreaterThan(-1);
+    expect(factsIdx).toBeGreaterThan(rulesIdx);
+  });
+
+  test("hard facts section is omitted when memory has no `!! ` bullets", () => {
+    const memory = `## What I Remember
+- We escaped the mines.
+- We met Hierophantis in town.
+`;
+    const system = buildAgentSystemPrompt(baseP, "/abs/grimbold.md", memory);
+    expect(system).not.toContain("## CRITICAL — Hard Facts From Your Memory");
+  });
+
+  test("hard facts section is omitted when memory is null", () => {
+    const system = buildAgentSystemPrompt(baseP, "/abs/grimbold.md", null);
+    expect(system).not.toContain("## CRITICAL — Hard Facts From Your Memory");
   });
 });
 

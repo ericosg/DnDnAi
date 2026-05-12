@@ -64,6 +64,7 @@ export interface DirectiveContext {
     playerName: string;
     notation: string;
     reason: string;
+    createdAt: string;
   }[];
   /** Agents the DM brought off dormant this turn (by character-sheet name). */
   activatedAgents: string[];
@@ -107,6 +108,7 @@ export function processDirectives(text: string, gameState: GameState): Directive
         playerName: directive.forName,
         notation: directive.notation,
         reason: directive.reason,
+        createdAt: new Date().toISOString(),
       });
       processedText = processedText.replace(
         originalTag,

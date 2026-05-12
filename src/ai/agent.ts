@@ -3,7 +3,9 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import matter from "gray-matter";
 import { AGENTS_DIR, models, NARRATIVE_STYLE, STYLE_INSTRUCTIONS } from "../config.js";
-import { getAgentNotesPath, readAgentNotes } from "../game/agent-notes.js";
+import { formatAdminCorrectionsForPrompt } from "../game/admin-corrections.js";
+import { appendAuditEntry } from "../game/agent-memory-audit.js";
+import { extractHardFacts, getAgentNotesPath, readAgentNotes } from "../game/agent-notes.js";
 import { log } from "../logger.js";
 import type { AgentPersonality, GameState, TurnEntry } from "../state/types.js";
 import { chat, chatAgentic } from "./claude.js";
@@ -58,23 +60,55 @@ export async function generateAgentAction(
     );
   }
 
-  const system = buildAgentSystemPrompt(personality, memoryPath, memoryContent != null);
+  const adminCorrections = formatAdminCorrectionsForPrompt(
+    gameState.id,
+    { kind: "agent", name: personality.name },
+    gameState.turnCount,
+  );
+
+  const system = buildAgentSystemPrompt(personality, memoryPath, memoryContent);
   const messages = buildAgentMessages(
     personality,
     gameState,
     recentHistory,
     currentSituation,
     memoryContent,
+    adminCorrections,
   );
   const model = personality.model ?? models.agent;
-  return chatAgentic(model, system, messages, AGENT_ALLOWED_TOOLS, personality.name, effort);
+
+  // Tee Edit-on-own-memory tool uses into the audit log (Ticket 5.1).
+  // Read events are skipped — only writes change state.
+  const auditCallback = async (ev: { name: string; input: Record<string, unknown> }) => {
+    if (ev.name !== "Edit" && ev.name !== "Write") return;
+    const filePath = typeof ev.input.file_path === "string" ? ev.input.file_path : "";
+    if (filePath !== memoryPath) return; // only audit writes to the agent's OWN memory
+    const oldStr = typeof ev.input.old_string === "string" ? ev.input.old_string : "";
+    const newStr = typeof ev.input.new_string === "string" ? ev.input.new_string : "";
+    const summary =
+      ev.name === "Edit"
+        ? `Edit on ${path.basename(filePath)}: -[${oldStr.slice(0, 80)}] +[${newStr.slice(0, 80)}]`
+        : `Write on ${path.basename(filePath)}: ${(ev.input.content as string | undefined)?.slice(0, 100) ?? ""}`;
+    await appendAuditEntry(gameState.id, personality.name, gameState.turnCount, ev.name, summary);
+  };
+
+  return chatAgentic(
+    model,
+    system,
+    messages,
+    AGENT_ALLOWED_TOOLS,
+    personality.name,
+    effort,
+    auditCallback,
+  );
 }
 
 export function buildAgentSystemPrompt(
   personality: AgentPersonality,
   memoryPath: string,
-  memoryExists: boolean,
+  memoryContent: string | null,
 ): string {
+  const memoryExists = memoryContent != null;
   const sections: string[] = [
     `You are ${personality.name}, a ${personality.race} ${personality.class} (Level ${personality.level}) in a D&D 5e campaign.`,
   ];
@@ -165,6 +199,23 @@ ${styleRules}
 - CRITICAL: You can ONLY reference things the DM has already described. Do NOT invent, detect, perceive, or reveal anything new about the environment, enemies, sounds, smells, lights, or any world detail that the DM has not explicitly narrated. If you want to look/listen/search for something, say you ARE TRYING TO — do not describe what you find. Only the DM decides what exists in the world and what you perceive.
 - Your in-character reply (the prose the players read) MUST be your final message after any tool calls. Tool use is invisible to players — only text you emit after your tool calls goes to the channel.`);
 
+  // Hard facts — load-bearing bullets from memory, pinned at the END for highest recency.
+  // Authors mark a memory bullet as load-bearing by prefixing it with `!! ` (e.g. `- !! Harken is alive`).
+  // These facts override recent narration if they appear to conflict — long-context drift can't beat
+  // the last instruction the model reads before generating.
+  if (memoryContent) {
+    const hardFacts = extractHardFacts(memoryContent);
+    if (hardFacts.length > 0) {
+      const bullets = hardFacts.map((f) => `- ${f}`).join("\n");
+      sections.push(`## CRITICAL — Hard Facts From Your Memory
+The following facts in your memory file are LOAD-BEARING. You must not contradict them under any circumstance.
+If recent narration appears to contradict a hard fact, treat the narration as the error and stay consistent with your memory.
+Do NOT say something happened that the hard facts say has not happened, and do NOT deny something the hard facts say is true.
+
+${bullets}`);
+    }
+  }
+
   return sections.join("\n\n");
 }
 
@@ -174,6 +225,7 @@ export function buildAgentMessages(
   recentHistory: TurnEntry[],
   currentSituation: string,
   memoryContent: string | null,
+  adminCorrections?: string | null,
 ): { role: "user" | "assistant"; content: string }[] {
   const historyText = recentHistory
     .map((t) => {
@@ -236,10 +288,14 @@ ${memoryContent.trim()}
 `
     : "";
 
+  // Admin OOC corrections (Ticket 1) — pinned at the very TOP of the user message for highest recency.
+  // These override anything in memory or history; the agent must read and obey them first.
+  const corrSection = adminCorrections ? `${adminCorrections}\n\n` : "";
+
   return [
     {
       role: "user",
-      content: `${memorySection}${selfSheetSection}${partySection}${narrativeSection}${sceneSection}## Recent Events
+      content: `${corrSection}${memorySection}${selfSheetSection}${partySection}${narrativeSection}${sceneSection}## Recent Events
 ${historyText}
 
 ## Current Situation

@@ -1,5 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { COMPRESS_EVERY, models } from "../config.js";
+import { formatAdminCorrectionsForPrompt } from "../game/admin-corrections.js";
 import type { GameState, TurnEntry } from "../state/types.js";
 import { chat, chatAgentic } from "./claude.js";
 import {
@@ -8,6 +9,7 @@ import {
   buildPausePrompt,
   buildResumePrompt,
   type CompressionResult,
+  containsPromisePattern,
   DM_ALLOWED_TOOLS,
   parseSceneState,
 } from "./dm-prompt.js";
@@ -89,6 +91,11 @@ export async function dmNarrate(
   effort?: "low" | "medium" | "high" | "max",
 ): Promise<string> {
   const { canonicalFacts, dmContext, campaignBlueprint } = await loadDMPromptContext(gameState.id);
+  const adminCorrections = formatAdminCorrectionsForPrompt(
+    gameState.id,
+    { kind: "dm" },
+    gameState.turnCount,
+  );
   const { system, messages } = buildDMPrompt(
     gameState,
     history,
@@ -97,12 +104,18 @@ export async function dmNarrate(
     canonicalFacts,
     dmContext,
     campaignBlueprint,
+    adminCorrections,
   );
   return chatAgentic(models.dm, system, messages, DM_ALLOWED_TOOLS, "DM", effort);
 }
 
 export async function dmRecap(gameState: GameState, history: TurnEntry[]): Promise<string> {
   const { canonicalFacts, dmContext, campaignBlueprint } = await loadDMPromptContext(gameState.id);
+  const adminCorrections = formatAdminCorrectionsForPrompt(
+    gameState.id,
+    { kind: "dm" },
+    gameState.turnCount,
+  );
   const { system, messages } = buildDMPrompt(
     gameState,
     history,
@@ -111,6 +124,7 @@ export async function dmRecap(gameState: GameState, history: TurnEntry[]): Promi
     canonicalFacts,
     dmContext,
     campaignBlueprint,
+    adminCorrections,
   );
   return chatAgentic(models.dm, system, messages, DM_ALLOWED_TOOLS, "DM recap");
 }
@@ -125,6 +139,11 @@ export async function dmLook(
     : `A player looks around. Describe the current environment in detail — sights, sounds, smells, and anything notable they might interact with.`;
 
   const { canonicalFacts, dmContext, campaignBlueprint } = await loadDMPromptContext(gameState.id);
+  const adminCorrections = formatAdminCorrectionsForPrompt(
+    gameState.id,
+    { kind: "dm" },
+    gameState.turnCount,
+  );
   const { system, messages } = buildDMPrompt(
     gameState,
     history,
@@ -133,6 +152,7 @@ export async function dmLook(
     canonicalFacts,
     dmContext,
     campaignBlueprint,
+    adminCorrections,
   );
   return chatAgentic(models.dm, system, messages, DM_ALLOWED_TOOLS, "DM look");
 }
@@ -145,6 +165,11 @@ export async function dmAsk(
   askHistory?: string | null,
 ): Promise<string> {
   const { canonicalFacts, dmContext, campaignBlueprint } = await loadDMPromptContext(gameState.id);
+  const adminCorrections = formatAdminCorrectionsForPrompt(
+    gameState.id,
+    { kind: "dm" },
+    gameState.turnCount,
+  );
   const { system, messages } = buildDMPrompt(
     gameState,
     history,
@@ -153,12 +178,35 @@ export async function dmAsk(
     canonicalFacts,
     dmContext,
     campaignBlueprint,
+    adminCorrections,
   );
-  return chatAgentic(models.dm, system, messages, DM_ALLOWED_TOOLS, "DM ask");
+  const initial = await chatAgentic(models.dm, system, messages, DM_ALLOWED_TOOLS, "DM ask");
+
+  // No-promise retry: if the DM punts the action ("I'll track this going forward"), retry once
+  // and force it to act now. Promise-pattern checked once; we don't recurse on the retry.
+  if (containsPromisePattern(initial)) {
+    const retryMessages: { role: "user" | "assistant"; content: string }[] = [
+      ...messages,
+      { role: "assistant", content: initial },
+      {
+        role: "user",
+        content:
+          "[SYSTEM RETRY] Your previous answer promised to do something later (e.g., 'I'll track this', 'I'll fix this', 'I'll remember this'). Do NOT promise — act now. Either resolve the player's question with directives in this response, or tell the player exactly what they should do/say next. No future-tense commitments.",
+      },
+    ];
+    return chatAgentic(models.dm, system, retryMessages, DM_ALLOWED_TOOLS, "DM ask retry");
+  }
+
+  return initial;
 }
 
 export async function dmPause(gameState: GameState, history: TurnEntry[]): Promise<string> {
   const { canonicalFacts, dmContext, campaignBlueprint } = await loadDMPromptContext(gameState.id);
+  const adminCorrections = formatAdminCorrectionsForPrompt(
+    gameState.id,
+    { kind: "dm" },
+    gameState.turnCount,
+  );
   const { system, messages } = buildDMPrompt(
     gameState,
     history,
@@ -167,6 +215,7 @@ export async function dmPause(gameState: GameState, history: TurnEntry[]): Promi
     canonicalFacts,
     dmContext,
     campaignBlueprint,
+    adminCorrections,
   );
   return chatAgentic(models.dm, system, messages, DM_ALLOWED_TOOLS, "DM pause");
 }
@@ -174,6 +223,11 @@ export async function dmPause(gameState: GameState, history: TurnEntry[]): Promi
 export async function dmResume(gameState: GameState, history: TurnEntry[]): Promise<string> {
   const { canonicalFacts, dmContext, campaignBlueprint } = await loadDMPromptContext(gameState.id);
   const needsBlueprint = !campaignBlueprint;
+  const adminCorrections = formatAdminCorrectionsForPrompt(
+    gameState.id,
+    { kind: "dm" },
+    gameState.turnCount,
+  );
   const { system, messages } = buildDMPrompt(
     gameState,
     history,
@@ -182,6 +236,7 @@ export async function dmResume(gameState: GameState, history: TurnEntry[]): Prom
     canonicalFacts,
     dmContext,
     campaignBlueprint,
+    adminCorrections,
   );
   return chatAgentic(models.dm, system, messages, DM_ALLOWED_TOOLS, "DM resume");
 }
@@ -226,7 +281,7 @@ Omit mechanical details (dice rolls, HP numbers) unless plot-relevant.`;
 
   let userContent = `${existing}Recent events:\n${recentText}\n\n`;
   if (canonicalFacts) {
-    userContent += `Canonical facts (use these exact names/details, never contradict them):\n${canonicalFacts}\n\n`;
+    userContent += `Canonical facts (use these exact names/details, never contradict them). Any name or fact listed below MUST appear verbatim in your new summary if it is relevant — do not paraphrase, abbreviate, or omit it:\n${canonicalFacts}\n\n`;
   }
   userContent += "Create the structured scene snapshot and updated narrative summary.";
 

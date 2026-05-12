@@ -168,6 +168,38 @@ export async function appendAgentMemory(
 }
 
 /**
+ * Extract LOAD-BEARING hard facts from an agent's memory file.
+ *
+ * Hard facts are bullet-list items that begin with `!! ` (after the bullet marker).
+ * They can appear in any of the five memory sections — the prefix is the only signal.
+ * Used by `buildAgentSystemPrompt` to pin these facts at the END of the system prompt
+ * so long-context drift can't overwrite them with vibe from recent narration.
+ *
+ * Examples that match:
+ *   - !! Harken is alive — he is being kept for tomorrow's plan.
+ *   * !! The Sheaf & Stone is the only tavern in town.
+ *   - !! I cannot cast Fireball — it is not on my spell list.
+ *
+ * Examples that DO NOT match:
+ *   - Harken is alive (no `!!` prefix)
+ *   - !!Harken is alive (missing space after `!!`)
+ *   !! Harken is alive (missing bullet marker)
+ *
+ * Returns the captured fact text per match, in document order, with whitespace trimmed.
+ */
+export function extractHardFacts(memory: string): string[] {
+  const facts: string[] = [];
+  const re = /^[ \t]*[-*+][ \t]+!![ \t]+(.+?)[ \t]*$/gm;
+  let m: RegExpExecArray | null = re.exec(memory);
+  while (m !== null) {
+    const fact = m[1].trim();
+    if (fact.length > 0) facts.push(fact);
+    m = re.exec(memory);
+  }
+  return facts;
+}
+
+/**
  * List all agent memory files present in a game directory.
  * Used by /resume retrofit to detect whether any agents are missing memory.
  */

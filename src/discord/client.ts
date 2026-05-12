@@ -25,8 +25,14 @@ import {
 import { BLUEPRINT_FORMAT } from "../ai/dm-prompt.js";
 import { buildHelpPrompt, HELP_ALLOWED_TOOLS } from "../ai/help-prompt.js";
 import { config, models, VERSION } from "../config.js";
+import {
+  type AdminCorrection,
+  type AdminTarget,
+  addAdminCorrection,
+  clearAdminCorrections,
+} from "../game/admin-corrections.js";
 import { applyAgentMemoryEffects } from "../game/agent-memory-effects.js";
-import { agentNotesExist, seedAgentNotes } from "../game/agent-notes.js";
+import { agentNotesExist, appendAgentMemory, seedAgentNotes } from "../game/agent-notes.js";
 import { addAskExchange, formatAskHistoryForPrompt } from "../game/ask-history.js";
 import { buildAgentCharacter, parseCharacterSheet } from "../game/characters.js";
 import { roll as rollDice } from "../game/dice.js";
@@ -705,6 +711,7 @@ THEN — narrate a compelling opening scene that brings these characters togethe
           playerName: pr.playerName,
           notation: pr.notation,
           reason: pr.reason,
+          createdAt: pr.createdAt ?? new Date().toISOString(),
         }));
       }
 
@@ -1098,7 +1105,128 @@ THEN — narrate a compelling opening scene that brings these characters togethe
       });
       break;
     }
+
+    case "correct": {
+      // Admin-only OOC correction (Ticket 1)
+      if (!isAdmin(interaction.user.id)) {
+        await interaction.reply({
+          content: "Not authorized. Only the bot owner can issue admin corrections.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      const gameState = await findGameByChannel(channel.id);
+      if (!gameState) {
+        await interaction.reply({
+          content: "No game in this channel.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      const targetStr = interaction.options.getString("target", true).trim();
+      const message = interaction.options.getString("message", true).trim();
+      const remember = interaction.options.getBoolean("remember") ?? false;
+      const userOption = interaction.options.getUser("user");
+
+      // Parse target — `user:` option overrides target string when provided
+      let target: AdminTarget;
+      let targetLabel: string;
+      if (userOption) {
+        target = { kind: "human", playerId: userOption.id };
+        targetLabel = `@${userOption.displayName}`;
+      } else if (targetStr.toLowerCase() === "dm") {
+        target = { kind: "dm" };
+        targetLabel = "DM";
+      } else if (targetStr.toLowerCase() === "all" || targetStr.toLowerCase() === "everyone") {
+        target = { kind: "all" };
+        targetLabel = "ALL";
+      } else {
+        // Try to match an agent character name (case-insensitive)
+        const agent = gameState.players.find(
+          (p) => p.isAgent && p.characterSheet.name.toLowerCase() === targetStr.toLowerCase(),
+        );
+        if (!agent) {
+          await interaction.reply({
+            content: `No agent named "${targetStr}". Use 'dm', 'all', an agent character name, or the user: option.`,
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+        target = { kind: "agent", name: agent.characterSheet.name };
+        targetLabel = agent.characterSheet.name;
+      }
+
+      const entry: AdminCorrection = {
+        target,
+        message,
+        remember,
+        issuedAt: new Date().toISOString(),
+        issuedAtTurn: gameState.turnCount,
+        issuedBy: interaction.user.id,
+      };
+      addAdminCorrection(gameState.id, entry);
+
+      // Append to agent memory if requested
+      if (remember && target.kind === "agent") {
+        try {
+          await appendAgentMemory(gameState.id, target.name, message);
+        } catch (err) {
+          log.error(`Admin correction: appendAgentMemory failed for ${target.name}:`, err);
+        }
+      }
+
+      // Persist as a system TurnEntry so the correction is auditable beyond the in-memory buffer
+      const { appendHistory } = await import("../state/store.js");
+      await appendHistory(gameState.id, {
+        id: 0,
+        timestamp: entry.issuedAt,
+        playerId: "system",
+        playerName: "Admin",
+        type: "system",
+        content: `[ADMIN OOC → ${targetLabel}${remember ? " · REMEMBERED" : ""}]: ${message}`,
+      });
+
+      // Visible OOC channel message so the table sees the correction
+      await channel.send(
+        `🛠️ **[ADMIN OOC → ${targetLabel}${remember ? " · saved to memory" : ""}]**\n${message}`,
+      );
+      await interaction.reply({
+        content: `Correction queued for **${targetLabel}**${remember && target.kind === "agent" ? " (and appended to their memory)" : ""}.`,
+        flags: MessageFlags.Ephemeral,
+      });
+      break;
+    }
+
+    case "clear-corrections": {
+      if (!isAdmin(interaction.user.id)) {
+        await interaction.reply({
+          content: "Not authorized. Only the bot owner can clear admin corrections.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      const gameState = await findGameByChannel(channel.id);
+      if (!gameState) {
+        await interaction.reply({
+          content: "No game in this channel.",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+      clearAdminCorrections(gameState.id);
+      await interaction.reply({
+        content: "All pending admin corrections cleared.",
+        flags: MessageFlags.Ephemeral,
+      });
+      break;
+    }
   }
+}
+
+function isAdmin(userId: string): boolean {
+  const adminId = process.env.ADMIN_USER_ID?.trim();
+  if (!adminId) return false;
+  return userId === adminId;
 }
 
 async function fetchAttachment(attachment: Attachment): Promise<string> {
